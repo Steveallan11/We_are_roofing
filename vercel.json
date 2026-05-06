@@ -1,0 +1,10 @@
+{
+  "buildCommand": "echo 'Static files - no build needed'",
+  "outputDirectory": "we-are-roofing-app",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
