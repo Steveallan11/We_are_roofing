@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --gold: #d4af37;
+  --gold-l: #f5d060;
+  --gold-d: #8b6914;
+  --black: #080808;
+  --dark: #111111;
+  --card: #181818;
+  --card2: #1f1f1f;
+  --border: rgba(212, 175, 55, 0.18);
+  --border2: rgba(212, 175, 55, 0.35);
+  --text: #f0e8d0;
+  --muted: rgba(240, 232, 208, 0.65);
+  --dim: rgba(240, 232, 208, 0.35);
+}
+
+html {
+  background:
+    radial-gradient(circle at top, rgba(212, 175, 55, 0.16), transparent 22%),
+    linear-gradient(180deg, #060606 0%, #0d0c06 42%, #111111 100%);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: transparent;
+}
+
+* {
+  border-color: var(--border);
+}
+
+.app-shell {
+  @apply mx-auto min-h-screen max-w-6xl px-4 pb-12 pt-4 sm:px-6;
+}
+
+.card {
+  @apply rounded-[1.25rem] border bg-card shadow-card;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.button-primary {
+  @apply inline-flex items-center justify-center rounded-2xl px-5 py-3 text-base font-semibold text-black transition;
+  background: linear-gradient(135deg, var(--gold-d), var(--gold-l));
+}
+
+.button-secondary {
+  @apply inline-flex items-center justify-center rounded-2xl border px-5 py-3 text-base font-semibold text-[var(--text)] transition;
+  background: rgba(212, 175, 55, 0.08);
+  border-color: var(--border2);
+}
+
+.button-ghost {
+  @apply inline-flex items-center justify-center rounded-2xl border px-4 py-3 text-base font-semibold transition;
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.field {
+  @apply w-full rounded-2xl border px-4 py-3 text-base outline-none transition;
+  background: var(--card);
+  color: white;
+  border-color: var(--border);
+}
+
+.label {
+  @apply mb-2 block text-xs font-bold uppercase tracking-[0.2em];
+  color: var(--gold-l);
+}
+
+.field::placeholder {
+  color: var(--dim);
+}
+
+.field:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.14);
+}
+
+.brand-panel {
+  background: linear-gradient(180deg, #060606, #0d0c06);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-panel::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+.section-kicker {
+  font-family: var(--font-condensed);
+  letter-spacing: 0.32em;
+  color: var(--gold-d);
+}
+
+.gold-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+.status-pill {
+  @apply inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold;
+}
+
+.surface-muted {
+  background: rgba(212, 175, 55, 0.06);
+  border-color: rgba(212, 175, 55, 0.18);
+}
+
+.page-grid {
+  @apply grid gap-4 lg:grid-cols-[1.15fr_0.85fr];
+}
+
+.stack {
+  @apply flex flex-col gap-4;
+}
+
+.starfield {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.starfield::before,
+.starfield::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 40px 70px, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 50px 160px, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 90px 40px, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 160px 120px, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(1px 1px at 200px 150px, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 250px 200px, rgba(255, 255, 255, 0.7), transparent);
+  background-repeat: repeat;
+  background-size: 650px 450px;
+  animation: twinkle 8s ease-in-out infinite alternate;
+}
+
+.starfield::after {
+  background-image:
+    radial-gradient(1px 1px at 10px 10px, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 100px 50px, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 180px 120px, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 260px 200px, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 340px 280px, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 420px 360px, rgba(255, 255, 255, 0.5), transparent);
+  background-size: 600px 500px;
+  animation: twinkle 12s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes twinkle {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
