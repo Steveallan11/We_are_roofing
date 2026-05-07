@@ -22,24 +22,49 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>) {
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+  let session = null;
+
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>) {
+            cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          }
         }
       }
-    }
-  );
+    );
 
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
+    const result = await supabase.auth.getSession();
+    session = result.data.session;
+  } catch (error) {
+    console.error("Middleware session check failed", {
+      pathname,
+      error: error instanceof Error ? error.message : String(error)
+    });
+
+    if (pathname === "/") {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    if (pathname === "/login") {
+      return response;
+    }
+
+    if (isProtected) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      loginUrl.searchParams.set("auth_error", "1");
+      return NextResponse.redirect(loginUrl);
+    }
+
+    return response;
+  }
 
   if (pathname === "/") {
     return NextResponse.redirect(new URL(session ? "/dashboard" : "/login", request.url));
