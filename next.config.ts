@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
-  outputFileTracingRoot: "C:\\Users\\leona\\Documents\\Roofing Assistant Ai\\we are roofing"
+  outputFileTracingRoot: path.join(__dirname)
 };
 
 export default nextConfig;
