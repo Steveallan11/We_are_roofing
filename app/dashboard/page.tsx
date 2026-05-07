@@ -21,9 +21,6 @@ export default async function DashboardPage() {
           <Link className="button-ghost" href={crmHref}>
             Open CRM
           </Link>
-          <Link className="button-secondary" href="/login">
-            Admin Login
-          </Link>
         </>
       }
     >
@@ -67,7 +64,6 @@ export default async function DashboardPage() {
             <div className="mt-4 space-y-2 text-sm text-[var(--muted)]">
               <p className="text-[var(--text)]">werroofing@gmail.com</p>
               <p>Single admin login for the MVP office workflow.</p>
-              <p>Supabase Auth still needs live credentials before this becomes a protected production login.</p>
             </div>
           </div>
         </aside>

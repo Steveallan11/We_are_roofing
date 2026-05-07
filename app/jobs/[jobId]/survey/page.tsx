@@ -20,7 +20,7 @@ export default async function SurveyPage({ params }: Props) {
       actions={
         <>
           <Link className="button-secondary" href={`/jobs/${bundle.job.id}/quote`}>
-            Create Quote
+            Quote Review
           </Link>
           <Link className="button-ghost" href={`/jobs/${bundle.job.id}`}>
             Back to Job
@@ -45,13 +45,14 @@ export default async function SurveyPage({ params }: Props) {
               <p className="text-white">{bundle.customer.full_name}</p>
             </div>
           </div>
-          <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[rgba(212,175,55,0.05)] p-4 text-sm text-[var(--muted)]">
-            Next refinement after this pass: add route-specific survey sections for flat roof, pitched/tiled, fascias/soffits/gutters,
-            chimney/lead, and other roof types so the quote engine can work from richer structure.
-          </div>
         </div>
 
-        <SurveyForm initialSurvey={bundle.survey} />
+        <SurveyForm
+          initialSurvey={bundle.survey}
+          jobId={bundle.job.id}
+          roofType={(bundle.job.roof_type as "Flat" | "Pitched" | "Slate" | "Tile" | "Fascia" | "Chimney" | "Mixed" | "Other") ?? "Other"}
+          surveyType={(bundle.survey?.survey_type as "Flat Roof" | "Pitched / Tiled" | "Fascias / Soffits / Gutters" | "Chimney / Lead" | "Other / Misc") ?? "Other / Misc"}
+        />
       </div>
     </AppShell>
   );

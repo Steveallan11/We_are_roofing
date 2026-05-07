@@ -105,14 +105,17 @@ export default async function JobDetailPage({ params }: Props) {
                   </div>
                 ))
               ) : (
-                <div className="surface-muted rounded-2xl border p-4 text-sm text-[var(--muted)]">
-                  No photos yet. The photo upload endpoint is part of the next API pass.
-                </div>
+                <div className="surface-muted rounded-2xl border p-4 text-sm text-[var(--muted)]">No site photos saved yet.</div>
               )}
             </div>
           </div>
 
-          <SurveyForm initialSurvey={bundle.survey} />
+          <SurveyForm
+            initialSurvey={bundle.survey}
+            jobId={bundle.job.id}
+            roofType={(bundle.job.roof_type as "Flat" | "Pitched" | "Slate" | "Tile" | "Fascia" | "Chimney" | "Mixed" | "Other") ?? "Other"}
+            surveyType={(bundle.survey?.survey_type as "Flat Roof" | "Pitched / Tiled" | "Fascias / Soffits / Gutters" | "Chimney / Lead" | "Other / Misc") ?? "Other / Misc"}
+          />
         </div>
 
         <aside className="stack">
@@ -140,7 +143,7 @@ export default async function JobDetailPage({ params }: Props) {
                   <div className="rounded-2xl border p-3" key={material.id}>
                     <p className="font-semibold text-white">{material.item_name}</p>
                     <p className="mt-1 text-sm text-[var(--muted)]">
-                      {material.quantity} {material.unit} • {material.required_status}
+                      {material.quantity} {material.unit} - {material.required_status}
                     </p>
                   </div>
                 ))
