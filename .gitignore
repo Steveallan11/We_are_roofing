@@ -10,3 +10,7 @@ coverage
 dist
 *.log
 
+
+we-are-roofing-app/
+we-are-roofing-website/
+edge-functions/
