@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { MetricCard } from "@/components/layout/metric-card";
 import { JobCard } from "@/components/jobs/job-card";
@@ -6,6 +7,7 @@ import { getBusiness, getDashboardStats, getJobs } from "@/lib/data";
 
 export default async function DashboardPage() {
   const [business, stats, jobs] = await Promise.all([getBusiness(), getDashboardStats(), getJobs()]);
+  const crmHref = "/crm" as Route;
 
   return (
     <AppShell
@@ -15,6 +17,9 @@ export default async function DashboardPage() {
         <>
           <Link className="button-primary" href="/jobs/new">
             Add New Job
+          </Link>
+          <Link className="button-ghost" href={crmHref}>
+            Open CRM
           </Link>
           <Link className="button-secondary" href="/login">
             Admin Login
@@ -57,9 +62,16 @@ export default async function DashboardPage() {
               <p>VAT {business.vat_rate}%</p>
             </div>
           </div>
+          <div className="card p-5">
+            <p className="section-kicker text-[0.65rem] uppercase">Admin Access</p>
+            <div className="mt-4 space-y-2 text-sm text-[var(--muted)]">
+              <p className="text-[var(--text)]">werroofing@gmail.com</p>
+              <p>Single admin login for the MVP office workflow.</p>
+              <p>Supabase Auth still needs live credentials before this becomes a protected production login.</p>
+            </div>
+          </div>
         </aside>
       </section>
     </AppShell>
   );
 }
-

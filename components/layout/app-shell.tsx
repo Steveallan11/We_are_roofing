@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { Starfield } from "@/components/ui/starfield";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 type Props = {
   title: string;
@@ -24,7 +25,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             </div>
             <nav className="hidden items-center gap-3 text-sm text-[var(--muted)] md:flex">
               <Link href="/dashboard">Dashboard</Link>
+              <Link href="/crm">CRM</Link>
               <Link href="/jobs/new">New Job</Link>
+              <LogoutButton />
             </nav>
           </div>
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -41,4 +44,3 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     </div>
   );
 }
-

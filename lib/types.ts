@@ -129,6 +129,11 @@ export type DashboardStats = {
   materialsNeeded: number;
 };
 
+export type KanbanColumn = {
+  status: JobStatus;
+  jobs: Job[];
+};
+
 export type Business = {
   id: string;
   business_name: string;

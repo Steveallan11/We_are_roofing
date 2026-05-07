@@ -16,6 +16,7 @@ import type {
   DashboardStats,
   Job,
   JobBundle,
+  KanbanColumn,
   KnowledgeBaseRecord,
   QuoteRecord,
   SurveyRecord
@@ -116,6 +117,36 @@ export async function getKnowledgeBase(): Promise<KnowledgeBaseRecord[]> {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase.from("knowledge_base").select("*").order("category", { ascending: true });
   return (data as KnowledgeBaseRecord[] | null) ?? MOCK_KNOWLEDGE_BASE;
+}
+
+export async function getCustomers(): Promise<Customer[]> {
+  if (!canUseSupabase()) {
+    return MOCK_CUSTOMERS;
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase.from("customers").select("*").order("created_at", { ascending: false });
+  return (data as Customer[] | null) ?? MOCK_CUSTOMERS;
+}
+
+export async function getKanbanColumns(): Promise<Array<KanbanColumn & { customer?: Customer | null; quote?: QuoteRecord | null }>> {
+  const jobs = await getJobs();
+  const statuses: Array<Job["status"]> = [
+    "New Lead",
+    "Survey Complete",
+    "Ready For AI Quote",
+    "Quote Drafted",
+    "Ready To Send",
+    "Quote Sent",
+    "Accepted",
+    "Booked",
+    "Completed"
+  ];
+
+  return statuses.map((status) => ({
+    status,
+    jobs: jobs.filter((job) => job.status === status)
+  }));
 }
 
 export function getEmptySurvey(): SurveyRecord {
