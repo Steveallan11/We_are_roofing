@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -97,7 +98,11 @@ export default async function CustomerDetailPage({ params }: Props) {
         ) : (
           <div className="space-y-2">
             {(jobs ?? []).map((job: any) => (
-              <Link key={job.id} href={"/jobs/" + job.id} className="block rounded-xl border border-[var(--border)] p-3 hover:-translate-y-0.5 transition hover:border-[var(--border2)]">
+              <Link
+                key={job.id}
+                href={`/jobs/${job.id}` as Route}
+                className="block rounded-xl border border-[var(--border)] p-3 hover:-translate-y-0.5 transition hover:border-[var(--border2)]"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
