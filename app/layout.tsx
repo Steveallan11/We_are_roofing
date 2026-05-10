@@ -1,39 +1,21 @@
 import type { Metadata } from "next";
-import { Barlow, Barlow_Condensed, Bebas_Neue, Geist_Mono } from "next/font/google";
-import "@/app/globals.css";
-
-const body = Barlow({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-body"
-});
-
-const display = Bebas_Neue({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-display"
-});
-
-const condensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-condensed"
-});
-
-const mono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono"
-});
+import { NavShell } from "@/components/layout/nav-shell";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "We Are Roofing OS",
-  description: "Mobile-first roofing survey, quote, and job workflow."
+  description: "Business management system for We Are Roofing UK Ltd",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${body.variable} ${display.variable} ${condensed.variable} ${mono.variable}`}>
-      <body>{children}</body>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      </head>
+      <body><NavShell>{children}</NavShell></body>
     </html>
   );
 }
