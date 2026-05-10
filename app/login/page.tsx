@@ -14,7 +14,7 @@ export default function LoginPage() {
       <div className="mx-auto max-w-xl">
         <div className="card p-6 md:p-8">
           <div className="stack">
-            <Suspense fallback={<div className="text-sm text-[var(--muted)]">Loading sign-in…</div>}>
+            <Suspense fallback={<div className="text-sm text-[var(--muted)]">Loading sign-in...</div>}>
               <LoginForm authEnabled={authEnabled} defaultEmail={defaultEmail} />
             </Suspense>
             <div className="rounded-2xl border border-[var(--border)] bg-[rgba(212,175,55,0.05)] p-4 text-sm text-[var(--muted)]">

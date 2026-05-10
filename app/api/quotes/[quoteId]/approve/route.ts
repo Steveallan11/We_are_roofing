@@ -13,7 +13,7 @@ export async function POST(_request: Request, { params }: Props) {
     return NextResponse.json({
       ok: true,
       quoteId,
-      message: "Approve quote endpoint scaffolded.",
+      message: "Quote approved.",
       next_job_status: "Ready To Send",
       next_quote_status: "Approved"
     });
