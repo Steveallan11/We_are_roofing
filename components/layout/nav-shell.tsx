@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const NAV = [
@@ -15,9 +16,8 @@ export function NavShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="hidden md:flex md:w-52 md:flex-col md:fixed md:inset-y-0 border-r border-[var(--border)] bg-[var(--dark)]">
         <div className="px-4 pt-5 pb-3">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="text-2xl">🏠</span>
-            <div><p className="font-condensed text-lg text-white leading-tight">We Are Roofing</p><p className="text-[10px] uppercase tracking-[0.15em] text-[var(--gold)]">Business OS</p></div>
+          <Link href="/dashboard">
+            <img src="/logo.svg" alt="We Are Roofing" className="h-10 w-auto" />
           </Link>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-1">
