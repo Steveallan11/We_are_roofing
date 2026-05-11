@@ -60,6 +60,9 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
 
     setSuccess(result.message || "Action completed.");
     startTransition(() => {
+      if (action === "generate" || action === "pdf" || action === "approve") {
+        router.push(`/jobs/${jobId}/quote`);
+      }
       router.refresh();
     });
   }
@@ -70,6 +73,11 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
         {!quote ? (
           <button className="button-primary" disabled={isPending} onClick={() => runAction("generate")} type="button">
             {isPending ? "Creating Quote..." : "Create Quote"}
+          </button>
+        ) : null}
+        {quote ? (
+          <button className="button-ghost" disabled={isPending} onClick={() => router.push(`/jobs/${jobId}/quote`)} type="button">
+            Open Quote Review
           </button>
         ) : null}
         {quote ? (
