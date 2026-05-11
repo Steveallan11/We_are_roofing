@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 export async function POST(request: Request) {
@@ -59,8 +60,13 @@ export async function POST(request: Request) {
   if (file) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
     filePath = `knowledge/${Date.now()}-${safeName}`;
+    const bucketResult = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+    if (!bucketResult.ok) {
+      return NextResponse.json({ ok: false, error: bucketResult.error }, { status: 500 });
+    }
+
     const upload = await supabase.storage
-      .from("job-documents")
+      .from(JOB_DOCUMENTS_BUCKET)
       .upload(filePath, Buffer.from(await file.arrayBuffer()), {
         contentType: file.type || "application/octet-stream",
         upsert: true
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: upload.error.message }, { status: 500 });
     }
 
-    filePublicUrl = supabase.storage.from("job-documents").getPublicUrl(filePath).data.publicUrl;
+    filePublicUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, filePath);
   }
 
   if (recordType === "knowledge_base") {

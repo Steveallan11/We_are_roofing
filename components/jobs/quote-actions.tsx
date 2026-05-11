@@ -87,7 +87,7 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
       body: JSON.stringify(request.body)
     });
 
-    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string; warning?: string | null } | null;
 
     if (!response.ok || !result?.ok) {
       setActiveAction(null);
@@ -95,7 +95,7 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
       return;
     }
 
-    setSuccess(result.message || "Action completed.");
+    setSuccess([result.message, result.warning].filter(Boolean).join(" ") || "Action completed.");
     startTransition(() => {
       if (action === "generate" || action === "pdf" || action === "approve") {
         router.push(`/jobs/${jobId}/quote`);

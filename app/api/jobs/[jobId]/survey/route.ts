@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 type Props = {
@@ -195,18 +196,21 @@ async function persistSurveySnapshot({
   });
 
   const storagePath = `${jobId}/surveys/${surveyId}/site-survey-latest.html`;
-  const upload = await supabase.storage.from("job-documents").upload(storagePath, Buffer.from(html, "utf8"), {
-    contentType: "text/html; charset=utf-8",
-    upsert: true
-  });
+  const bucketResult = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+  const upload = bucketResult.ok
+    ? await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(storagePath, Buffer.from(html, "utf8"), {
+        contentType: "text/html; charset=utf-8",
+        upsert: true
+      })
+    : { error: { message: bucketResult.error } };
 
-  const publicUrl = upload.error ? null : supabase.storage.from("job-documents").getPublicUrl(storagePath).data.publicUrl;
+  const publicUrl = upload.error ? null : getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, storagePath);
   const payload = {
     job_id: jobId,
     quote_id: null,
     document_type: "survey_snapshot",
     display_name: "Site Survey Snapshot",
-    storage_bucket: publicUrl ? "job-documents" : null,
+    storage_bucket: publicUrl ? JOB_DOCUMENTS_BUCKET : null,
     storage_path: publicUrl ? storagePath : null,
     public_url: publicUrl,
     source_type: "generated",

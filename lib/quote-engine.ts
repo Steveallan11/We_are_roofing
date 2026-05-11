@@ -4,9 +4,8 @@ import type {
   PricingRuleRecord,
   QuoteRecord
 } from "@/lib/types";
+import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-
-const PDF_BUCKET = "job-documents";
 
 function scoreHistoricalQuote(bundle: JobBundle, record: HistoricalQuoteRecord) {
   let score = 0;
@@ -245,21 +244,41 @@ export async function persistQuoteArtifacts(
 
   let htmlUrl: string | null = null;
   let pdfUrl: string | null = null;
+  let bucketError: string | null = null;
+  let htmlError: string | null = null;
+  let pdfError: string | null = null;
 
-  const htmlUpload = await supabase.storage.from(PDF_BUCKET).upload(htmlPath, Buffer.from(html, "utf8"), {
-    contentType: "text/html; charset=utf-8",
-    upsert: true
-  });
-  if (!htmlUpload.error) {
-    htmlUrl = supabase.storage.from(PDF_BUCKET).getPublicUrl(htmlPath).data.publicUrl;
-  }
+  const bucketResult = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+  if (!bucketResult.ok) {
+    bucketError = bucketResult.error;
+    htmlError = bucketError;
+    pdfError = bucketError;
+  } else {
+    const htmlUpload = await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(htmlPath, Buffer.from(html, "utf8"), {
+      contentType: "text/html; charset=utf-8",
+      upsert: true
+    });
+    if (htmlUpload.error) {
+      htmlError = htmlUpload.error.message;
+    } else {
+      htmlUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, htmlPath);
+      if (!htmlUrl) {
+        htmlError = "HTML snapshot uploaded, but no public URL could be generated.";
+      }
+    }
 
-  const pdfUpload = await supabase.storage.from(PDF_BUCKET).upload(pdfPath, pdf, {
-    contentType: "application/pdf",
-    upsert: true
-  });
-  if (!pdfUpload.error) {
-    pdfUrl = supabase.storage.from(PDF_BUCKET).getPublicUrl(pdfPath).data.publicUrl;
+    const pdfUpload = await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(pdfPath, pdf, {
+      contentType: "application/pdf",
+      upsert: true
+    });
+    if (pdfUpload.error) {
+      pdfError = pdfUpload.error.message;
+    } else {
+      pdfUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, pdfPath);
+      if (!pdfUrl) {
+        pdfError = "PDF uploaded, but no public URL could be generated.";
+      }
+    }
   }
 
   const [{ data: existingHtml }, { data: existingPdf }] = await Promise.all([
@@ -284,7 +303,7 @@ export async function persistQuoteArtifacts(
     quote_id: quote.id,
     document_type: "quote_html",
     display_name: `${quote.quote_ref} HTML Snapshot`,
-    storage_bucket: htmlUrl ? PDF_BUCKET : null,
+    storage_bucket: htmlUrl ? JOB_DOCUMENTS_BUCKET : null,
     storage_path: htmlUrl ? htmlPath : null,
     public_url: htmlUrl,
     source_type: "generated",
@@ -298,7 +317,7 @@ export async function persistQuoteArtifacts(
     quote_id: quote.id,
     document_type: "quote_pdf",
     display_name: `${quote.quote_ref}.pdf`,
-    storage_bucket: pdfUrl ? PDF_BUCKET : null,
+    storage_bucket: pdfUrl ? JOB_DOCUMENTS_BUCKET : null,
     storage_path: pdfUrl ? pdfPath : null,
     public_url: pdfUrl,
     source_type: "generated",
@@ -326,7 +345,7 @@ export async function persistQuoteArtifacts(
       .eq("id", quote.id);
   }
 
-  return { htmlUrl, pdfUrl, html, pdf };
+  return { htmlUrl, pdfUrl, html, pdf, bucketError, htmlError, pdfError };
 }
 
 function wrapText(text: string, maxLength = 92) {

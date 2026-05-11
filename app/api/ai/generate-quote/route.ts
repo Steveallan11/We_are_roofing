@@ -113,6 +113,10 @@ export async function POST(request: Request) {
       ...quoteRecord,
       pdf_url: artifacts.pdfUrl ?? quoteRecord.pdf_url
     },
-    next_job_status: "Quote Drafted"
+    next_job_status: "Quote Drafted",
+    warning:
+      artifacts.pdfUrl || artifacts.htmlUrl
+        ? null
+        : artifacts.pdfError || artifacts.bucketError || "Quote drafted, but document snapshots could not be uploaded."
   });
 }
