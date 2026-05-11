@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { AppShell } from "@/components/layout/app-shell";
 import { LoginForm } from "@/components/auth/login-form";
 
 export default function LoginPage() {
@@ -6,24 +7,24 @@ export default function LoginPage() {
   const defaultEmail = process.env.NEXT_PUBLIC_MVP_ADMIN_EMAIL ?? "werroofing@gmail.com";
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="card max-w-md w-full p-8">
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--gold)]">We Are Roofing OS</p>
-          <h1 className="mt-2 font-condensed text-3xl text-white">Admin Sign In</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">Sign in with the We Are Roofing admin account to access the live dashboard, pipeline, customers, and job workflow.</p>
-        </div>
-        <div className="mt-6">
-          <Suspense fallback={<div className="text-sm text-[var(--muted)]">Loading sign-in...</div>}>
-            <LoginForm authEnabled={authEnabled} defaultEmail={defaultEmail} />
-          </Suspense>
-        </div>
-        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[rgba(212,175,55,0.05)] p-4 text-sm text-[var(--muted)]">
-          <p className="text-[var(--text)]">Admin account: {defaultEmail}</p>
-          <p className="mt-2">The session should stay live until you sign out.</p>
-          {!authEnabled ? <p className="mt-2 text-[#ff9a91]">Supabase auth env vars are not configured for this environment yet.</p> : null}
+    <AppShell
+      title="Sign In"
+      subtitle="This is now the front door to the app. On a successful Supabase login the session should stay active, so you go straight back into the app until you sign out."
+    >
+      <div className="mx-auto max-w-xl">
+        <div className="card p-6 md:p-8">
+          <div className="stack">
+            <Suspense fallback={<div className="text-sm text-[var(--muted)]">Loading sign-in...</div>}>
+              <LoginForm authEnabled={authEnabled} defaultEmail={defaultEmail} />
+            </Suspense>
+            <div className="rounded-2xl border border-[var(--border)] bg-[rgba(212,175,55,0.05)] p-4 text-sm text-[var(--muted)]">
+              <p className="text-[var(--text)]">Admin account: {defaultEmail}</p>
+              <p className="mt-2">Once signed in successfully, the app should keep the session and open straight back into the protected area.</p>
+              {!authEnabled ? <p className="mt-2 text-[#ff9a91]">Supabase env vars are not configured in this environment yet.</p> : null}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

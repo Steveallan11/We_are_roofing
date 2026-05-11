@@ -11,6 +11,10 @@ const serverSchema = clientSchema.extend({
   OPENAI_API_KEY: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().email().optional(),
+  NOTION_API_KEY: z.string().min(1).optional(),
+  NOTION_QUOTES_DATA_SOURCE_ID: z.string().min(1).optional(),
+  NOTION_KNOWLEDGE_DATA_SOURCE_ID: z.string().min(1).optional(),
+  NOTION_VERSION: z.string().min(1).default("2025-09-03"),
   APP_URL: z.string().url().default("http://localhost:3000"),
   MVP_ADMIN_EMAIL: z.string().email().optional()
 });

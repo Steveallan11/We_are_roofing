@@ -1,86 +1,78 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
+import { QuoteActions } from "@/components/jobs/quote-actions";
+import { AppShell } from "@/components/layout/app-shell";
 import { SurveyForm } from "@/components/forms/survey-form";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle } from "@/lib/data";
-import { formatDate } from "@/lib/utils";
 
-type Props = { params: Promise<{ jobId: string }> };
+type Props = {
+  params: Promise<{ jobId: string }>;
+};
 
 export default async function SurveyPage({ params }: Props) {
   const { jobId } = await params;
   const bundle = await getJobBundle(jobId);
-
   if (!bundle) notFound();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--gold)]">{bundle.job.roof_type ?? "Roofing"}</span>
-            <StatusPill status={bundle.job.status} />
-          </div>
-          <h1 className="mt-1 font-condensed text-3xl text-white">Site Survey</h1>
-          <p className="text-sm text-[var(--muted)]">
-            {bundle.customer?.full_name ?? "Unknown customer"} · {bundle.job.property_address}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link className="button-secondary text-sm" href={`/jobs/${jobId}`}>
-            Job Overview
+    <AppShell
+      title="Site Survey"
+      subtitle="Capture the details needed for quoting and job overview: condition, measurements, access, likely cause, and what the customer is expecting."
+      actions={
+        <>
+          <QuoteActions customerEmail={bundle.customer.email} jobId={bundle.job.id} quote={bundle.quote ?? null} />
+          <Link className="button-ghost" href={`/jobs/${bundle.job.id}`}>
+            Back to Job
           </Link>
-          <Link className="button-ghost text-sm" href="/dashboard">
-            Dashboard
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="card p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--gold)]">Customer</p>
-          <p className="mt-2 font-condensed text-xl text-white">{bundle.customer?.full_name ?? "Unknown"}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">{bundle.customer?.phone ?? "No phone saved"}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--gold)]">Survey Status</p>
-          <p className="mt-2 text-sm text-[var(--text)]">{bundle.survey ? "Survey already started" : "No survey saved yet"}</p>
-          <p className="mt-1 text-xs text-[var(--dim)]">Updated {formatDate(bundle.survey?.updated_at ?? bundle.job.updated_at ?? null)}</p>
-        </div>
-        <div className="card p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--gold)]">Photos</p>
-              <p className="mt-2 text-sm text-[var(--text)]">{bundle.photos.length} uploaded</p>
+        </>
+      }
+    >
+      <div className="stack">
+        <div className="card p-5">
+          <p className="section-kicker text-[0.65rem] uppercase">Survey Route</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-[var(--border)] p-4">
+              <p className="label">Roof Type</p>
+              <p className="text-white">{bundle.job.roof_type ?? "Unknown"}</p>
             </div>
-            <PhotoUploadButton jobId={jobId} />
+            <div className="rounded-2xl border border-[var(--border)] p-4">
+              <p className="label">Job Type</p>
+              <p className="text-white">{bundle.job.job_type ?? "Unknown"}</p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] p-4">
+              <p className="label">Customer</p>
+              <p className="text-white">{bundle.customer.full_name}</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {bundle.photos.length > 0 ? (
-        <div className="card p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--gold)]">Latest Photos</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {bundle.photos.slice(0, 8).map((photo: any) => (
-              <div key={photo.id} className="overflow-hidden rounded-xl border border-[var(--border)]">
-                {photo.public_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt={photo.caption ?? photo.photo_type} className="h-28 w-full object-cover" src={photo.public_url} />
-                ) : (
-                  <div className="flex h-28 items-center justify-center bg-[var(--card2)] text-xs text-[var(--dim)]">Processing...</div>
-                )}
-                <div className="p-2">
-                  <p className="text-xs font-semibold text-white">{photo.photo_type}</p>
-                </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="section-kicker text-[0.65rem] uppercase">Quote Readiness</p>
+              <div className="mt-3 flex items-center gap-3">
+                <StatusPill status={bundle.job.status} />
+                {bundle.quote ? <StatusPill status={bundle.quote.status} /> : null}
               </div>
-            ))}
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                Save the survey, upload the supporting photos, then generate the first draft from this screen. The draft will be saved back into the job file for review and sending.
+              </p>
+            </div>
+            <div className="min-w-[280px] flex-1">
+              <PhotoUploadButton jobId={bundle.job.id} />
+            </div>
           </div>
         </div>
-      ) : null}
 
-      <SurveyForm jobId={jobId} initialSurvey={bundle.survey} />
-    </div>
+        <SurveyForm
+          initialSurvey={bundle.survey}
+          jobId={bundle.job.id}
+          roofType={(bundle.job.roof_type as "Flat" | "Pitched" | "Slate" | "Tile" | "Fascia" | "Chimney" | "Mixed" | "Other") ?? "Other"}
+          surveyType={(bundle.survey?.survey_type as "Flat Roof" | "Pitched / Tiled" | "Fascias / Soffits / Gutters" | "Chimney / Lead" | "Other / Misc") ?? "Other / Misc"}
+        />
+      </div>
+    </AppShell>
   );
 }

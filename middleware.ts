@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import type { CookieOptions } from "@supabase/ssr";
 import { createServerClient } from "@supabase/ssr";
 
-const protectedPrefixes = ["/dashboard", "/pipeline", "/customers", "/jobs", "/leads"];
+const protectedPrefixes = ["/dashboard", "/crm", "/jobs"];
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({
@@ -25,20 +25,29 @@ export async function middleware(request: NextRequest) {
   let session = null;
 
   try {
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>) {
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>) {
+            cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          }
         }
       }
-    });
+    );
 
     const result = await supabase.auth.getSession();
     session = result.data.session;
-  } catch {
+  } catch (error) {
+    console.error("Middleware session check failed", {
+      pathname,
+      error: error instanceof Error ? error.message : String(error)
+    });
+
     if (pathname === "/") {
       return NextResponse.redirect(new URL("/login", request.url));
     }
@@ -75,5 +84,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/dashboard/:path*", "/pipeline/:path*", "/customers/:path*", "/jobs/:path*", "/leads/:path*"]
+  matcher: ["/", "/login", "/dashboard/:path*", "/crm/:path*", "/jobs/:path*"]
 };

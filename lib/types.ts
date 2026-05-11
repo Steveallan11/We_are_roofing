@@ -223,6 +223,9 @@ export type JobPhoto = {
   public_url?: string | null;
   photo_type: PhotoType;
   caption?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
+  created_at?: string;
   uploaded_at?: string;
 };
 
@@ -269,6 +272,69 @@ export type KnowledgeBaseRecord = {
   content: string;
   source_type?: string | null;
   tags: string[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type HistoricalQuoteRecord = {
+  id: string;
+  business_id: string;
+  title: string;
+  source_reference?: string | null;
+  source_record_id?: string | null;
+  source_url?: string | null;
+  source_type: string;
+  source_date?: string | null;
+  source_year?: number | null;
+  roof_type?: string | null;
+  job_type?: string | null;
+  tags: string[];
+  imported_text: string;
+  scope_excerpt?: string | null;
+  materials_excerpt?: string | null;
+  original_total?: number | null;
+  uplifted_reference_total?: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PricingRuleRecord = {
+  id: string;
+  business_id: string;
+  title: string;
+  year_from?: number | null;
+  year_to?: number | null;
+  roof_type?: string | null;
+  job_type?: string | null;
+  uplift_multiplier: number;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type JobDocumentRecord = {
+  id: string;
+  job_id: string;
+  quote_id?: string | null;
+  document_type: string;
+  display_name: string;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  public_url?: string | null;
+  source_type: string;
+  mime_type?: string | null;
+  file_size?: number | null;
+  content_html?: string | null;
+  created_at?: string;
+};
+
+export type QuoteAttachmentRecord = {
+  id: string;
+  quote_id: string;
+  job_photo_id?: string | null;
+  job_document_id?: string | null;
+  attachment_type: string;
+  created_at?: string;
 };
 
 export type EmailLog = {
@@ -291,4 +357,6 @@ export type JobBundle = {
   quote?: QuoteRecord | null;
   materials: MaterialRecord[];
   photos: JobPhoto[];
+  documents: JobDocumentRecord[];
+  email_logs: EmailLog[];
 };

@@ -1,5 +1,13 @@
 import OpenAI from "openai";
-import type { GeneratedQuote, JobBundle, KnowledgeBaseRecord, MaterialLineItem } from "@/lib/types";
+import type {
+  GeneratedQuote,
+  HistoricalQuoteRecord,
+  JobBundle,
+  KnowledgeBaseRecord,
+  MaterialLineItem,
+  PricingRuleRecord
+} from "@/lib/types";
+import { getComparableHistoricalQuotes } from "@/lib/quote-engine";
 
 const PROMPT_VERSION = "weareroofing-v1";
 
@@ -40,20 +48,46 @@ function buildFallbackMaterials(bundle: JobBundle): MaterialLineItem[] {
 
 export async function generateQuoteFromBundle(
   bundle: JobBundle,
-  knowledgeBase: KnowledgeBaseRecord[]
+  knowledgeBase: KnowledgeBaseRecord[],
+  historicalQuotes: HistoricalQuoteRecord[] = [],
+  pricingRules: PricingRuleRecord[] = []
 ): Promise<GeneratedQuote & { model_name: string; prompt_version: string }> {
   if (!process.env.OPENAI_API_KEY) {
     return buildFallbackQuote(bundle);
   }
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const comparables = getComparableHistoricalQuotes(bundle, historicalQuotes, pricingRules);
   const knowledge = knowledgeBase
     .map((record) => `${record.category}: ${record.title}\n${record.content}`)
     .join("\n\n");
+  const comparableQuoteContext = comparables
+    .map(
+      (record) =>
+        `Title: ${record.title}
+Year: ${record.source_year ?? "Unknown"}
+Roof Type: ${record.roof_type ?? "Unknown"}
+Job Type: ${record.job_type ?? "Unknown"}
+Original Total: ${record.original_total ?? "Unknown"}
+Uplifted Total: ${record.uplifted_reference_total ?? "Unknown"}
+Tags: ${(record.tags ?? []).join(", ")}
+Imported Text:
+${record.imported_text}`
+    )
+    .join("\n\n---\n\n");
+  const pricingRuleContext = pricingRules
+    .map(
+      (rule) =>
+        `${rule.title}: years ${rule.year_from ?? "any"}-${rule.year_to ?? "any"}, roof ${rule.roof_type ?? "any"}, job ${
+          rule.job_type ?? "any"
+        }, multiplier ${rule.uplift_multiplier}. ${rule.notes ?? ""}`
+    )
+    .join("\n");
 
   const prompt = `
 You are the We Are Roofing Expert Quote Builder.
 Use the survey and knowledge base below to produce a professional quote in conservative UK roofer language.
+Use the historical quotes as style and comparable-price anchors only. Do not blindly copy old totals; instead apply the uplifted totals and current survey facts.
 Return JSON only.
 
 Business:
@@ -73,6 +107,12 @@ ${JSON.stringify(bundle.photos, null, 2)}
 
 Knowledge base:
 ${knowledge}
+
+Historical quote comparables:
+${comparableQuoteContext || "No historical quote comparables available."}
+
+Pricing rules:
+${pricingRuleContext || "No pricing rules configured."}
 `;
 
   const response = await client.responses.create({

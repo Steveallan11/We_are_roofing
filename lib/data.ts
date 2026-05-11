@@ -14,10 +14,14 @@ import type {
   Business,
   Customer,
   DashboardStats,
+  EmailLog,
+  HistoricalQuoteRecord,
   Job,
   JobBundle,
+  JobDocumentRecord,
   KanbanColumn,
   KnowledgeBaseRecord,
+  PricingRuleRecord,
   QuoteRecord,
   SurveyRecord
 } from "@/lib/types";
@@ -89,13 +93,15 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
   const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return null;
 
-  const [businessResult, customerResult, surveyResult, quoteResult, materialResult, photoResult] = await Promise.all([
+  const [businessResult, customerResult, surveyResult, quoteResult, materialResult, photoResult, documentResult, emailResult] = await Promise.all([
     supabase.from("businesses").select("*").eq("id", job.business_id).single(),
     supabase.from("customers").select("*").eq("id", job.customer_id).single(),
     supabase.from("surveys").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("quotes").select("*").eq("job_id", jobId).order("version_number", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("materials").select("*").eq("job_id", jobId).order("created_at", { ascending: true }),
-    supabase.from("job_photos").select("*").eq("job_id", jobId).order("uploaded_at", { ascending: false })
+    supabase.from("job_photos").select("*").eq("job_id", jobId).order("uploaded_at", { ascending: false }),
+    supabase.from("job_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+    supabase.from("email_logs").select("*").eq("job_id", jobId).order("sent_at", { ascending: false })
   ]);
 
   return {
@@ -105,7 +111,9 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     survey: (surveyResult.data as SurveyRecord | null) ?? null,
     quote: (quoteResult.data as QuoteRecord | null) ?? null,
     materials: (materialResult.data as JobBundle["materials"] | null) ?? [],
-    photos: (photoResult.data as JobBundle["photos"] | null) ?? []
+    photos: (photoResult.data as JobBundle["photos"] | null) ?? [],
+    documents: (documentResult.data as JobDocumentRecord[] | null) ?? [],
+    email_logs: (emailResult.data as EmailLog[] | null) ?? []
   };
 }
 
@@ -127,6 +135,36 @@ export async function getCustomers(): Promise<Customer[]> {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase.from("customers").select("*").order("created_at", { ascending: false });
   return (data as Customer[] | null) ?? MOCK_CUSTOMERS;
+}
+
+export async function getHistoricalQuotes(limit = 100): Promise<HistoricalQuoteRecord[]> {
+  if (!canUseSupabase()) {
+    return [];
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("historical_quotes")
+    .select("*")
+    .order("source_year", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return (data as HistoricalQuoteRecord[] | null) ?? [];
+}
+
+export async function getPricingRules(): Promise<PricingRuleRecord[]> {
+  if (!canUseSupabase()) {
+    return [];
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("pricing_rules")
+    .select("*")
+    .order("year_from", { ascending: true, nullsFirst: false });
+
+  return (data as PricingRuleRecord[] | null) ?? [];
 }
 
 export async function getKanbanColumns(): Promise<Array<KanbanColumn & { customer?: Customer | null; quote?: QuoteRecord | null }>> {

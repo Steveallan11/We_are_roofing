@@ -28,10 +28,10 @@ export const KNOWLEDGE_BASE_SEEDS: SeedRecord[] = [
   {
     title: "Pricing Reference by Job Type",
     category: "Pricing Reference",
-    tags: ["pricing", "uplift", "2025/26"],
+    tags: ["pricing", "uplift", "2025/26", "primary pricing anchor"],
     source_type: "notion_import",
     content:
-      "Historical prices are based on 2022 We Are Roofing source material and must be uplifted by roughly 15-20% for 2025/26 pricing. Always consider labour, materials, scaffold, waste, asbestos, insulation, decking, and specialist access."
+      "Historical prices are based on 2022 We Are Roofing source material and must be uplifted by roughly 15-20% for 2025/26 pricing. Treat current 2025/26 upload-batch pricing as the primary anchor where available. Always consider labour, materials, scaffold, waste, asbestos, insulation, decking, and specialist access."
   },
   {
     title: "Scope of Works Library",
@@ -60,10 +60,10 @@ export const KNOWLEDGE_BASE_SEEDS: SeedRecord[] = [
   {
     title: "Historical Quote Examples",
     category: "Historical Quote",
-    tags: ["examples", "historical", "quotes"],
+    tags: ["examples", "historical", "quotes", "logic and wording"],
     source_type: "notion_import",
     content:
-      "Use prior We Are Roofing quotes as style anchors for flat roofs, moss removal, ridge/hip works, dry valleys, lead flashing, UPVC rooflines, and chimney works. Do not copy old prices directly without uplift and current checks."
+      "Use prior We Are Roofing quotes as style anchors for flat roofs, moss removal, ridge/hip works, dry valleys, lead flashing, UPVC rooflines, and chimney works. Use older quotes mainly for logic and wording unless they are already marked as current pricing anchors. Do not copy old prices directly without uplift and current checks."
   },
   {
     title: "Email Style Guidance",
@@ -72,6 +72,13 @@ export const KNOWLEDGE_BASE_SEEDS: SeedRecord[] = [
     source_type: "notion_import",
     content:
       "Email copy should be concise, professional, and practical. Explain that the quotation is attached or linked, highlight the key recommendation, and invite the customer to reply or call with questions."
+  },
+  {
+    title: "Master Source Library Prioritisation",
+    category: "Pricing Reference",
+    tags: ["ai priority", "current pricing use", "review"],
+    source_type: "notion_import",
+    content:
+      "Use the Notion master source library with this order of trust: 1 Primary Current Price, 2 Secondary/Uplift, 3 Logic and Wording, 4 Reference Only, 5 Review Before Use. If a source says Logic or Wording Only, it may guide phrasing and scope but should not drive the final price."
   }
 ];
-

@@ -312,7 +312,9 @@ export function getMockBundle(jobId: string): JobBundle | null {
     survey: MOCK_SURVEYS.find((item) => item.job_id === jobId) ?? null,
     quote: [...MOCK_QUOTES].reverse().find((item) => item.job_id === jobId) ?? null,
     materials: MOCK_MATERIALS.filter((item) => item.job_id === jobId),
-    photos: MOCK_PHOTOS.filter((item) => item.job_id === jobId)
+    photos: MOCK_PHOTOS.filter((item) => item.job_id === jobId),
+    documents: [],
+    email_logs: []
   };
 }
 

@@ -1,111 +1,340 @@
 "use client";
-import { useState, useCallback } from "react";
-import type { SurveyRecord } from "@/lib/types";
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { SURVEY_TYPES } from "@/lib/constants";
+import type { RoofType, SurveyRecord, SurveyType } from "@/lib/types";
 
-type Props = { jobId: string; initialSurvey?: SurveyRecord | null };
-type Sec = "core" | "flat" | "pitched" | "fascia" | "chimney";
-const COND = ["Good","Fair","Poor","Failed","N/A"] as const;
+type Props = {
+  jobId: string;
+  roofType: RoofType;
+  surveyType: SurveyType;
+  initialSurvey?: SurveyRecord | null;
+};
 
-function Sel({ id, label, opts, val, hint }: { id: string; label: string; opts: readonly string[]; val?: string; hint?: string }) {
-  return (<div><label className="label" htmlFor={id}>{label}</label><select className="field" id={id} name={id} defaultValue={val ?? ""}><option value="">Select...</option>{opts.map(o=><option key={o}>{o}</option>)}</select>{hint&&<p className="mt-1 text-xs text-[var(--dim)]">{hint}</p>}</div>);
-}
-function Txt({ id, label, ph, val, multi, hint }: { id: string; label: string; ph?: string; val?: string; multi?: boolean; hint?: string }) {
-  return (<div><label className="label" htmlFor={id}>{label}</label>{multi?<textarea className="field min-h-20" id={id} name={id} placeholder={ph} defaultValue={val??""}/>:<input className="field" id={id} name={id} placeholder={ph} defaultValue={val??""}/>}{hint&&<p className="mt-1 text-xs text-[var(--dim)]">{hint}</p>}</div>);
-}
-function Tog({ id, label, def, hint }: { id: string; label: string; def?: boolean; hint?: string }) {
-  const [on,setOn]=useState(def??false);
-  return (<div className="flex items-start gap-3"><button type="button" onClick={()=>setOn(!on)} className={`mt-0.5 flex h-7 w-12 shrink-0 items-center rounded-full border-2 transition ${on?"bg-[var(--gold)] border-[var(--gold)]":"bg-[var(--card2)] border-[var(--border2)]"}`}><span className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${on?"translate-x-[22px]":"translate-x-[2px]"}`}/></button><input type="hidden" name={id} value={on?"true":"false"}/><div><p className="text-sm font-semibold text-[var(--text)]">{label}</p>{hint&&<p className="text-xs text-[var(--dim)]">{hint}</p>}</div></div>);
-}
-function Hdr({ title, icon }: { title: string; icon: string }) {
-  return (<div className="mb-3"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--gold)]">{icon} {title}</p><div className="gold-divider mt-2"/></div>);
-}
+type SectionKey = "core" | "flat" | "pitched" | "fascia" | "chimney";
+const CONDITIONS = ["Good", "Fair", "Poor", "Failed", "N/A"] as const;
 
-function CoreFields({ s }: { s?: SurveyRecord|null }) {
-  return (<><Hdr icon="📋" title="Core Survey"/><div className="grid gap-3 sm:grid-cols-2"><Txt id="surveyor_name" label="Surveyor" ph="Name" val={s?.surveyor_name??""}/><Txt id="roof_condition" label="Overall Condition" ph="General assessment" val={s?.roof_condition??""}/><Txt id="problem_observed" label="Problem Observed" ph="What did you find?" val={s?.problem_observed??""} multi hint="Main issue the customer called about"/><Txt id="suspected_cause" label="Suspected Cause" ph="What caused it?" val={s?.suspected_cause??""} multi/><Txt id="recommended_works" label="Recommended Works" ph="What work do you recommend?" val={s?.recommended_works??""} multi hint="Be specific — feeds into AI quote"/><Txt id="measurements" label="Measurements" ph="m², linear m, outlets..." val={s?.measurements??""} multi/><Txt id="access_notes" label="Access Notes" ph="Scaffold, parking, neighbours..." val={s?.access_notes??""} multi/><div className="space-y-3"><Tog id="scaffold_required" label="Scaffold Required" def={s?.scaffold_required} hint="Will scaffolding be needed?"/><Txt id="scaffold_notes" label="Scaffold Notes" ph="Type, height..." val={s?.scaffold_notes??""}/></div><Txt id="weather_notes" label="Weather" ph="Conditions during survey" val={s?.weather_notes??""}/><Txt id="safety_notes" label="Safety Notes" ph="Hazards..." val={s?.safety_notes??""}/><Txt id="customer_concerns" label="Customer Concerns" ph="Their words" val={s?.customer_concerns??""} multi hint="Helps personalise quote"/><Txt id="raw_notes" label="Other Notes" ph="Anything else..." val={s?.raw_notes??""} multi/></div></>);
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  return (
+    <label className="label" htmlFor={htmlFor}>
+      {children}
+    </label>
+  );
 }
 
-function FlatFields({ d }: { d: Record<string,unknown> }) {
-  return (<><Hdr icon="🏠" title="Flat Roof"/><div className="grid gap-3 sm:grid-cols-2"><Sel id="flat_surface" label="Current Surface" opts={["Felt","EPDM Rubber","GRP Fibreglass","Lead","Asphalt","Liquid Applied","Unknown"]} val={d.current_surface_type as string}/><Txt id="flat_age" label="Approx Age" ph="e.g. 15 years" val={d.approximate_age as string}/><Sel id="flat_deck" label="Deck Condition" opts={COND} val={d.deck_condition as string} hint="Soft spots? Bouncy?"/><Sel id="flat_drainage" label="Drainage" opts={COND} val={d.drainage_condition as string}/><Tog id="flat_ponding" label="Standing Water" def={d.standing_water as boolean} hint="Ponding visible?"/><Sel id="flat_upstands" label="Upstands" opts={COND} val={d.upstands_condition as string}/><Sel id="flat_flashings" label="Flashings" opts={COND} val={d.flashings_condition as string}/><Txt id="flat_rooflights" label="Rooflights" ph="Number, type, condition" val={d.rooflights as string}/><div className="sm:col-span-2"><Sel id="flat_system" label="Recommended System" opts={["GRP Fibreglass","EPDM Rubber","Liquid Applied","Lead","Single Ply","Other"]} val={d.recommended_system as string} hint="What would you quote?"/></div></div></>);
+function TextField({
+  id,
+  label,
+  defaultValue,
+  placeholder,
+  multiline,
+  hint
+}: {
+  id: string;
+  label: string;
+  defaultValue?: string | null;
+  placeholder?: string;
+  multiline?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      {multiline ? (
+        <textarea className="field min-h-24" defaultValue={defaultValue ?? ""} id={id} name={id} placeholder={placeholder} />
+      ) : (
+        <input className="field" defaultValue={defaultValue ?? ""} id={id} name={id} placeholder={placeholder} />
+      )}
+      {hint ? <p className="mt-1 text-xs text-[var(--dim)]">{hint}</p> : null}
+    </div>
+  );
 }
 
-function PitchedFields({ d }: { d: Record<string,unknown> }) {
-  return (<><Hdr icon="🏡" title="Pitched / Tiled"/><div className="grid gap-3 sm:grid-cols-2"><Sel id="p_tile" label="Tile Type" opts={["Concrete Interlocking","Plain Clay","Marley Modern","Redland 49","Slate","Rosemary","Unknown"]} val={d.tile_type as string}/><Sel id="p_ridge" label="Ridge Type" opts={["Mortar Bedded","Dry Ridge","Half Round","Angular","Unknown"]} val={d.ridge_type as string}/><Sel id="p_valley" label="Valley Type" opts={["Lead Lined","GRP Trough","Mortar","Tile Valley","None","Unknown"]} val={d.valley_type as string}/><Txt id="p_missing" label="Missing Tiles" ph="Count" val={d.missing_tiles as string}/><Sel id="p_felt" label="Underfelt" opts={COND} val={d.felt_condition as string} hint="From loft space?"/><Txt id="p_battens" label="Battens" ph="Condition" val={d.batten_condition as string}/><Tog id="p_solar" label="Solar Panels" def={d.solar_panels as boolean} hint="Need removing?"/><Tog id="p_chimney" label="Chimney Present" def={d.chimney_present as boolean}/><Txt id="p_hip" label="Hip Tiles" ph="Condition" val={d.hip_condition as string}/><Txt id="p_verge" label="Verge" ph="Mortar or dry verge" val={d.verge_condition as string}/><Txt id="p_eaves" label="Eaves" ph="Eaves course, ventilation" val={d.eaves_detail as string}/><Txt id="p_loft" label="Loft Inspection" ph="What did you see inside?" val={d.loft_notes as string} multi hint="Daylight? Damp? Insulation?"/></div></>);
+function SelectField({
+  id,
+  label,
+  options,
+  defaultValue,
+  hint
+}: {
+  id: string;
+  label: string;
+  options: readonly string[];
+  defaultValue?: string | null;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <select className="field" defaultValue={defaultValue ?? ""} id={id} name={id}>
+        <option value="">Select...</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      {hint ? <p className="mt-1 text-xs text-[var(--dim)]">{hint}</p> : null}
+    </div>
+  );
 }
 
-function FasciaFields({ d }: { d: Record<string,unknown> }) {
-  return (<><Hdr icon="🔧" title="Fascias / Soffits / Gutters"/><div className="grid gap-3 sm:grid-cols-2"><Sel id="f_material" label="Material" opts={["uPVC","Wood","Composite","Aluminium","Unknown"]} val={d.current_material as string}/><Sel id="f_fascia" label="Fascia Condition" opts={COND} val={d.fascia_condition as string}/><Sel id="f_soffit" label="Soffit Condition" opts={COND} val={d.soffit_condition as string}/><Sel id="f_gutter" label="Guttering" opts={COND} val={d.guttering_condition as string}/><Sel id="f_downpipe" label="Downpipe" opts={COND} val={d.downpipe_condition as string}/><Txt id="f_colour" label="Colour Preference" ph="White, black, anthracite..." val={d.colour_preference as string}/><Txt id="f_metres" label="Linear Metres" ph="Total run" val={d.linear_metres as string}/><Tog id="f_cladding" label="Cladding Present" def={d.cladding_present as boolean}/></div></>);
+function ToggleField({
+  checked,
+  hint,
+  id,
+  label,
+  onChange
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-[var(--border)] p-4">
+      <button
+        aria-pressed={checked}
+        className={`mt-0.5 flex h-7 w-12 items-center rounded-full border-2 transition ${
+          checked ? "border-[var(--gold)] bg-[var(--gold)]" : "border-[var(--border2)] bg-[var(--card2)]"
+        }`}
+        onClick={() => onChange(!checked)}
+        type="button"
+      >
+        <span
+          className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+        />
+      </button>
+      <input name={id} type="hidden" value={checked ? "true" : "false"} />
+      <div>
+        <p className="text-sm font-semibold text-[var(--text)]">{label}</p>
+        {hint ? <p className="text-xs text-[var(--dim)]">{hint}</p> : null}
+      </div>
+    </div>
+  );
 }
 
-function ChimneyFields({ d }: { d: Record<string,unknown> }) {
-  return (<><Hdr icon="🏭" title="Chimney / Lead"/><div className="grid gap-3 sm:grid-cols-2"><Sel id="c_condition" label="Chimney Condition" opts={COND} val={d.chimney_condition as string}/><Sel id="c_flaunching" label="Flaunching" opts={COND} val={d.flaunching_condition as string} hint="Mortar around pots"/><Sel id="c_lead" label="Lead Flashings" opts={COND} val={d.lead_flashings_condition as string}/><Tog id="c_flue" label="Gas Flue Present" def={d.gas_flue_present as boolean}/><Tog id="c_parapet" label="Parapet / Coping" def={d.parapet_or_coping as boolean}/><Txt id="c_pointing" label="Pointing" ph="Mortar joints..." val={d.pointing_condition as string}/><Txt id="c_pots" label="Chimney Pots" ph="Number, condition, caps..." val={d.chimney_pots as string}/><Txt id="c_height" label="Height / Access" ph="Scaffold needed?" val={d.height_access as string}/><Txt id="c_code" label="Lead Code" ph="Code 4, Code 5..." val={d.lead_code as string}/><Txt id="c_notes" label="Lead Notes" ph="Soakers, back gutters..." val={d.additional_notes as string} multi/></div></>);
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-3">
+      <p className="section-kicker text-[0.65rem] uppercase">{children}</p>
+      <div className="gold-divider mt-2" />
+    </div>
+  );
 }
 
-export function SurveyForm({ jobId, initialSurvey }: Props) {
-  const [saving,setSaving]=useState(false);
-  const [saved,setSaved]=useState(false);
-  const [error,setError]=useState<string|null>(null);
-  const [type,setType]=useState(initialSurvey?.survey_type??"");
-  const [secs,setSecs]=useState<Set<Sec>>(()=>{
-    const s=new Set<Sec>(["core"]);
-    const t=initialSurvey?.survey_type;
-    if(t==="Flat Roof")s.add("flat");if(t==="Pitched / Tiled")s.add("pitched");
-    if(t==="Fascias / Soffits / Gutters")s.add("fascia");if(t==="Chimney / Lead")s.add("chimney");
-    return s;
-  });
+export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props) {
+  const router = useRouter();
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [selectedSurveyType, setSelectedSurveyType] = useState<SurveyType>((initialSurvey?.survey_type as SurveyType) ?? surveyType);
+  const [scaffoldRequired, setScaffoldRequired] = useState(initialSurvey?.scaffold_required ?? false);
+  const [noPhotoConfirmation, setNoPhotoConfirmation] = useState(initialSurvey?.no_photo_confirmation ?? false);
+  const [extraSections, setExtraSections] = useState<Set<SectionKey>>(new Set());
+  const adaptive = (initialSurvey?.adaptive_sections ?? {}) as Record<string, Record<string, unknown>>;
 
-  const pickType=useCallback((t:string)=>{
-    setType(t);const s=new Set<Sec>(["core"]);
-    if(t==="Flat Roof")s.add("flat");if(t==="Pitched / Tiled")s.add("pitched");
-    if(t==="Fascias / Soffits / Gutters")s.add("fascia");if(t==="Chimney / Lead")s.add("chimney");
-    setSecs(s);
-  },[]);
-
-  const toggle=useCallback((sec:Sec)=>{setSecs(p=>{const n=new Set(p);n.has(sec)?n.delete(sec):n.add(sec);return n});},[]);
-
-  const submit=async(e:React.FormEvent<HTMLFormElement>)=>{
-    e.preventDefault();setSaving(true);setError(null);
-    const fd=new FormData(e.currentTarget);
-    const body:Record<string,unknown>={};
-    fd.forEach((v,k)=>{body[k]=v==="true"?true:v==="false"?false:v});
-    body.survey_type=type;
-    try{
-      const res=await fetch(`/api/jobs/${jobId}/survey`,{method:initialSurvey?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-      if(!res.ok)throw new Error("Failed to save");
-      setSaved(true);setTimeout(()=>setSaved(false),4000);
-    }catch(err){setError(err instanceof Error?err.message:"Save failed")}
-    finally{setSaving(false)}
-  };
-
-  const ad=(initialSurvey?.adaptive_sections??{}) as Record<string,Record<string,unknown>>;
+  const activeSections = useMemo(() => {
+    const sections = new Set<SectionKey>(["core"]);
+    if (selectedSurveyType === "Flat Roof") sections.add("flat");
+    if (selectedSurveyType === "Pitched / Tiled") sections.add("pitched");
+    if (selectedSurveyType === "Fascias / Soffits / Gutters") sections.add("fascia");
+    if (selectedSurveyType === "Chimney / Lead") sections.add("chimney");
+    for (const section of extraSections) {
+      sections.add(section);
+    }
+    return sections;
+  }, [extraSections, selectedSurveyType]);
 
   return (
-    <form className="space-y-4" onSubmit={submit}>
-      {/* Type Selector */}
-      <div className="card p-4">
-        <Hdr icon="🎯" title="Survey Type"/>
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-          {SURVEY_TYPES.map(t=>(
-            <button key={t} type="button" onClick={()=>pickType(t)} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold text-left transition ${type===t?"border-[var(--gold)] bg-[rgba(212,175,55,0.15)] text-[var(--gold-l)]":"border-[var(--border)] bg-[var(--card)] text-[var(--text)]"}`}>{t}</button>
+    <form
+      className="stack"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setError(null);
+        setSaved(false);
+        const formData = new FormData(event.currentTarget);
+        const payload: Record<string, unknown> = {};
+
+        formData.forEach((value, key) => {
+          payload[key] = value === "true" ? true : value === "false" ? false : value;
+        });
+
+        payload.survey_type = selectedSurveyType;
+        payload.roof_type = roofType;
+        payload.scaffold_required = scaffoldRequired;
+        payload.no_photo_confirmation = noPhotoConfirmation;
+
+        const response = await fetch(`/api/jobs/${jobId}/survey`, {
+          method: initialSurvey ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+        if (!response.ok || !result?.ok) {
+          setError(result?.error || "Survey could not be saved. Please check the required site details.");
+          return;
+        }
+
+        setSaved(true);
+        startTransition(() => {
+          router.refresh();
+        });
+      }}
+    >
+      <div className="card p-5">
+        <SectionHeader>Survey Type</SectionHeader>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {SURVEY_TYPES.map((option) => (
+            <button
+              className={`rounded-2xl border px-3 py-3 text-left text-sm font-semibold transition ${
+                selectedSurveyType === option
+                  ? "border-[var(--gold)] bg-[rgba(212,175,55,0.14)] text-[var(--gold-l)]"
+                  : "border-[var(--border)] bg-[var(--card)] text-[var(--text)]"
+              }`}
+              key={option}
+              onClick={() => {
+                setSelectedSurveyType(option);
+                setExtraSections(new Set());
+              }}
+              type="button"
+            >
+              {option}
+            </button>
           ))}
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {([["flat","Flat"],["pitched","Pitched"],["fascia","Fascias"],["chimney","Chimney"]] as [Sec,string][]).map(([k,l])=>(
-            <button key={k} type="button" onClick={()=>toggle(k)} className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${secs.has(k)?"border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold-l)]":"border-[var(--border)] text-[var(--dim)]"}`}>{secs.has(k)?"✓ ":""}{l}</button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {([
+            ["flat", "Flat"],
+            ["pitched", "Pitched"],
+            ["fascia", "Fascias"],
+            ["chimney", "Chimney"]
+          ] as Array<[SectionKey, string]>).map(([section, label]) => (
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                activeSections.has(section)
+                  ? "border-[var(--gold)] bg-[rgba(212,175,55,0.14)] text-[var(--gold-l)]"
+                  : "border-[var(--border)] text-[var(--dim)]"
+              }`}
+              key={section}
+              onClick={() =>
+                setExtraSections((current) => {
+                  const next = new Set(current);
+                  if (next.has(section)) next.delete(section);
+                  else next.add(section);
+                  return next;
+                })
+              }
+            >
+              {label}
+            </span>
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-[var(--dim)]">Toggle extra sections for mixed jobs</p>
       </div>
-      <div className="card p-4"><CoreFields s={initialSurvey}/></div>
-      {secs.has("flat")&&<div className="card p-4"><FlatFields d={ad.flat_roof??{}}/></div>}
-      {secs.has("pitched")&&<div className="card p-4"><PitchedFields d={ad.pitched_roof??{}}/></div>}
-      {secs.has("fascia")&&<div className="card p-4"><FasciaFields d={ad.fascias??{}}/></div>}
-      {secs.has("chimney")&&<div className="card p-4"><ChimneyFields d={ad.chimney??{}}/></div>}
-      <div className="card p-4 sticky bottom-16 md:bottom-4 z-10">
-        <div className="flex items-center gap-3">
-          <button className="button-primary text-sm" type="submit" disabled={saving}>{saving?"Saving...":initialSurvey?"Update Survey":"Save Survey"}</button>
-          {saved&&<p className="text-sm text-[#7ce3a6]">✓ Saved</p>}
-          {error&&<p className="text-sm text-[#ff9a91]">✗ {error}</p>}
+
+      <div className="card p-5">
+        <SectionHeader>Core Survey</SectionHeader>
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextField defaultValue={initialSurvey?.surveyor_name ?? "Andrew Bailey"} id="surveyor_name" label="Surveyor" />
+          <SelectField defaultValue={initialSurvey?.roof_condition ?? ""} id="roof_condition" label="Overall Condition" options={CONDITIONS} />
+          <TextField defaultValue={initialSurvey?.problem_observed ?? ""} hint="Main issue the customer called about." id="problem_observed" label="Problem Observed" multiline placeholder="What did you find on site?" />
+          <TextField defaultValue={initialSurvey?.suspected_cause ?? ""} id="suspected_cause" label="Suspected Cause" multiline placeholder="What looks to be causing the issue?" />
+          <TextField defaultValue={initialSurvey?.recommended_works ?? ""} hint="This feeds directly into the quote engine." id="recommended_works" label="Recommended Works" multiline placeholder="What works do you recommend?" />
+          <TextField defaultValue={initialSurvey?.measurements ?? ""} id="measurements" label="Measurements" multiline placeholder="m2, linear metres, outlets, ridge runs..." />
+          <TextField defaultValue={initialSurvey?.access_notes ?? ""} id="access_notes" label="Access Notes" multiline placeholder="Scaffold, parking, neighbours, conservatories..." />
+          <TextField defaultValue={initialSurvey?.customer_concerns ?? ""} hint="Use the customer's own wording where possible." id="customer_concerns" label="Customer Concerns" multiline placeholder="Anything the customer wants priced or explained?" />
+          <TextField defaultValue={initialSurvey?.weather_notes ?? ""} id="weather_notes" label="Weather Notes" multiline placeholder="Conditions during survey." />
+          <TextField defaultValue={initialSurvey?.safety_notes ?? ""} id="safety_notes" label="Safety Notes" multiline placeholder="Any hazards or controls needed." />
+          <TextField defaultValue={initialSurvey?.voice_note_transcript ?? ""} id="voice_note_transcript" label="Voice Note Transcript" multiline placeholder="Optional dictated notes from site." />
+          <TextField defaultValue={initialSurvey?.raw_notes ?? ""} id="raw_notes" label="Other Notes" multiline placeholder="Anything else that should stay on the job file." />
+          <TextField defaultValue={initialSurvey?.scaffold_notes ?? ""} id="scaffold_notes" label="Scaffold Notes" multiline placeholder="Front, rear, tower access, edge protection..." />
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <ToggleField checked={scaffoldRequired} hint="Will scaffolding be needed?" id="scaffold_required" label="Scaffold Required" onChange={setScaffoldRequired} />
+          <ToggleField
+            checked={noPhotoConfirmation}
+            hint="Use this only when the survey is complete but photos are not available."
+            id="no_photo_confirmation"
+            label="Ready For Quote Without Photos"
+            onChange={setNoPhotoConfirmation}
+          />
+        </div>
+      </div>
+
+      {activeSections.has("flat") ? (
+        <div className="card p-5">
+          <SectionHeader>Flat Roof Details</SectionHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectField defaultValue={String(adaptive.flat_roof?.current_surface_type ?? "")} id="flat_current_surface_type" label="Current Surface" options={["Felt", "EPDM Rubber", "GRP Fibreglass", "Lead", "Asphalt", "Liquid Applied", "Unknown"]} />
+            <TextField defaultValue={String(adaptive.flat_roof?.approximate_age ?? "")} id="flat_approximate_age" label="Approximate Age" placeholder="e.g. 15 years" />
+            <SelectField defaultValue={String(adaptive.flat_roof?.deck_condition ?? "")} id="flat_deck_condition" label="Deck Condition" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.flat_roof?.drainage_condition ?? "")} id="flat_drainage_condition" label="Drainage" options={CONDITIONS} />
+            <SelectField defaultValue={Boolean(adaptive.flat_roof?.standing_water) ? "Yes" : "No"} id="flat_standing_water" label="Standing Water" options={["Yes", "No"]} />
+            <SelectField defaultValue={String(adaptive.flat_roof?.upstands_condition ?? "")} id="flat_upstands_condition" label="Upstands" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.flat_roof?.flashings_condition ?? "")} id="flat_flashings_condition" label="Flashings" options={CONDITIONS} />
+            <TextField defaultValue={String(adaptive.flat_roof?.rooflights ?? "")} id="flat_rooflights" label="Rooflights" placeholder="Number, type, condition" />
+            <SelectField defaultValue={String(adaptive.flat_roof?.recommended_system ?? "")} id="flat_recommended_system" label="Recommended System" options={["Danosa Option 3", "GRP Fibreglass", "EPDM Rubber", "Liquid Applied", "Lead", "Single Ply", "Other"]} />
+          </div>
+        </div>
+      ) : null}
+
+      {activeSections.has("pitched") ? (
+        <div className="card p-5">
+          <SectionHeader>Pitched / Tiled Details</SectionHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectField defaultValue={String(adaptive.pitched_roof?.tile_type ?? "")} id="p_tile_type" label="Tile Type" options={["Concrete Interlocking", "Plain Clay", "Slate", "Rosemary", "Unknown"]} />
+            <SelectField defaultValue={String(adaptive.pitched_roof?.ridge_type ?? "")} id="p_ridge_type" label="Ridge Type" options={["Mortar Bedded", "Dry Ridge", "Half Round", "Angular", "Unknown"]} />
+            <SelectField defaultValue={String(adaptive.pitched_roof?.valley_type ?? "")} id="p_valley_type" label="Valley Type" options={["Lead Lined", "GRP Trough", "Mortar", "Tile Valley", "None", "Unknown"]} />
+            <TextField defaultValue={String(adaptive.pitched_roof?.missing_tiles ?? "")} id="p_missing_tiles" label="Missing Tiles" placeholder="Count" />
+            <SelectField defaultValue={String(adaptive.pitched_roof?.felt_condition ?? "")} id="p_felt_condition" label="Underfelt Condition" options={CONDITIONS} />
+            <TextField defaultValue={String(adaptive.pitched_roof?.battens ?? "")} id="p_battens" label="Battens" placeholder="Condition or notes" />
+            <TextField defaultValue={String(adaptive.pitched_roof?.verge ?? "")} id="p_verge" label="Verge" placeholder="Mortar or dry verge" />
+            <TextField defaultValue={String(adaptive.pitched_roof?.eaves ?? "")} id="p_eaves" label="Eaves" placeholder="Ventilation, trays, support..." />
+          </div>
+        </div>
+      ) : null}
+
+      {activeSections.has("fascia") ? (
+        <div className="card p-5">
+          <SectionHeader>Fascias / Soffits / Gutters</SectionHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectField defaultValue={String(adaptive.fascias?.current_material ?? "")} id="f_current_material" label="Current Material" options={["uPVC", "Wood", "Composite", "Aluminium", "Unknown"]} />
+            <SelectField defaultValue={String(adaptive.fascias?.fascia_condition ?? "")} id="f_fascia_condition" label="Fascia Condition" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.fascias?.soffit_condition ?? "")} id="f_soffit_condition" label="Soffit Condition" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.fascias?.guttering_condition ?? "")} id="f_guttering_condition" label="Guttering Condition" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.fascias?.downpipe_condition ?? "")} id="f_downpipe_condition" label="Downpipe Condition" options={CONDITIONS} />
+            <TextField defaultValue={String(adaptive.fascias?.colour_preference ?? "")} id="f_colour_preference" label="Colour Preference" placeholder="White, black, anthracite..." />
+            <TextField defaultValue={String(adaptive.fascias?.linear_metres ?? "")} id="f_linear_metres" label="Linear Metres" placeholder="Total run" />
+          </div>
+        </div>
+      ) : null}
+
+      {activeSections.has("chimney") ? (
+        <div className="card p-5">
+          <SectionHeader>Chimney / Lead</SectionHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectField defaultValue={String(adaptive.chimney?.chimney_condition ?? "")} id="c_chimney_condition" label="Chimney Condition" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.chimney?.flaunching_condition ?? "")} id="c_flaunching_condition" label="Flaunching" options={CONDITIONS} />
+            <SelectField defaultValue={String(adaptive.chimney?.lead_flashings_condition ?? "")} id="c_lead_flashings_condition" label="Lead Flashings" options={CONDITIONS} />
+            <TextField defaultValue={String(adaptive.chimney?.pointing_condition ?? "")} id="c_pointing_condition" label="Pointing" placeholder="Mortar joints..." />
+            <TextField defaultValue={String(adaptive.chimney?.chimney_pots ?? "")} id="c_chimney_pots" label="Chimney Pots" placeholder="Number, condition, caps..." />
+            <TextField defaultValue={String(adaptive.chimney?.height_access ?? "")} id="c_height_access" label="Height / Access" placeholder="Scaffold needed?" />
+            <TextField defaultValue={String(adaptive.chimney?.lead_code ?? "")} id="c_lead_code" label="Lead Code" placeholder="Code 4, Code 5..." />
+            <TextField defaultValue={String(adaptive.chimney?.additional_notes ?? "")} id="c_additional_notes" label="Lead Notes" multiline placeholder="Soakers, back gutters, apron detail..." />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="card sticky bottom-4 z-10 p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="button-primary" disabled={isPending} type="submit">
+            {isPending ? "Saving Survey..." : initialSurvey ? "Update Survey" : "Save Survey"}
+          </button>
+          {saved ? <p className="text-sm text-[#7ce3a6]">Survey saved to the job record.</p> : null}
+          {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
         </div>
       </div>
     </form>
