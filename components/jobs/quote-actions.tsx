@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { QuoteRecord } from "@/lib/types";
@@ -15,10 +16,43 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [activeAction, setActiveAction] = useState<"generate" | "approve" | "send" | "pdf" | null>(null);
+
+  const workingCopy =
+    activeAction === "generate"
+      ? {
+          title: "Generating Quote",
+          subtitle: "The system is checking your survey, past quotes, pricing rules, and house style before building the draft.",
+          steps: [
+            "Reading the saved survey and job details",
+            "Checking historical quotes and pricing anchors",
+            "Writing the roof report, scope, and customer email"
+          ]
+        }
+      : activeAction === "pdf"
+        ? {
+            title: "Building Quote Pack",
+            subtitle: "Creating the latest document snapshot and PDF for the job file.",
+            steps: ["Preparing quote wording", "Building the customer document", "Saving the PDF into the job file"]
+          }
+        : activeAction === "approve"
+          ? {
+              title: "Approving Quote",
+              subtitle: "Locking the current draft and moving it into the ready-to-send stage.",
+              steps: ["Checking the saved totals", "Updating the quote status", "Preparing the customer-ready version"]
+            }
+          : activeAction === "send"
+            ? {
+                title: "Sending Quote",
+                subtitle: "Packaging the approved quote and sending it to the customer email on file.",
+                steps: ["Preparing the email", "Attaching the latest quote document", "Logging the send inside the job file"]
+              }
+            : null;
 
   async function runAction(action: "generate" | "approve" | "send" | "pdf") {
     setError(null);
     setSuccess(null);
+    setActiveAction(action);
 
     const request =
       action === "generate"
@@ -54,6 +88,7 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
 
     if (!response.ok || !result?.ok) {
+      setActiveAction(null);
       setError(result?.error || "That action could not be completed.");
       return;
     }
@@ -69,6 +104,34 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
 
   return (
     <div className="stack">
+      {workingCopy ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(6,6,6,0.88)] px-4">
+          <div className="card w-full max-w-xl p-6 text-center shadow-2xl">
+            <div className="flex justify-center">
+              <BrandLogo size="lg" />
+            </div>
+            <p className="section-kicker mt-4 text-[0.7rem] uppercase">We Are Roofing Quote Engine</p>
+            <h3 className="mt-3 font-display text-4xl text-[var(--gold-l)]">{workingCopy.title}</h3>
+            <p className="mx-auto mt-3 max-w-lg text-sm text-[var(--muted)]">{workingCopy.subtitle}</p>
+
+            <div className="quote-engine-pulse mt-6" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+
+            <div className="mt-6 space-y-3 text-left">
+              {workingCopy.steps.map((step, index) => (
+                <div className="surface-muted rounded-2xl border p-3" key={step}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--gold-d)]">Step {index + 1}</p>
+                  <p className="mt-1 text-sm text-[var(--text)]">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-3">
         {!quote ? (
           <button className="button-primary" disabled={isPending} onClick={() => runAction("generate")} type="button">
