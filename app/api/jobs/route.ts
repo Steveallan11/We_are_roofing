@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createJobSchema } from "@/lib/validators";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { canPersistToSupabase, ensureBusinessRecord } from "@/lib/workflows";
+import { canPersistToSupabase, ensureBusinessRecord, getNextJobRef } from "@/lib/workflows";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
 
   const supabase = createSupabaseAdminClient();
   const business = await ensureBusinessRecord();
+  const jobRef = await getNextJobRef();
 
   const customerPayload = parsed.data.customer;
   const jobPayload = parsed.data.job;
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
     .insert({
       business_id: business.id,
       customer_id: customer.id,
+      job_ref: jobRef,
       job_title: jobPayload.job_title,
       property_address: customerPayload.property_address,
       postcode: customerPayload.postcode || null,
@@ -89,5 +91,44 @@ export async function POST(request: Request) {
     received: parsed.data,
     customer,
     job
+  });
+}
+
+export async function PATCH(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as {
+    job_id?: string;
+    status?: string;
+  };
+
+  if (!body.job_id || !body.status) {
+    return NextResponse.json({ ok: false, error: "job_id and status are required." }, { status: 400 });
+  }
+
+  if (!canPersistToSupabase()) {
+    return NextResponse.json({ ok: true, message: "Job status updated in preview mode." });
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const patch: Record<string, string> = {
+    status: body.status,
+    updated_at: new Date().toISOString()
+  };
+
+  if (body.status === "Accepted") {
+    patch.accepted_at = new Date().toISOString();
+  }
+  if (body.status === "Completed") {
+    patch.completed_at = new Date().toISOString();
+  }
+
+  const { data, error } = await supabase.from("jobs").update(patch).eq("id", body.job_id).select("*").single();
+  if (error || !data) {
+    return NextResponse.json({ ok: false, error: error?.message ?? "Unable to update job status." }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    message: "Job status updated.",
+    job: data
   });
 }

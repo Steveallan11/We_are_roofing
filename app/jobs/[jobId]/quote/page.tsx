@@ -31,7 +31,7 @@ export default async function QuotePage({ params }: Props) {
           <div className="card p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="section-kicker text-[0.65rem] uppercase">{displayQuoteRef}</p>
+                <p className="section-kicker text-[0.65rem] uppercase">{bundle.job.job_ref ?? "WR-J-TBC"} · {displayQuoteRef}</p>
                 <h2 className="mt-2 font-condensed text-3xl text-white">{bundle.customer.full_name}</h2>
                 <p className="mt-2 text-sm text-[var(--muted)]">{bundle.job.property_address}</p>
               </div>

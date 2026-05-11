@@ -34,6 +34,10 @@ export default async function SurveyPage({ params }: Props) {
           <p className="section-kicker text-[0.65rem] uppercase">Survey Route</p>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-[var(--border)] p-4">
+              <p className="label">Job Number</p>
+              <p className="text-white">{bundle.job.job_ref ?? "WR-J-TBC"}</p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] p-4">
               <p className="label">Roof Type</p>
               <p className="text-white">{bundle.job.roof_type ?? "Unknown"}</p>
             </div>

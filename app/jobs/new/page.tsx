@@ -6,7 +6,7 @@ export default function NewJobPage() {
   return (
     <AppShell
       title="Add New Job"
-      subtitle="This is the first step in the field workflow. We capture the lead, property, and survey type up front so the next screen can stay focused and simple."
+      subtitle="Every lead becomes a job file straight away. Save the customer and property details here, create the permanent job number, then go straight into survey capture."
       actions={<Link className="button-ghost" href="/dashboard">Back to Dashboard</Link>}
     >
       <div className="mx-auto max-w-4xl">

@@ -67,6 +67,12 @@ export async function getNextQuoteVersionAndRef(jobId: string) {
   return { versionNumber, quoteRef };
 }
 
+export async function getNextJobRef() {
+  const supabase = createSupabaseAdminClient();
+  const { count } = await supabase.from("jobs").select("*", { count: "exact", head: true });
+  return `WR-J-${String((count ?? 0) + 1001).padStart(4, "0")}`;
+}
+
 export function deriveQuoteStatus(quote: GeneratedQuote): QuoteRecord["status"] {
   if (quote.confidence === "Low" || quote.missing_info.length > 0) {
     return "Needs Review";

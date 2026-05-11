@@ -10,6 +10,7 @@ import {
   MOCK_QUOTES,
   MOCK_SURVEYS
 } from "@/lib/mock-data";
+import { groupJobsIntoColumns } from "@/lib/job-workflow";
 import type {
   Business,
   Customer,
@@ -169,22 +170,7 @@ export async function getPricingRules(): Promise<PricingRuleRecord[]> {
 
 export async function getKanbanColumns(): Promise<Array<KanbanColumn & { customer?: Customer | null; quote?: QuoteRecord | null }>> {
   const jobs = await getJobs();
-  const statuses: Array<Job["status"]> = [
-    "New Lead",
-    "Survey Complete",
-    "Ready For AI Quote",
-    "Quote Drafted",
-    "Ready To Send",
-    "Quote Sent",
-    "Accepted",
-    "Booked",
-    "Completed"
-  ];
-
-  return statuses.map((status) => ({
-    status,
-    jobs: jobs.filter((job) => job.status === status)
-  }));
+  return groupJobsIntoColumns(jobs as Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null }>);
 }
 
 export function getEmptySurvey(): SurveyRecord {

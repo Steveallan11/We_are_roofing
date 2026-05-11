@@ -19,7 +19,7 @@ export default async function DashboardPage() {
             Add New Job
           </Link>
           <Link className="button-ghost" href={crmHref}>
-            Open CRM
+            Open Jobs
           </Link>
         </>
       }
@@ -42,7 +42,7 @@ export default async function DashboardPage() {
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Primary Workflow</p>
             <ol className="mt-4 space-y-3 text-sm text-[var(--text)]">
-              <li>1. Add the lead and property details.</li>
+              <li>1. Add the lead and property details to create the job file.</li>
               <li>2. Complete the survey on site and upload photos.</li>
               <li>3. Press create quote to draft the report and pricing.</li>
               <li>4. Review, approve, then send the customer version.</li>

@@ -131,6 +131,8 @@ export type DashboardStats = {
 
 export type KanbanColumn = {
   status: JobStatus;
+  label?: string;
+  description?: string;
   jobs: Job[];
 };
 
@@ -170,6 +172,7 @@ export type Job = {
   id: string;
   business_id: string;
   customer_id: string;
+  job_ref?: string | null;
   job_title: string;
   property_address: string;
   postcode?: string | null;
