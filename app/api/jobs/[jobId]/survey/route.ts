@@ -130,6 +130,14 @@ async function saveSurvey(request: Request, { params }: Props) {
     );
   }
 
+  await persistSurveySnapshot({
+    supabase,
+    jobId,
+    surveyId: surveyResult.data.id,
+    survey: surveyResult.data as Record<string, unknown>,
+    adaptiveSections
+  });
+
   const nextStatus = payload.no_photo_confirmation || (photoCount ?? 0) > 0 ? "Ready For AI Quote" : "Survey Complete";
 
   await supabase
@@ -148,6 +156,172 @@ async function saveSurvey(request: Request, { params }: Props) {
     next_status: nextStatus,
     survey: surveyResult.data
   });
+}
+
+async function persistSurveySnapshot({
+  supabase,
+  jobId,
+  surveyId,
+  survey,
+  adaptiveSections
+}: {
+  supabase: ReturnType<typeof createSupabaseAdminClient>;
+  jobId: string;
+  surveyId: string;
+  survey: Record<string, unknown>;
+  adaptiveSections: Record<string, Record<string, unknown>>;
+}) {
+  const [{ data: job }, { data: customer }, { data: existingDocument }] = await Promise.all([
+    supabase.from("jobs").select("job_title, property_address").eq("id", jobId).single(),
+    supabase.from("jobs").select("customer_id").eq("id", jobId).single().then(async (jobResult) => {
+      if (!jobResult.data?.customer_id) return { data: null };
+      return supabase.from("customers").select("full_name").eq("id", jobResult.data.customer_id).maybeSingle();
+    }),
+    supabase
+      .from("job_documents")
+      .select("id")
+      .eq("job_id", jobId)
+      .eq("document_type", "survey_snapshot")
+      .limit(1)
+      .maybeSingle()
+  ]);
+
+  const html = buildSurveySnapshotHtml({
+    customerName: String(customer?.full_name ?? "Customer"),
+    propertyAddress: String(job?.property_address ?? ""),
+    jobTitle: String(job?.job_title ?? "Roofing Survey"),
+    survey,
+    adaptiveSections
+  });
+
+  const storagePath = `${jobId}/surveys/${surveyId}/site-survey-latest.html`;
+  const upload = await supabase.storage.from("job-documents").upload(storagePath, Buffer.from(html, "utf8"), {
+    contentType: "text/html; charset=utf-8",
+    upsert: true
+  });
+
+  const publicUrl = upload.error ? null : supabase.storage.from("job-documents").getPublicUrl(storagePath).data.publicUrl;
+  const payload = {
+    job_id: jobId,
+    quote_id: null,
+    document_type: "survey_snapshot",
+    display_name: "Site Survey Snapshot",
+    storage_bucket: publicUrl ? "job-documents" : null,
+    storage_path: publicUrl ? storagePath : null,
+    public_url: publicUrl,
+    source_type: "generated",
+    mime_type: "text/html",
+    file_size: Buffer.byteLength(html, "utf8"),
+    content_html: html
+  };
+
+  if (existingDocument?.id) {
+    await supabase.from("job_documents").update(payload).eq("id", existingDocument.id);
+  } else {
+    await supabase.from("job_documents").insert(payload);
+  }
+}
+
+function buildSurveySnapshotHtml({
+  customerName,
+  propertyAddress,
+  jobTitle,
+  survey,
+  adaptiveSections
+}: {
+  customerName: string;
+  propertyAddress: string;
+  jobTitle: string;
+  survey: Record<string, unknown>;
+  adaptiveSections: Record<string, Record<string, unknown>>;
+}) {
+  const coreRows = [
+    ["Surveyor", survey.surveyor_name],
+    ["Survey Type", survey.survey_type],
+    ["Roof Type", survey.roof_type],
+    ["Roof Condition", survey.roof_condition],
+    ["Problem Observed", survey.problem_observed],
+    ["Suspected Cause", survey.suspected_cause],
+    ["Recommended Works", survey.recommended_works],
+    ["Measurements", survey.measurements],
+    ["Access Notes", survey.access_notes],
+    ["Scaffold Required", survey.scaffold_required ? "Yes" : "No"],
+    ["Scaffold Notes", survey.scaffold_notes],
+    ["Customer Concerns", survey.customer_concerns],
+    ["Weather Notes", survey.weather_notes],
+    ["Safety Notes", survey.safety_notes],
+    ["Voice Notes", survey.voice_note_transcript],
+    ["Other Notes", survey.raw_notes]
+  ]
+    .filter(([, value]) => String(value ?? "").trim().length > 0)
+    .map(([label, value]) => `<div class="row"><div class="label">${escapeHtml(String(label))}</div><div class="value">${escapeHtml(String(value))}</div></div>`)
+    .join("");
+
+  const extraSections = Object.entries(adaptiveSections)
+    .filter(([, fields]) => Object.keys(fields ?? {}).length > 0)
+    .map(([sectionName, fields]) => {
+      const rows = Object.entries(fields)
+        .filter(([, value]) => String(value ?? "").trim().length > 0)
+        .map(
+          ([key, value]) =>
+            `<div class="row"><div class="label">${escapeHtml(toTitleCase(key))}</div><div class="value">${escapeHtml(String(value))}</div></div>`
+        )
+        .join("");
+
+      return `<section><h2>${escapeHtml(toTitleCase(sectionName.replaceAll("_", " ")))}</h2>${rows}</section>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Site Survey Snapshot</title>
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; background: #f5f2e7; color: #111; padding: 32px; }
+      .sheet { max-width: 900px; margin: 0 auto; background: #fff; border: 1px solid #d8c58a; border-radius: 18px; overflow: hidden; }
+      .hero { background: #101417; color: #f5d060; padding: 28px 32px; }
+      .hero h1 { margin: 0; font-size: 30px; }
+      .hero p { margin: 8px 0 0; color: #d7c483; }
+      .body { padding: 28px 32px; }
+      h2 { margin: 22px 0 10px; font-size: 18px; text-transform: uppercase; color: #8b6914; }
+      .row { display: grid; grid-template-columns: 220px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #eee2b8; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6e5a1c; }
+      .value { white-space: pre-line; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="hero">
+        <h1>${escapeHtml(jobTitle)}</h1>
+        <p>${escapeHtml(customerName)} | ${escapeHtml(propertyAddress)}</p>
+      </div>
+      <div class="body">
+        <section>
+          <h2>Core Survey</h2>
+          ${coreRows || '<p>No saved survey details yet.</p>'}
+        </section>
+        ${extraSections}
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export async function GET(_request: Request, { params }: Props) {

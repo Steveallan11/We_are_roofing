@@ -17,6 +17,7 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeAction, setActiveAction] = useState<"generate" | "approve" | "send" | "pdf" | null>(null);
+  const [overlayDismissed, setOverlayDismissed] = useState(false);
 
   const workingCopy =
     activeAction === "generate"
@@ -53,6 +54,7 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
     setError(null);
     setSuccess(null);
     setActiveAction(action);
+    setOverlayDismissed(false);
 
     const request =
       action === "generate"
@@ -104,9 +106,18 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
 
   return (
     <div className="stack">
-      {workingCopy ? (
+      {workingCopy && !overlayDismissed ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(6,6,6,0.88)] px-4">
           <div className="card w-full max-w-xl p-6 text-center shadow-2xl">
+            <div className="flex justify-end">
+              <button
+                className="button-ghost !px-3 !py-2 text-sm"
+                onClick={() => setOverlayDismissed(true)}
+                type="button"
+              >
+                Keep in background
+              </button>
+            </div>
             <div className="flex justify-center">
               <BrandLogo size="lg" />
             </div>
@@ -128,6 +139,20 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {workingCopy && overlayDismissed ? (
+        <div className="surface-muted rounded-2xl border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--gold-l)]">{workingCopy.title}</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">{workingCopy.subtitle}</p>
+            </div>
+            <button className="button-ghost !px-3 !py-2 text-sm" onClick={() => setOverlayDismissed(false)} type="button">
+              Show Status
+            </button>
           </div>
         </div>
       ) : null}
