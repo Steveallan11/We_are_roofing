@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  formatSurveySnapshotValue,
+  getSurveyFieldLabel,
+  getSurveySectionLabel
+} from "@/lib/survey-utils";
 import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -265,14 +270,14 @@ function buildSurveySnapshotHtml({
     .filter(([, fields]) => Object.keys(fields ?? {}).length > 0)
     .map(([sectionName, fields]) => {
       const rows = Object.entries(fields)
-        .filter(([, value]) => String(value ?? "").trim().length > 0)
+        .filter(([, value]) => formatSurveySnapshotValue(value).length > 0)
         .map(
           ([key, value]) =>
-            `<div class="row"><div class="label">${escapeHtml(toTitleCase(key))}</div><div class="value">${escapeHtml(String(value))}</div></div>`
+            `<div class="row"><div class="label">${escapeHtml(getSurveyFieldLabel(key))}</div><div class="value">${escapeHtml(formatSurveySnapshotValue(value))}</div></div>`
         )
         .join("");
 
-      return `<section><h2>${escapeHtml(toTitleCase(sectionName.replaceAll("_", " ")))}</h2>${rows}</section>`;
+      return `<section><h2>${escapeHtml(getSurveySectionLabel(sectionName))}</h2>${rows}</section>`;
     })
     .join("");
 
@@ -318,14 +323,6 @@ function escapeHtml(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-function toTitleCase(value: string) {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 export async function GET(_request: Request, { params }: Props) {

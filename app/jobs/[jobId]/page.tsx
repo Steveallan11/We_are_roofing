@@ -7,6 +7,7 @@ import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle } from "@/lib/data";
 import { getNextActionLabel } from "@/lib/job-workflow";
+import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
 
 type Props = {
@@ -22,6 +23,8 @@ export default async function JobDetailPage({ params }: Props) {
   }
 
   const materialsHref = `/jobs/${bundle.job.id}/materials` as Route;
+  const surveyHighlights = getSurveyHighlights(bundle.survey);
+  const surveyMeasurements = getSurveyMeasurementsSummary(bundle.survey);
 
   return (
     <AppShell
@@ -87,11 +90,15 @@ export default async function JobDetailPage({ params }: Props) {
               </div>
               <div>
                 <p className="label">Measurements</p>
-                <p className="text-sm text-[var(--text)]">{bundle.survey?.measurements ?? "Not captured yet"}</p>
+                <p className="text-sm text-[var(--text)]">{surveyMeasurements}</p>
               </div>
               <div>
                 <p className="label">Access</p>
                 <p className="text-sm text-[var(--text)]">{bundle.survey?.access_notes ?? "Not captured yet"}</p>
+              </div>
+              <div>
+                <p className="label">Specialist Highlights</p>
+                <p className="text-sm text-[var(--text)]">{surveyHighlights.length > 0 ? surveyHighlights.join(" | ") : "Will appear once the specialist survey is saved"}</p>
               </div>
               <div>
                 <p className="label">Survey Snapshot</p>

@@ -74,23 +74,82 @@ export type SurveyCore = {
 export type FlatRoofDetails = {
   current_surface_type?: string;
   approximate_age?: string;
+  length_m?: number | null;
+  width_m?: number | null;
+  perimeter_m?: number | null;
+  roof_area_estimate_m2?: number | null;
+  roof_area_override_m2?: number | null;
   deck_condition?: string;
   drainage_condition?: string;
   standing_water?: boolean;
   upstands_condition?: string;
   flashings_condition?: string;
+  outlets_count?: number | null;
   rooflights?: string;
   recommended_system?: string;
 };
 
 export type PitchedRoofDetails = {
+  roof_style?: string;
+  roof_style_notes?: string;
   tile_type?: string;
+  tile_age?: string;
+  tile_condition?: string;
+  tile_issues?: string[];
+  missing_tiles?: number | null;
+  pitch_angle_deg?: number | null;
+  ridge_length_m?: number | null;
+  number_of_ridges?: number | null;
+  total_ridge_metres?: number | null;
+  eaves_length_m?: number | null;
+  verge_length_m?: number | null;
+  rafter_length_m?: number | null;
+  hip_count?: number | null;
+  total_hip_metres?: number | null;
+  valley_count?: number | null;
+  total_valley_metres?: number | null;
+  roof_area_estimate_m2?: number | null;
+  roof_area_override_m2?: number | null;
   ridge_type?: string;
+  ridge_condition?: string;
+  hip_type?: string;
+  hip_condition?: string;
   valley_type?: string;
-  missing_tiles?: number;
+  valley_condition?: string;
+  verge_type?: string;
+  verge_condition?: string;
+  eaves_ventilation?: string;
+  bird_guard_present?: boolean;
+  membrane_type?: string;
   felt_condition?: string;
-  solar_panels?: boolean;
+  batten_condition?: string;
+  batten_notes?: string;
   chimney_present?: boolean;
+  chimney_condition?: string;
+  chimney_flashings_condition?: string;
+  chimney_flaunching_condition?: string;
+  chimney_pots?: string;
+  chimney_cowls?: boolean;
+  chimney_repointing_needed?: boolean;
+  solar_panels?: boolean;
+  solar_panel_count?: number | null;
+  roof_windows?: boolean;
+  roof_window_count?: number | null;
+  aerial_present?: boolean;
+  satellite_present?: boolean;
+  vents_present?: boolean;
+  moss_level?: string;
+  moss_treatment_recommended?: boolean;
+  loft_inspected?: boolean;
+  loft_daylight_visible?: boolean;
+  loft_damp_patches?: boolean;
+  loft_condensation?: boolean;
+  loft_insulation_type?: string;
+  loft_insulation_depth_mm?: number | null;
+  loft_notes?: string;
+  scaffold_type?: string;
+  scaffold_elevations?: string;
+  access_notes?: string;
 };
 
 export type FasciaDetails = {
@@ -100,14 +159,51 @@ export type FasciaDetails = {
   guttering_condition?: string;
   downpipe_condition?: string;
   colour_preference?: string;
+  front_run_m?: number | null;
+  rear_run_m?: number | null;
+  left_run_m?: number | null;
+  right_run_m?: number | null;
+  total_linear_metres?: number | null;
+  total_linear_metres_override?: number | null;
+  gutter_profile?: string;
+  cladding_details?: string;
 };
 
 export type ChimneyDetails = {
+  chimney_count?: number | null;
   chimney_condition?: string;
   flaunching_condition?: string;
   lead_flashings_condition?: string;
   gas_flue_present?: boolean;
   parapet_or_coping?: boolean;
+  chimney_pots?: string;
+  chimney_cowls?: boolean;
+  repointing_needed?: boolean;
+  lead_code?: string;
+  apron_length_m?: number | null;
+  back_gutter_length_m?: number | null;
+  step_flashing_length_m?: number | null;
+  total_measured_run_m?: number | null;
+  total_measured_run_override_m?: number | null;
+  height_or_access_notes?: string;
+  additional_notes?: string;
+};
+
+export type OtherSurveyDetails = {
+  survey_focus?: string;
+  measured_area_m2?: number | null;
+  measured_run_m?: number | null;
+  recommended_system?: string;
+  issue_tags?: string[];
+  additional_findings?: string;
+};
+
+export type SurveyAdaptiveSections = {
+  flat_roof?: FlatRoofDetails;
+  pitched_roof?: PitchedRoofDetails;
+  fascias?: FasciaDetails;
+  chimney?: ChimneyDetails;
+  other?: OtherSurveyDetails;
 };
 
 export type SurveyPayload = {
@@ -118,7 +214,7 @@ export type SurveyPayload = {
   pitched_roof?: PitchedRoofDetails;
   fascias?: FasciaDetails;
   chimney?: ChimneyDetails;
-  other?: Record<string, string | number | boolean | null>;
+  other?: OtherSurveyDetails;
 };
 
 export type DashboardStats = {
@@ -213,7 +309,7 @@ export type SurveyRecord = {
   survey_type?: string | null;
   roof_type?: string | null;
   no_photo_confirmation: boolean;
-  adaptive_sections?: Record<string, unknown>;
+  adaptive_sections?: SurveyAdaptiveSections;
   created_at?: string;
   updated_at?: string;
 };
