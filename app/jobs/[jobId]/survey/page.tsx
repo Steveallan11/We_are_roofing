@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { QuoteActions } from "@/components/jobs/quote-actions";
@@ -15,6 +16,7 @@ export default async function SurveyPage({ params }: Props) {
   const { jobId } = await params;
   const bundle = await getJobBundle(jobId);
   if (!bundle) notFound();
+  const roofSurveyHref = `/jobs/${bundle.job.id}/roof-survey` as Route;
 
   return (
     <AppShell
@@ -49,6 +51,11 @@ export default async function SurveyPage({ params }: Props) {
               <p className="label">Customer</p>
               <p className="text-white">{bundle.customer.full_name}</p>
             </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link className="button-ghost" href={roofSurveyHref}>
+              Open Roof Survey Tool
+            </Link>
           </div>
         </div>
 

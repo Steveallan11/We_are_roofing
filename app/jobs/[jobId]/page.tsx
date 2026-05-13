@@ -23,6 +23,7 @@ export default async function JobDetailPage({ params }: Props) {
   }
 
   const materialsHref = `/jobs/${bundle.job.id}/materials` as Route;
+  const roofSurveyHref = `/jobs/${bundle.job.id}/roof-survey` as Route;
   const surveyHighlights = getSurveyHighlights(bundle.survey);
   const surveyMeasurements = getSurveyMeasurementsSummary(bundle.survey);
 
@@ -108,9 +109,14 @@ export default async function JobDetailPage({ params }: Props) {
               </div>
             </div>
             <div className="mt-4">
-              <Link className="button-secondary" href={`/jobs/${bundle.job.id}/survey`}>
-                Open Survey Workspace
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link className="button-secondary" href={`/jobs/${bundle.job.id}/survey`}>
+                  Open Survey Workspace
+                </Link>
+                <Link className="button-ghost" href={roofSurveyHref}>
+                  Roof Survey Tool
+                </Link>
+              </div>
             </div>
           </div>
 

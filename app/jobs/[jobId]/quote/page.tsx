@@ -9,10 +9,12 @@ import { currency } from "@/lib/utils";
 
 type Props = {
   params: Promise<{ jobId: string }>;
+  searchParams?: Promise<{ prefill?: string; surveyId?: string }>;
 };
 
-export default async function QuotePage({ params }: Props) {
+export default async function QuotePage({ params, searchParams }: Props) {
   const { jobId } = await params;
+  const query = searchParams ? await searchParams : undefined;
   const bundle = await getJobBundle(jobId);
   if (!bundle) notFound();
 
@@ -28,6 +30,11 @@ export default async function QuotePage({ params }: Props) {
     >
       <section className="page-grid">
         <div className="stack">
+          {query?.prefill === "roof-survey" ? (
+            <div className="card border-[var(--gold)]/40 bg-[var(--gold)]/5 p-4">
+              <p className="text-sm text-[var(--gold-l)]">Pre-populated from roof survey takeoff. Add rates, waste factors, and final wording to complete the quote.</p>
+            </div>
+          ) : null}
           <div className="card p-6">
             <div className="flex items-start justify-between gap-4">
               <div>

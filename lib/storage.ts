@@ -1,15 +1,24 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const JOB_DOCUMENTS_BUCKET = "job-documents";
+export const SURVEY_IMAGES_BUCKET = "survey-images";
 
 type AdminSupabaseClient = ReturnType<typeof createSupabaseAdminClient>;
 
 export async function ensurePublicStorageBucket(supabase: AdminSupabaseClient, bucketName: string) {
+  return ensureStorageBucket(supabase, bucketName, true);
+}
+
+export async function ensurePrivateStorageBucket(supabase: AdminSupabaseClient, bucketName: string) {
+  return ensureStorageBucket(supabase, bucketName, false);
+}
+
+async function ensureStorageBucket(supabase: AdminSupabaseClient, bucketName: string, isPublic: boolean) {
   const bucketLookup = await supabase.storage.getBucket(bucketName);
 
   if (bucketLookup.error) {
     const createResult = await supabase.storage.createBucket(bucketName, {
-      public: true
+      public: isPublic
     });
 
     if (createResult.error) {
@@ -25,9 +34,9 @@ export async function ensurePublicStorageBucket(supabase: AdminSupabaseClient, b
     };
   }
 
-  if (!bucketLookup.data.public) {
+  if (bucketLookup.data.public !== isPublic) {
     const updateResult = await supabase.storage.updateBucket(bucketName, {
-      public: true
+      public: isPublic
     });
 
     if (updateResult.error) {
