@@ -195,6 +195,11 @@ body {
   animation-delay: 0.32s;
 }
 
+.assistant-fab {
+  background: linear-gradient(135deg, var(--gold-d), var(--gold-l));
+  animation: assistant-fab-pulse 2.4s ease-in-out infinite;
+}
+
 @keyframes twinkle {
   0% {
     opacity: 0.5;
@@ -217,5 +222,15 @@ body {
   40% {
     transform: translateY(-5px) scale(1.08);
     opacity: 1;
+  }
+}
+
+@keyframes assistant-fab-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.28), 0 18px 40px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(212, 175, 55, 0), 0 18px 40px rgba(0, 0, 0, 0.4);
   }
 }

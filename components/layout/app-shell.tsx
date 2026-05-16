@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { AssistantQuickPrompts } from "@/components/assistant/AssistantQuickPrompts";
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { Starfield } from "@/components/ui/starfield";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -37,6 +38,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
               <p className="section-kicker text-[0.7rem] uppercase">We Are Roofing OS</p>
               <h1 className="mt-2 font-display text-4xl leading-none text-[var(--gold-l)] md:text-5xl">{title}</h1>
               {subtitle ? <p className="mt-3 max-w-2xl text-sm text-[var(--muted)] md:text-base">{subtitle}</p> : null}
+              <AssistantQuickPrompts />
             </div>
             {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
           </div>

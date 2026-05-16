@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 
 export const metadata: Metadata = {
   title: "We Are Roofing OS",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <AssistantPanel />
+      </body>
     </html>
   );
 }
