@@ -29,7 +29,7 @@ export function AssistantQuickPrompts() {
         <button
           className="rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--muted)] transition hover:border-[var(--gold)] hover:text-[var(--gold-l)]"
           key={prompt}
-          onClick={() => window.dispatchEvent(new CustomEvent("andy:prompt", { detail: { prompt } }))}
+          onClick={() => window.dispatchEvent(new CustomEvent("gauge:prompt", { detail: { prompt } }))}
           type="button"
         >
           {prompt}

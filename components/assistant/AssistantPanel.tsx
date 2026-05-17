@@ -24,7 +24,7 @@ export function AssistantPanel() {
         <div className="fixed bottom-6 right-6 z-50 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-[1.5rem] border border-[var(--border2)] bg-[var(--dark)] shadow-2xl">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
             <div>
-              <p className="font-display text-2xl text-[var(--gold-l)]">Andy</p>
+              <p className="font-display text-2xl text-[var(--gold-l)]">Gauge</p>
               <p className="text-xs text-[var(--muted)]">Roofing admin assistant</p>
             </div>
             <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export function AssistantPanel() {
                 <textarea
                   className="field min-h-14 flex-1 resize-none"
                   onChange={(event) => assistant.setDraft(event.target.value)}
-                  placeholder="Ask Andy about jobs, quotes, or what needs doing next..."
+                  placeholder="Ask Gauge about jobs, quotes, or what needs doing next..."
                   value={assistant.draft}
                 />
                 <button className="button-primary !px-4 !py-3" disabled={assistant.status === "sending"} type="submit">

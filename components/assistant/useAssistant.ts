@@ -14,7 +14,7 @@ type ChatStatus = "idle" | "sending" | "error";
 
 declare global {
   interface WindowEventMap {
-    "andy:prompt": CustomEvent<{ prompt: string }>;
+    "gauge:prompt": CustomEvent<{ prompt: string }>;
   }
 
   interface Window {
@@ -108,8 +108,8 @@ export function useAssistant() {
       setOpen(true);
       void sendMessage(event.detail.prompt);
     };
-    window.addEventListener("andy:prompt", handler as EventListener);
-    return () => window.removeEventListener("andy:prompt", handler as EventListener);
+    window.addEventListener("gauge:prompt", handler as EventListener);
+    return () => window.removeEventListener("gauge:prompt", handler as EventListener);
   }, []);
 
   const sendMessage = useCallback(

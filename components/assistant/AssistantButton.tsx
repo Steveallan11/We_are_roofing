@@ -15,12 +15,12 @@ export function AssistantButton({ onClick, overdueCount, tooltipVisible }: Props
         </div>
       ) : null}
       <button
-        aria-label="Open Andy assistant"
+        aria-label="Open Gauge assistant"
         className="assistant-fab relative flex h-14 w-14 items-center justify-center rounded-full text-lg font-semibold text-black shadow-2xl"
         onClick={onClick}
         type="button"
       >
-        A
+        G
         {overdueCount > 0 ? <span className="absolute right-1 top-1 h-3 w-3 rounded-full bg-[#ff5d5d]" /> : null}
       </button>
     </div>

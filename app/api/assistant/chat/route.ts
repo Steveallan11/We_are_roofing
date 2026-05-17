@@ -77,7 +77,7 @@ async function saveConversation(conversationId: string | null | undefined, busin
   const payload = {
     business_id: businessId,
     messages,
-    title: firstUserText ? firstUserText.slice(0, 80) : "Andy conversation",
+    title: firstUserText ? firstUserText.slice(0, 80) : "Gauge conversation",
     updated_at: new Date().toISOString()
   };
 
