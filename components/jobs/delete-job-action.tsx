@@ -20,11 +20,10 @@ export function DeleteJobAction({ jobId, jobRef, jobTitle }: Props) {
 
   async function deleteJob() {
     setError(null);
-    const response = await fetch("/api/jobs", {
-      method: "DELETE",
+    const response = await fetch(`/api/jobs/${jobId}/delete`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        job_id: jobId,
         confirmation: confirmText
       })
     });
