@@ -39,7 +39,7 @@ function hashSource(value: string) {
 function parseMoney(value: unknown) {
   const text = clean(value);
   if (!text) return null;
-  const match = text.match(/(?:£|gbp)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i);
+  const match = text.match(/(?:£|Ł|gbp)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i);
   if (!match) return null;
   const amount = Number(match[1].replace(/,/g, ""));
   return Number.isFinite(amount) ? amount : null;
@@ -54,6 +54,11 @@ function parseYear(value: unknown) {
 function parseDate(value: unknown) {
   const text = clean(value);
   if (!text) return null;
+  const ukDate = text.match(/^([0-3]?\d)\/([01]?\d)\/((?:19|20)\d{2})$/);
+  if (ukDate) {
+    const [, day, month, year] = ukDate;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
@@ -94,6 +99,13 @@ function findFirst(row: Record<string, string>, candidates: string[]) {
     if (match && clean(match[1])) return clean(match[1]);
   }
   return "";
+}
+
+function splitTags(value: string) {
+  return value
+    .split(/[;,/]+/)
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function parseCsvRows(csv: string) {
@@ -143,23 +155,28 @@ function parseCsvRows(csv: string) {
   );
 }
 
-function rowToHistoricalQuote(row: Record<string, string>, fileName: string, index: number): ParsedUploadRecord {
+function rowToHistoricalQuote(row: Record<string, string>, fileName: string, index: number): ParsedUploadRecord | null {
   const allText = Object.values(row).map(clean).filter(Boolean).join("\n");
+  const status = findFirst(row, ["status"]).toLowerCase();
+  if (status.includes("skipped") || status.includes("missing") || status.includes("non-quoting")) {
+    return null;
+  }
+
   const title =
-    findFirst(row, ["title", "quote title", "reference", "quote ref", "customer", "client", "name"]) ||
+    findFirst(row, ["source_ref", "source ref", "title", "quote title", "reference", "quote ref", "customer", "client", "name"]) ||
     `${fileName.replace(/\.[^.]+$/, "")} quote ${index + 1}`;
   const content =
+    [findFirst(row, ["problem_diagnosis"]), findFirst(row, ["recommended_scope"]), findFirst(row, ["ai_quote_notes"])]
+      .filter(Boolean)
+      .join("\n\n") ||
     findFirst(row, ["content", "quote copy", "description", "scope", "scope of works", "works", "notes", "imported text"]) ||
     allText;
-  const total = parseMoney(findFirst(row, ["total", "price", "amount", "value", "quote total", "grand total"])) ?? parseMoney(allText);
-  const sourceDate = parseDate(findFirst(row, ["date", "quote date", "created", "sent date"]));
-  const sourceYear = parseYear(findFirst(row, ["year", "date", "quote date"])) ?? parseYear(allText);
-  const roofType = findFirst(row, ["roof type"]) || inferRoofType(allText);
-  const jobType = findFirst(row, ["job type", "work type"]) || inferJobType(allText);
-  const rowTags = findFirst(row, ["tags", "tag"])
-    .split(/[;,]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  const total = parseMoney(findFirst(row, ["price_anchor_first_gbp", "price anchor", "total", "price", "amount", "value", "quote total", "grand total"]));
+  const sourceDate = parseDate(findFirst(row, ["source_date", "source date", "date", "quote date", "created", "sent date"]));
+  const sourceYear = parseYear(findFirst(row, ["year", "source_date", "source date", "date", "quote date", "year_band"])) ?? parseYear(allText);
+  const roofType = findFirst(row, ["roof_type", "roof type"]) || inferRoofType(allText);
+  const jobType = findFirst(row, ["job type", "work type", "job_category_summary", "job category summary"]) || inferJobType(allText);
+  const rowTags = splitTags(findFirst(row, ["job_category_tags", "job category tags", "tags", "tag"]));
   const tags = Array.from(new Set([...rowTags, ...inferTags(allText, fileName)]));
 
   return {
@@ -239,7 +256,7 @@ export async function parseKnowledgeUpload(file: File): Promise<ParsedUpload> {
     if (rows.length === 0) {
       return { records: [], warning: `${file.name} did not contain usable CSV rows.` };
     }
-    return { records: rows.map((row, index) => rowToHistoricalQuote(row, file.name, index)) };
+    return { records: rows.map((row, index) => rowToHistoricalQuote(row, file.name, index)).filter((record): record is ParsedUploadRecord => Boolean(record)) };
   }
 
   if (extension === ".json") {
@@ -247,7 +264,7 @@ export async function parseKnowledgeUpload(file: File): Promise<ParsedUpload> {
     const rows = Array.isArray(parsed) ? parsed : typeof parsed === "object" && parsed ? Object.values(parsed as Record<string, unknown>).filter((item) => typeof item === "object") : [];
     if (rows.length > 0) {
       return {
-        records: rows.map((row, index) => rowToHistoricalQuote(row as Record<string, string>, file.name, index))
+        records: rows.map((row, index) => rowToHistoricalQuote(row as Record<string, string>, file.name, index)).filter((record): record is ParsedUploadRecord => Boolean(record))
       };
     }
   }
@@ -256,4 +273,3 @@ export async function parseKnowledgeUpload(file: File): Promise<ParsedUpload> {
     records: splitTextIntoQuoteBlocks(text).map((block, index) => textBlockToRecord(block, file.name, index))
   };
 }
-

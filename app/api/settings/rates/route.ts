@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
-import { applyRateCardToCostBreakdown, calculateQuoteTotals, DEFAULT_RATES, pricingRulesToRateCard, type RateCardEntry } from "@/lib/pricing/rateCard";
+import {
+  applyRateCardToCostBreakdown,
+  calculateQuoteTotals,
+  DEFAULT_RATES,
+  mergeRateCardWithDefaults,
+  pricingRulesToRateCard,
+  type RateCardEntry
+} from "@/lib/pricing/rateCard";
 import type { CostLineItem, PricingRuleRecord, QuoteRecord } from "@/lib/types";
 
 type SaveRatesBody = {
@@ -34,7 +41,7 @@ export async function GET() {
   }
 
   const savedRates = pricingRulesToRateCard((data as PricingRuleRecord[] | null) ?? []);
-  return NextResponse.json({ ok: true, rates: savedRates, hasSavedRates: Boolean(data?.length) });
+  return NextResponse.json({ ok: true, rates: mergeRateCardWithDefaults(savedRates), hasSavedRates: Boolean(data?.length) });
 }
 
 export async function POST(request: Request) {

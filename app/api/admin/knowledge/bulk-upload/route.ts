@@ -75,15 +75,32 @@ export async function POST(request: Request) {
       for (let index = 0; index < parsed.records.length; index += 1) {
         const record = parsed.records[index];
         const sourceRecordId = createSourceRecordId(file.name, record, index);
-        const duplicate = await supabase
-          .from(record.recordType === "historical_quote" ? "historical_quotes" : "knowledge_base")
-          .select("id")
-          .eq(record.recordType === "historical_quote" ? "source_record_id" : "title", record.recordType === "historical_quote" ? sourceRecordId : record.title)
-          .maybeSingle();
+        if (record.recordType === "historical_quote") {
+          const byRecordId = await supabase
+            .from("historical_quotes")
+            .select("id")
+            .eq("business_id", business.id)
+            .eq("source_record_id", sourceRecordId)
+            .maybeSingle();
+          const byReference = byRecordId.data
+            ? byRecordId
+            : await supabase
+                .from("historical_quotes")
+                .select("id")
+                .eq("business_id", business.id)
+                .eq("source_reference", record.sourceReference)
+                .maybeSingle();
 
-        if (duplicate.data) {
-          result.skipped_duplicates += 1;
-          continue;
+          if (byReference.data) {
+            result.skipped_duplicates += 1;
+            continue;
+          }
+        } else {
+          const duplicate = await supabase.from("knowledge_base").select("id").eq("business_id", business.id).eq("title", record.title).maybeSingle();
+          if (duplicate.data) {
+            result.skipped_duplicates += 1;
+            continue;
+          }
         }
 
         if (record.recordType === "knowledge_base") {

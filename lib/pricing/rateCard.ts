@@ -39,9 +39,33 @@ export const DEFAULT_RATES: RateCardInput[] = [
   { category: "Linear", item: "Gutter", unit: "lm", default_rate: 12 },
   { category: "Linear", item: "Fascia", unit: "lm", default_rate: 10 },
   { category: "Linear", item: "Soaker", unit: "lm", default_rate: 18 },
-  { category: "Fixed", item: "Scaffold", unit: "item", default_rate: 2000 },
+  { category: "Fixed", item: "Scaffold", unit: "item", default_rate: 1250 },
   { category: "Fixed", item: "Skip", unit: "item", default_rate: 300 },
-  { category: "Fixed", item: "Waste Disposal", unit: "item", default_rate: 250 }
+  { category: "Fixed", item: "Waste Disposal", unit: "item", default_rate: 250 },
+  { category: "Fixed", item: "Asbestos Disposal Allowance", unit: "item", default_rate: 250 },
+  { category: "Fixed", item: "OSB Board Sheet Allowance", unit: "item", default_rate: 70 },
+  { category: "Fixed", item: "Roof Lantern Replacement", unit: "item", default_rate: 2500 },
+  { category: "Fixed", item: "Refit Existing Roof Lantern", unit: "item", default_rate: 600 },
+  { category: "Anchor", item: "Roof Report / Diagnosis", unit: "item", default_rate: 500 },
+  { category: "Anchor", item: "Chimney Flaunching And Lead Flashings", unit: "item", default_rate: 495 },
+  { category: "Anchor", item: "Chimney Removal", unit: "item", default_rate: 695 },
+  { category: "Anchor", item: "Ridge Tile Local Repair", unit: "item", default_rate: 595 },
+  { category: "Anchor", item: "Gable Verge Re-bed", unit: "item", default_rate: 995 },
+  { category: "Anchor", item: "Dry Valley Replacement", unit: "item", default_rate: 995 },
+  { category: "Anchor", item: "Porch Flat Roof Replacement", unit: "item", default_rate: 995 },
+  { category: "Anchor", item: "Dormer Or Small Flat Roof", unit: "item", default_rate: 1150 },
+  { category: "Anchor", item: "Verges And Ridge Tiles", unit: "item", default_rate: 1500 },
+  { category: "Anchor", item: "Large Moss Removal", unit: "item", default_rate: 1777 },
+  { category: "Anchor", item: "Moss Scrape And Verges", unit: "item", default_rate: 1895 },
+  { category: "Anchor", item: "Mansard Eaves Felt And Lead Repair", unit: "item", default_rate: 2835 },
+  { category: "Anchor", item: "Garage Flat Roof Fascias And Walkway Roof", unit: "item", default_rate: 2995 },
+  { category: "Anchor", item: "UPVC Fascia Soffit Guttering", unit: "item", default_rate: 3495 },
+  { category: "Anchor", item: "Commercial Flat Roof Overclad", unit: "item", default_rate: 3495 },
+  { category: "Anchor", item: "GRP Flat Roof Replacement With Coping And Lantern", unit: "item", default_rate: 5555 },
+  { category: "Anchor", item: "Half Elevation Re-roof", unit: "item", default_rate: 6495 },
+  { category: "Anchor", item: "Flat Roof With New Roof Lantern", unit: "item", default_rate: 7650 },
+  { category: "Anchor", item: "Strip And Re-tile With UPVC", unit: "item", default_rate: 7995 },
+  { category: "Anchor", item: "Large Warm Deck Flat Roof", unit: "item", default_rate: 12995 }
 ];
 
 export function pricingRulesToRateCard(rules: PricingRuleRecord[]): RateCardEntry[] {
@@ -58,6 +82,15 @@ export function pricingRulesToRateCard(rules: PricingRuleRecord[]): RateCardEntr
     }));
 
   return entries.length > 0 ? entries : DEFAULT_RATES.map((rate) => ({ ...rate, rate: rate.default_rate, active: true }));
+}
+
+export function mergeRateCardWithDefaults(savedRates: RateCardEntry[]) {
+  const keyFor = (rate: Pick<RateCardEntry, "category" | "item">) => `${normaliseRateName(rate.category)}:${normaliseRateName(rate.item)}`;
+  const savedByKey = new Map(savedRates.map((rate) => [keyFor(rate), rate]));
+  const mergedDefaults = DEFAULT_RATES.map((rate) => savedByKey.get(keyFor(rate)) ?? { ...rate, rate: rate.default_rate, active: true });
+  const defaultKeys = new Set(DEFAULT_RATES.map(keyFor));
+  const customRates = savedRates.filter((rate) => !defaultKeys.has(keyFor(rate)));
+  return [...mergedDefaults, ...customRates];
 }
 
 export function normaliseRateName(value: string) {
@@ -77,6 +110,7 @@ export function findRateForItem(itemName: string, rates: RateCardEntry[]) {
 }
 
 export function parseQuantityFromLine(line: CostLineItem, unit?: string) {
+  if (unit === "item") return 1;
   const search = `${line.item} ${line.notes}`.replace(/,/g, "");
   const units = unit ? [unit] : ["m²", "m2", "sqm", "lm", "m", "item", "no."];
   for (const candidate of units) {
