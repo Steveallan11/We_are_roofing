@@ -7,6 +7,8 @@ export const createJobSchema = z.object({
     email: z.string().email().optional().or(z.literal("")),
     property_address: z.string().min(1),
     postcode: z.string().optional(),
+    town: z.string().optional(),
+    county: z.string().optional(),
     source: z.string().optional()
   }),
   job: z.object({
@@ -44,4 +46,3 @@ export const photoMetadataSchema = z.object({
   caption: z.string().optional(),
   file_name: z.string().min(1)
 });
-

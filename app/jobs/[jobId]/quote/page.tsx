@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { QuoteEditor } from "@/components/jobs/quote-editor";
 import { AppShell } from "@/components/layout/app-shell";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
-import { getJobBundle } from "@/lib/data";
+import { getJobBundle, getPricingRules } from "@/lib/data";
+import { pricingRulesToRateCard } from "@/lib/pricing/rateCard";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -15,10 +17,12 @@ type Props = {
 export default async function QuotePage({ params, searchParams }: Props) {
   const { jobId } = await params;
   const query = searchParams ? await searchParams : undefined;
-  const bundle = await getJobBundle(jobId);
+  const [bundle, pricingRules] = await Promise.all([getJobBundle(jobId), getPricingRules()]);
   if (!bundle) notFound();
 
   const quote = bundle.quote ?? null;
+  const savedRateRules = pricingRules.filter((rule) => rule.rule_name && rule.flat_adjustment != null && rule.active !== false);
+  const rateCard = savedRateRules.length ? pricingRulesToRateCard(savedRateRules) : [];
   const displayQuoteRef = quote?.quote_ref ?? "No Draft Yet";
   const displayStatus = quote?.status ?? "Draft";
 
@@ -73,7 +77,7 @@ export default async function QuotePage({ params, searchParams }: Props) {
             )}
           </div>
 
-          <QuoteEditor jobId={bundle.job.id} quote={quote} />
+          <QuoteEditor jobId={bundle.job.id} quote={quote} rateCard={rateCard} />
         </div>
 
         <aside className="stack">
@@ -87,6 +91,11 @@ export default async function QuotePage({ params, searchParams }: Props) {
                       <div>
                         <p className="font-semibold text-white">{line.item}</p>
                         <p className="mt-1 text-xs text-[var(--muted)]">{line.notes}</p>
+                        {Number(line.cost || 0) === 0 ? (
+                          <Link className="mt-2 inline-flex text-xs text-[var(--gold-l)] underline-offset-4 hover:underline" href={"/settings/rates" as Route}>
+                            Rate not set - add this item to the Rate Card
+                          </Link>
+                        ) : null}
                       </div>
                       <p className="font-display text-2xl text-[var(--gold-l)]">{currency(line.cost)}</p>
                     </div>

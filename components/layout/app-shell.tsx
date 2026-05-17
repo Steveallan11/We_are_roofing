@@ -31,7 +31,9 @@ export function AppShell({ title, subtitle, actions, children, wide = false }: P
               <Link href="/dashboard">Dashboard</Link>
               <Link href="/crm">Jobs</Link>
               <Link href="/jobs/new">New Job</Link>
+              <Link href={"/settings/rates" as Route}>Rate Card</Link>
               <Link href={"/knowledge" as Route}>Knowledge</Link>
+              <Link href={"/settings" as Route}>Settings</Link>
               <LogoutButton />
             </nav>
           </div>

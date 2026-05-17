@@ -34,7 +34,6 @@ export async function POST(request: Request) {
     .from("customers")
     .select("*")
     .eq("business_id", business.id)
-    .eq("full_name", customerPayload.full_name)
     .eq("phone", customerPayload.phone)
     .limit(1)
     .maybeSingle();
@@ -50,6 +49,8 @@ export async function POST(request: Request) {
           phone: customerPayload.phone,
           email: customerPayload.email || null,
           address_line_1: customerPayload.property_address,
+          town: customerPayload.town || null,
+          county: customerPayload.county || null,
           postcode: customerPayload.postcode || null
         })
         .select("*")
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
     job_id: job.id,
     next_status: "New Lead",
     received: parsed.data,
+    duplicate_customer_reused: Boolean(existingCustomer),
     customer,
     job
   });

@@ -15,6 +15,8 @@ type FormState = {
   source: string;
   property_address: string;
   postcode: string;
+  town: string;
+  county: string;
   job_title: string;
   job_type: string;
   roof_type: string;
@@ -29,6 +31,8 @@ const initialState: FormState = {
   source: "Referral",
   property_address: "",
   postcode: "",
+  town: "",
+  county: "",
   job_title: "",
   job_type: "Replacement",
   roof_type: "Flat",
@@ -41,10 +45,45 @@ export function NewJobForm() {
   const [form, setForm] = useState<FormState>(initialState);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [postcodeStatus, setPostcodeStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function lookupPostcode() {
+    const postcode = form.postcode.trim();
+    if (!postcode) return;
+    setPostcodeStatus("Looking up postcode...");
+    try {
+      const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+      const result = (await response.json()) as {
+        status?: number;
+        result?: {
+          postcode?: string;
+          admin_district?: string;
+          admin_county?: string | null;
+          region?: string | null;
+        };
+      };
+
+      if (!response.ok || !result.result) {
+        setPostcodeStatus("Postcode not found - enter address manually.");
+        return;
+      }
+
+      setForm((current) => ({
+        ...current,
+        postcode: result.result?.postcode ?? current.postcode,
+        town: result.result?.admin_district ?? current.town,
+        county: result.result?.admin_county || result.result?.region || current.county,
+        property_address: current.property_address || [result.result?.admin_district, result.result?.postcode].filter(Boolean).join(", ")
+      }));
+      setPostcodeStatus("Postcode found - town and county filled.");
+    } catch {
+      setPostcodeStatus("Postcode lookup unavailable - enter address manually.");
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -62,6 +101,8 @@ export function NewJobForm() {
           email: form.email,
           property_address: form.property_address,
           postcode: form.postcode,
+          town: form.town,
+          county: form.county,
           source: form.source
         },
         job: {
@@ -75,7 +116,7 @@ export function NewJobForm() {
     });
 
     const result = (await response.json().catch(() => null)) as
-      | { ok?: boolean; error?: string | { fieldErrors?: Record<string, string[]> }; job_id?: string }
+      | { ok?: boolean; error?: string | { fieldErrors?: Record<string, string[]> }; job_id?: string; duplicate_customer_reused?: boolean }
       | null;
 
     if (!response.ok || !result?.ok || !result.job_id) {
@@ -83,7 +124,7 @@ export function NewJobForm() {
       return;
     }
 
-    setSuccess("Job saved. Opening the survey.");
+    setSuccess(result.duplicate_customer_reused ? "Existing customer found by phone. Job saved against that customer." : "Job saved. Opening the survey.");
     startTransition(() => {
       router.push(`/jobs/${result.job_id}/survey`);
       router.refresh();
@@ -103,13 +144,30 @@ export function NewJobForm() {
           <label className="label" htmlFor="customer-phone">
             Phone
           </label>
-          <input className="field" id="customer-phone" onChange={(event) => updateField("phone", event.target.value)} placeholder="Customer phone number" value={form.phone} />
+          <input
+            autoComplete="tel"
+            className="field"
+            id="customer-phone"
+            inputMode="tel"
+            onChange={(event) => updateField("phone", event.target.value)}
+            placeholder="Customer phone number"
+            type="tel"
+            value={form.phone}
+          />
         </div>
         <div>
           <label className="label" htmlFor="customer-email">
             Email
           </label>
-          <input className="field" id="customer-email" onChange={(event) => updateField("email", event.target.value)} placeholder="Customer email address" type="email" value={form.email} />
+          <input
+            autoComplete="email"
+            className="field"
+            id="customer-email"
+            onChange={(event) => updateField("email", event.target.value)}
+            placeholder="Customer email address"
+            type="email"
+            value={form.email}
+          />
         </div>
         <div>
           <label className="label" htmlFor="lead-source">
@@ -143,7 +201,28 @@ export function NewJobForm() {
           <label className="label" htmlFor="postcode">
             Postcode
           </label>
-          <input className="field" id="postcode" onChange={(event) => updateField("postcode", event.target.value)} placeholder="GU46..." value={form.postcode} />
+          <input
+            autoComplete="postal-code"
+            className="field"
+            id="postcode"
+            onBlur={lookupPostcode}
+            onChange={(event) => updateField("postcode", event.target.value)}
+            placeholder="GU46..."
+            value={form.postcode}
+          />
+          {postcodeStatus ? <p className="mt-2 text-xs text-[var(--muted)]">{postcodeStatus}</p> : null}
+        </div>
+        <div>
+          <label className="label" htmlFor="town">
+            Town
+          </label>
+          <input className="field" id="town" onChange={(event) => updateField("town", event.target.value)} placeholder="Yateley" value={form.town} />
+        </div>
+        <div>
+          <label className="label" htmlFor="county">
+            County
+          </label>
+          <input className="field" id="county" onChange={(event) => updateField("county", event.target.value)} placeholder="Hampshire" value={form.county} />
         </div>
         <div>
           <label className="label" htmlFor="job-type">

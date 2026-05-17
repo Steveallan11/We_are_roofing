@@ -246,6 +246,11 @@ export type Business = {
   company_number?: string | null;
   payment_terms: string;
   quote_valid_days: number;
+  weather_location?: string | null;
+  bank_name?: string | null;
+  bank_sort_code?: string | null;
+  bank_account?: string | null;
+  bank_account_name?: string | null;
 };
 
 export type Customer = {
@@ -402,6 +407,11 @@ export type PricingRuleRecord = {
   id: string;
   business_id: string;
   title: string;
+  rule_name?: string | null;
+  rule_type?: string | null;
+  conditions?: Record<string, unknown> | null;
+  flat_adjustment?: number | null;
+  active?: boolean | null;
   year_from?: number | null;
   year_to?: number | null;
   roof_type?: string | null;

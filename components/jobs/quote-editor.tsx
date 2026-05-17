@@ -1,16 +1,20 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CostLineItem, QuoteRecord } from "@/lib/types";
+import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
 import { currency } from "@/lib/utils";
 
 type Props = {
   jobId: string;
   quote: QuoteRecord | null;
+  rateCard?: RateCardEntry[];
 };
 
-export function QuoteEditor({ jobId, quote }: Props) {
+export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -25,17 +29,22 @@ export function QuoteEditor({ jobId, quote }: Props) {
   const [confidence, setConfidence] = useState<QuoteRecord["confidence"]>(quote?.confidence ?? "Medium");
   const [pricingNotes, setPricingNotes] = useState((quote?.pricing_notes ?? []).join("\n"));
   const [missingInfo, setMissingInfo] = useState((quote?.missing_info ?? []).join("\n"));
-  const [costBreakdown, setCostBreakdown] = useState<CostLineItem[]>(
-    quote?.cost_breakdown?.length
+  const [costBreakdown, setCostBreakdown] = useState<CostLineItem[]>(() => {
+    const initial = quote?.cost_breakdown?.length
       ? quote.cost_breakdown
-      : [{ item: "Main works", cost: 0, vat_applicable: true, notes: "Draft pricing line item" }]
-  );
+      : [{ item: "Main works", cost: 0, vat_applicable: true, notes: "Draft pricing line item" }];
+    return rateCard.length ? applyRateCardToCostBreakdown(initial, rateCard).updated : initial;
+  });
 
   const totals = useMemo(() => {
     const subtotal = Math.round(costBreakdown.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
     const vat = Math.round(costBreakdown.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
     return { subtotal, vat, total: subtotal + vat };
   }, [costBreakdown]);
+  const unpricedLines = useMemo(
+    () => costBreakdown.filter((line) => Number(line.cost || 0) === 0 && !findRateForItem(line.item, rateCard)),
+    [costBreakdown, rateCard]
+  );
 
   if (!quote) {
     return (
@@ -49,6 +58,19 @@ export function QuoteEditor({ jobId, quote }: Props) {
 
   function updateLine(index: number, updates: Partial<CostLineItem>) {
     setCostBreakdown((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...updates } : item)));
+  }
+
+  function applyRates() {
+    const { updated, pricingNotes: newNotes } = applyRateCardToCostBreakdown(costBreakdown, rateCard);
+    setCostBreakdown(updated);
+    if (newNotes.length) {
+      setPricingNotes((current) => [current, ...newNotes].filter(Boolean).join("\n"));
+      setSuccess("Rate Card pricing applied. Save changes to keep the new totals.");
+      setError(null);
+      return;
+    }
+    setError("No matching Rate Card items found for the remaining £0 lines.");
+    setSuccess(null);
   }
 
   async function saveQuote() {
@@ -110,6 +132,11 @@ export function QuoteEditor({ jobId, quote }: Props) {
             <p className="mt-2 text-sm text-[var(--muted)]">Adjust wording, totals, and customer email content before approval.</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            {rateCard.length ? (
+              <button className="button-ghost" disabled={isPending} onClick={applyRates} type="button">
+                Apply Rate Card
+              </button>
+            ) : null}
             <button className="button-secondary" disabled={isPending} onClick={generatePdf} type="button">
               Generate PDF
             </button>
@@ -159,7 +186,20 @@ export function QuoteEditor({ jobId, quote }: Props) {
       </div>
 
       <div className="card p-5">
-        <p className="section-kicker text-[0.65rem] uppercase">Cost Breakdown</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-kicker text-[0.65rem] uppercase">Cost Breakdown</p>
+            <p className="mt-2 text-sm text-[var(--muted)]">Rate Card matches fill £0 lines from survey quantities where possible.</p>
+          </div>
+          <Link className="button-ghost" href={"/settings/rates" as Route}>
+            Open Rate Card
+          </Link>
+        </div>
+        {unpricedLines.length ? (
+          <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4 text-sm text-[var(--gold-l)]">
+            {unpricedLines.length} line{unpricedLines.length === 1 ? "" : "s"} still need pricing. Add matching item names in the Rate Card, or enter the total manually.
+          </div>
+        ) : null}
         <div className="mt-4 space-y-4">
           {costBreakdown.map((line, index) => (
             <div className="rounded-2xl border border-[var(--border)] p-4" key={`${line.item}-${index}`}>
