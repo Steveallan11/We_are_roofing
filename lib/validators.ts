@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const createJobSchema = z.object({
   customer: z.object({
+    customer_id: z.string().uuid().optional().or(z.literal("")),
     full_name: z.string().min(1),
     phone: z.string().min(1),
     email: z.string().email().optional().or(z.literal("")),

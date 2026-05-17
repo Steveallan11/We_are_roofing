@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { Customer } from "@/lib/types";
 
-const leadSources = ["Referral", "Phone Call", "Website", "Google", "Facebook", "Checkatrade", "Other"];
-const jobTypes = ["Replacement", "Repair", "Inspection", "Report Only"];
-const roofTypes = ["Flat", "Pitched", "Tile", "Slate", "Fascia", "Chimney", "Mixed", "Other"];
+const leadSources = ["Referral", "Phone Call", "Website", "Google", "Facebook", "Checkatrade", "Returning Customer", "Other"];
+const jobTypes = ["Repair", "Replacement", "New Build", "Emergency", "Survey Only", "Report Only"];
+const roofTypes = ["Pitched Tile", "Pitched Slate", "Flat EPDM", "Flat GRP", "Flat Felt", "Flat Lead", "Mixed", "Chimney", "Guttering", "Other"];
 const urgencies = ["Low", "Medium", "High", "Emergency"];
 
 type FormState = {
+  customer_id: string;
   full_name: string;
   phone: string;
   email: string;
@@ -22,34 +24,64 @@ type FormState = {
   roof_type: string;
   urgency: string;
   internal_notes: string;
+  estimated_value: string;
 };
 
 const initialState: FormState = {
+  customer_id: "",
   full_name: "",
   phone: "",
   email: "",
-  source: "Referral",
+  source: "Phone Call",
   property_address: "",
   postcode: "",
   town: "",
   county: "",
   job_title: "",
-  job_type: "Replacement",
-  roof_type: "Flat",
+  job_type: "Repair",
+  roof_type: "Pitched Tile",
   urgency: "Medium",
-  internal_notes: ""
+  internal_notes: "",
+  estimated_value: ""
 };
 
-export function NewJobForm() {
+type Props = {
+  customers: Customer[];
+  prefillCustomerId?: string;
+};
+
+export function NewJobForm({ customers, prefillCustomerId }: Props) {
   const router = useRouter();
-  const [form, setForm] = useState<FormState>(initialState);
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState<FormState>(() => {
+    const selected = customers.find((customer) => customer.id === prefillCustomerId);
+    return selected ? customerToForm(selected, initialState) : initialState;
+  });
+  const [customerSearch, setCustomerSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [postcodeStatus, setPostcodeStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const matches = useMemo(() => {
+    const query = customerSearch.trim().toLowerCase();
+    if (!query) return customers.slice(0, 5);
+    return customers
+      .filter((customer) => [customer.full_name, customer.phone, customer.email, customer.postcode].filter(Boolean).join(" ").toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [customerSearch, customers]);
+
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectCustomer(customer: Customer) {
+    setForm((current) => customerToForm(customer, current));
+    setCustomerSearch(customer.full_name);
+  }
+
+  function autoTitle() {
+    updateField("job_title", `${form.roof_type} ${form.job_type}`);
   }
 
   async function lookupPostcode() {
@@ -59,7 +91,6 @@ export function NewJobForm() {
     try {
       const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
       const result = (await response.json()) as {
-        status?: number;
         result?: {
           postcode?: string;
           admin_district?: string;
@@ -69,7 +100,7 @@ export function NewJobForm() {
       };
 
       if (!response.ok || !result.result) {
-        setPostcodeStatus("Postcode not found - enter address manually.");
+        setPostcodeStatus("Postcode not found. Enter address manually.");
         return;
       }
 
@@ -80,14 +111,20 @@ export function NewJobForm() {
         county: result.result?.admin_county || result.result?.region || current.county,
         property_address: current.property_address || [result.result?.admin_district, result.result?.postcode].filter(Boolean).join(", ")
       }));
-      setPostcodeStatus("Postcode found - town and county filled.");
+      setPostcodeStatus("Postcode found. Town and county filled.");
     } catch {
-      setPostcodeStatus("Postcode lookup unavailable - enter address manually.");
+      setPostcodeStatus("Postcode lookup unavailable. Enter address manually.");
     }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function canContinue() {
+    if (step === 1) return Boolean(form.full_name && form.phone);
+    if (step === 2) return Boolean(form.property_address && form.job_type && form.roof_type);
+    if (step === 3) return Boolean(form.job_title && form.urgency && form.source);
+    return true;
+  }
+
+  async function handleSubmit() {
     setError(null);
     setSuccess(null);
 
@@ -96,6 +133,7 @@ export function NewJobForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         customer: {
+          customer_id: form.customer_id,
           full_name: form.full_name,
           phone: form.phone,
           email: form.email,
@@ -116,165 +154,222 @@ export function NewJobForm() {
     });
 
     const result = (await response.json().catch(() => null)) as
-      | { ok?: boolean; error?: string | { fieldErrors?: Record<string, string[]> }; job_id?: string; duplicate_customer_reused?: boolean }
+      | { ok?: boolean; error?: string | { fieldErrors?: Record<string, string[]> }; job_id?: string; job?: { job_ref?: string }; duplicate_customer_reused?: boolean }
       | null;
 
     if (!response.ok || !result?.ok || !result.job_id) {
-      setError("Unable to save the job. Please check the required details and try again.");
+      setError("Unable to save the job. Check the required details and try again.");
       return;
     }
 
-    setSuccess(result.duplicate_customer_reused ? "Existing customer found by phone. Job saved against that customer." : "Job saved. Opening the survey.");
+    setSuccess(`${result.job?.job_ref ?? "Job"} created. Opening job file.`);
     startTransition(() => {
-      router.push(`/jobs/${result.job_id}/survey`);
+      router.push(`/jobs/${result.job_id}`);
       router.refresh();
     });
   }
 
   return (
-    <form className="card p-6 md:p-8" onSubmit={handleSubmit}>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="label" htmlFor="customer-name">
-            Customer Name
-          </label>
-          <input className="field" id="customer-name" onChange={(event) => updateField("full_name", event.target.value)} placeholder="Full customer name" value={form.full_name} />
-        </div>
-        <div>
-          <label className="label" htmlFor="customer-phone">
-            Phone
-          </label>
-          <input
-            autoComplete="tel"
-            className="field"
-            id="customer-phone"
-            inputMode="tel"
-            onChange={(event) => updateField("phone", event.target.value)}
-            placeholder="Customer phone number"
-            type="tel"
-            value={form.phone}
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="customer-email">
-            Email
-          </label>
-          <input
-            autoComplete="email"
-            className="field"
-            id="customer-email"
-            onChange={(event) => updateField("email", event.target.value)}
-            placeholder="Customer email address"
-            type="email"
-            value={form.email}
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="lead-source">
-            Lead Source
-          </label>
-          <select className="field" id="lead-source" onChange={(event) => updateField("source", event.target.value)} value={form.source}>
-            {leadSources.map((source) => (
-              <option key={source}>{source}</option>
+    <div className="card overflow-hidden">
+      <div className="border-b border-[var(--border)] p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="section-kicker text-[0.65rem] uppercase">New Job Wizard</p>
+            <h2 className="mt-2 font-condensed text-3xl text-white">Step {step} of 4</h2>
+          </div>
+          <div className="hidden gap-2 md:flex">
+            {[1, 2, 3, 4].map((item) => (
+              <span className={`h-2 w-12 rounded-full ${item <= step ? "bg-[var(--gold)]" : "bg-white/10"}`} key={item} />
             ))}
-          </select>
-        </div>
-        <div className="md:col-span-2">
-          <label className="label" htmlFor="property-address">
-            Property Address
-          </label>
-          <input
-            className="field"
-            id="property-address"
-            onChange={(event) => updateField("property_address", event.target.value)}
-            placeholder="Full property address"
-            value={form.property_address}
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="job-title">
-            Job Title
-          </label>
-          <input className="field" id="job-title" onChange={(event) => updateField("job_title", event.target.value)} placeholder="Rear extension flat roof replacement" value={form.job_title} />
-        </div>
-        <div>
-          <label className="label" htmlFor="postcode">
-            Postcode
-          </label>
-          <input
-            autoComplete="postal-code"
-            className="field"
-            id="postcode"
-            onBlur={lookupPostcode}
-            onChange={(event) => updateField("postcode", event.target.value)}
-            placeholder="GU46..."
-            value={form.postcode}
-          />
-          {postcodeStatus ? <p className="mt-2 text-xs text-[var(--muted)]">{postcodeStatus}</p> : null}
-        </div>
-        <div>
-          <label className="label" htmlFor="town">
-            Town
-          </label>
-          <input className="field" id="town" onChange={(event) => updateField("town", event.target.value)} placeholder="Yateley" value={form.town} />
-        </div>
-        <div>
-          <label className="label" htmlFor="county">
-            County
-          </label>
-          <input className="field" id="county" onChange={(event) => updateField("county", event.target.value)} placeholder="Hampshire" value={form.county} />
-        </div>
-        <div>
-          <label className="label" htmlFor="job-type">
-            Job Type
-          </label>
-          <select className="field" id="job-type" onChange={(event) => updateField("job_type", event.target.value)} value={form.job_type}>
-            {jobTypes.map((jobType) => (
-              <option key={jobType}>{jobType}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="roof-type">
-            Roof Type
-          </label>
-          <select className="field" id="roof-type" onChange={(event) => updateField("roof_type", event.target.value)} value={form.roof_type}>
-            {roofTypes.map((roofType) => (
-              <option key={roofType}>{roofType}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="urgency">
-            Urgency
-          </label>
-          <select className="field" id="urgency" onChange={(event) => updateField("urgency", event.target.value)} value={form.urgency}>
-            {urgencies.map((urgency) => (
-              <option key={urgency}>{urgency}</option>
-            ))}
-          </select>
-        </div>
-        <div className="md:col-span-2">
-          <label className="label" htmlFor="internal-notes">
-            Internal Notes
-          </label>
-          <textarea
-            className="field min-h-24"
-            id="internal-notes"
-            onChange={(event) => updateField("internal_notes", event.target.value)}
-            placeholder="Anything the office or surveyor needs to know before the visit."
-            value={form.internal_notes}
-          />
+          </div>
         </div>
       </div>
 
-      <div className="gold-divider my-6" />
+      <div className="p-5 md:p-8">
+        {step === 1 ? (
+          <section className="grid gap-5">
+            <StepHeader title="Customer" text="Search first. If they already exist, use the existing record and avoid duplicates." />
+            <input className="field" onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search existing customers by name, phone, email or postcode" value={customerSearch} />
+            {matches.length ? (
+              <div className="grid gap-2">
+                {matches.map((customer) => (
+                  <button
+                    className={`rounded-2xl border p-3 text-left transition hover:border-[var(--gold)] ${form.customer_id === customer.id ? "border-[var(--gold)] bg-[var(--gold)]/10" : "border-[var(--border)] bg-black/20"}`}
+                    key={customer.id}
+                    onClick={() => selectCustomer(customer)}
+                    type="button"
+                  >
+                    <p className="font-semibold text-white">{customer.full_name}</p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">{[customer.phone, customer.email, customer.postcode].filter(Boolean).join(" | ")}</p>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Full Name" value={form.full_name} onChange={(value) => updateField("full_name", value)} autoComplete="name" />
+              <Field label="Phone" value={form.phone} onChange={(value) => updateField("phone", value)} autoComplete="tel" inputMode="tel" type="tel" />
+              <Field label="Email" value={form.email} onChange={(value) => updateField("email", value)} autoComplete="email" type="email" />
+              <SelectField label="Source" value={form.source} options={leadSources} onChange={(value) => updateField("source", value)} />
+            </div>
+          </section>
+        ) : null}
 
-      <button className="button-primary" disabled={isPending} type="submit">
-        {isPending ? "Saving Job..." : "Save Job And Start Survey"}
-      </button>
-      {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
-      {success ? <p className="mt-4 text-sm text-[#7ce3a6]">{success}</p> : null}
-    </form>
+        {step === 2 ? (
+          <section className="grid gap-5">
+            <StepHeader title="Property" text="Capture the site address and what kind of roof/job this is." />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Field label="Property Address" value={form.property_address} onChange={(value) => updateField("property_address", value)} autoComplete="street-address" />
+              </div>
+              <div>
+                <Field label="Postcode" value={form.postcode} onChange={(value) => updateField("postcode", value)} onBlur={lookupPostcode} autoComplete="postal-code" />
+                {postcodeStatus ? <p className="mt-2 text-xs text-[var(--muted)]">{postcodeStatus}</p> : null}
+              </div>
+              <Field label="Town" value={form.town} onChange={(value) => updateField("town", value)} />
+              <Field label="County" value={form.county} onChange={(value) => updateField("county", value)} />
+              <SelectField label="Job Type" value={form.job_type} options={jobTypes} onChange={(value) => updateField("job_type", value)} />
+              <SelectField label="Roof Type" value={form.roof_type} options={roofTypes} onChange={(value) => updateField("roof_type", value)} />
+            </div>
+          </section>
+        ) : null}
+
+        {step === 3 ? (
+          <section className="grid gap-5">
+            <StepHeader title="Details" text="Set the job title, urgency and any notes the office or surveyor needs." />
+            <div className="grid gap-4">
+              <div>
+                <Field label="Job Title" value={form.job_title} onChange={(value) => updateField("job_title", value)} />
+                <button className="mt-2 text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" onClick={autoTitle} type="button">
+                  Auto-generate from roof and job type
+                </button>
+              </div>
+              <div>
+                <p className="label">Urgency</p>
+                <div className="grid gap-2 md:grid-cols-4">
+                  {urgencies.map((urgency) => (
+                    <button className={`min-h-12 rounded-2xl border px-4 py-3 text-sm font-semibold ${form.urgency === urgency ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-black/20 text-[var(--text)]"}`} key={urgency} onClick={() => updateField("urgency", urgency)} type="button">
+                      {urgency}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label" htmlFor="internal-notes">Internal Notes</label>
+                <textarea className="field min-h-28" id="internal-notes" onChange={(event) => updateField("internal_notes", event.target.value)} value={form.internal_notes} />
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 4 ? (
+          <section className="grid gap-5">
+            <StepHeader title="Confirm" text="Check the details, then create the job file and permanent job number." />
+            <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-black/20 p-5 text-sm">
+              <Summary label="Customer" value={`${form.full_name} | ${form.phone}`} />
+              <Summary label="Property" value={`${form.property_address} ${form.postcode}`.trim()} />
+              <Summary label="Job" value={`${form.job_title} | ${form.roof_type} | ${form.job_type}`} />
+              <Summary label="Urgency / Source" value={`${form.urgency} | ${form.source}`} />
+              {form.internal_notes ? <Summary label="Notes" value={form.internal_notes} /> : null}
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      <div className="sticky bottom-0 flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--card)]/95 p-5 backdrop-blur md:flex-row md:items-center md:justify-between">
+        <div className="text-sm">
+          {error ? <p className="text-[#ff9a91]">{error}</p> : null}
+          {success ? <p className="text-[#7ce3a6]">{success}</p> : null}
+          {!error && !success ? <p className="text-[var(--muted)]">Minimum tap targets, simple steps, no CRM faff.</p> : null}
+        </div>
+        <div className="flex gap-3">
+          {step > 1 ? (
+            <button className="button-ghost min-h-11" onClick={() => setStep((current) => current - 1)} type="button">
+              Back
+            </button>
+          ) : null}
+          {step < 4 ? (
+            <button className="button-primary min-h-11" disabled={!canContinue()} onClick={() => setStep((current) => current + 1)} type="button">
+              Next
+            </button>
+          ) : (
+            <button className="button-primary min-h-11" disabled={isPending} onClick={handleSubmit} type="button">
+              {isPending ? "Creating..." : "Create Job"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function customerToForm(customer: Customer, current: FormState): FormState {
+  return {
+    ...current,
+    customer_id: customer.id,
+    full_name: customer.full_name,
+    phone: customer.phone ?? "",
+    email: customer.email ?? "",
+    property_address: customer.address_line_1 ?? current.property_address,
+    postcode: customer.postcode ?? current.postcode,
+    town: customer.town ?? current.town,
+    county: customer.county ?? current.county
+  };
+}
+
+function StepHeader({ title, text }: { title: string; text: string }) {
+  return (
+    <div>
+      <h3 className="font-condensed text-3xl text-white">{title}</h3>
+      <p className="mt-2 text-sm text-[var(--muted)]">{text}</p>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  inputMode,
+  autoComplete,
+  onBlur
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  autoComplete?: string;
+  onBlur?: () => void;
+}) {
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <input autoComplete={autoComplete} className="field min-h-11" id={id} inputMode={inputMode} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} type={type} value={value} />
+    </div>
+  );
+}
+
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <select className="field min-h-11" id={id} onChange={(event) => onChange(event.target.value)} value={value}>
+        {options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0 md:flex-row md:justify-between">
+      <span className="text-[var(--muted)]">{label}</span>
+      <span className="font-semibold text-white md:text-right">{value}</span>
+    </div>
   );
 }

@@ -30,13 +30,19 @@ export async function POST(request: Request) {
   const customerPayload = parsed.data.customer;
   const jobPayload = parsed.data.job;
 
-  const { data: existingCustomer } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("business_id", business.id)
-    .eq("phone", customerPayload.phone)
-    .limit(1)
-    .maybeSingle();
+  const { data: selectedCustomer } = customerPayload.customer_id
+    ? await supabase.from("customers").select("*").eq("business_id", business.id).eq("id", customerPayload.customer_id).maybeSingle()
+    : { data: null };
+
+  const { data: existingCustomer } = selectedCustomer
+    ? { data: selectedCustomer }
+    : await supabase
+        .from("customers")
+        .select("*")
+        .eq("business_id", business.id)
+        .eq("phone", customerPayload.phone)
+        .limit(1)
+        .maybeSingle();
 
   const customer =
     existingCustomer ??
