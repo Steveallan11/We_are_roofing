@@ -1,19 +1,19 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { KanbanBoard } from "@/components/crm/kanban-board";
-import { MetricCard } from "@/components/layout/metric-card";
 import { getJobs } from "@/lib/data";
 import { getJobWorkflowMetrics } from "@/lib/job-workflow";
 
 export default async function CrmPage() {
   const jobs = await getJobs();
   const metrics = getJobWorkflowMetrics(jobs);
-  const recentlyUpdated = [...jobs].slice(0, 5);
+  const totalLiveJobs = jobs.filter((job) => !["Completed", "Lost", "Archived"].includes(job.status)).length;
 
   return (
     <AppShell
       title="Jobs"
-      subtitle="This is the live roofing jobs board. Use it to see what needs surveying, what is ready for quote, what is waiting to send, and what has been won and booked."
+      subtitle="A simple roofing workflow board: see what needs a survey, what is ready to quote, what needs sending, and what has been won."
+      wide
       actions={
         <>
           <Link className="button-primary" href="/jobs/new">
@@ -26,33 +26,36 @@ export default async function CrmPage() {
       }
     >
       <section className="stack">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard hint="Leads that still need a survey booking or site visit." label="Need Survey" value={metrics.needingSurvey} />
-          <MetricCard hint="Surveys and photos are in place and ready to turn into quotes." label="Ready For Quote" value={metrics.readyForQuote} />
-          <MetricCard hint="Approved drafts that need to go out to the customer." label="Ready To Send" value={metrics.readyToSend} />
-          <MetricCard hint="Won work that needs ordering, booking, or handover." label="Accepted / Booked" value={metrics.acceptedOrBooked} />
+        <div className="grid gap-3 md:grid-cols-5">
+          {[
+            ["Live Jobs", totalLiveJobs, "Active board"],
+            ["Need Survey", metrics.needingSurvey, "Book or complete"],
+            ["Ready Quote", metrics.readyForQuote, "Generate draft"],
+            ["Ready Send", metrics.readyToSend, "Approved quotes"],
+            ["Won / Booked", metrics.acceptedOrBooked, "Handover work"]
+          ].map(([label, value, hint]) => (
+            <div className="card flex items-center justify-between gap-3 px-4 py-3" key={label}>
+              <div>
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[var(--dim)]">{label}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p>
+              </div>
+              <p className="font-display text-3xl leading-none text-[var(--gold-l)]">{value}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="card p-5">
-          <p className="section-kicker text-[0.65rem] uppercase">Jobs Workflow</p>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Keep the board focused on the real roofing journey: lead, survey, quote, send, accepted, and booked work.
-          </p>
-          <div className="mt-4">
-            <KanbanBoard jobs={jobs} />
+        <div className="card overflow-hidden">
+          <div className="flex flex-col gap-2 border-b border-[var(--border)] px-4 py-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="section-kicker text-[0.65rem] uppercase">Roofing Workflow</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">Move jobs left to right. Each card shows the next useful action, not every bit of admin noise.</p>
+            </div>
+            <p className="rounded-full border border-[var(--border)] bg-black/20 px-3 py-1 text-xs text-[var(--dim)]">
+              Tip: use filters to create a short daily worklist
+            </p>
           </div>
-        </div>
-
-        <div className="card p-5">
-          <p className="section-kicker text-[0.65rem] uppercase">Recently Updated Jobs</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            {recentlyUpdated.map((job) => (
-              <Link className="rounded-2xl border border-[var(--border)] p-4 transition hover:-translate-y-0.5" href={`/jobs/${job.id}`} key={job.id}>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gold-l)]">{job.job_ref ?? "WR-J-TBC"}</p>
-                <p className="mt-2 font-semibold text-white">{job.customer?.full_name ?? "Customer missing"}</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">{job.job_title}</p>
-              </Link>
-            ))}
+          <div className="p-4">
+            <KanbanBoard jobs={jobs} />
           </div>
         </div>
       </section>

@@ -4,19 +4,21 @@ import { AssistantQuickPrompts } from "@/components/assistant/AssistantQuickProm
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { Starfield } from "@/components/ui/starfield";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { cn } from "@/lib/utils";
 
 type Props = {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  wide?: boolean;
 };
 
-export function AppShell({ title, subtitle, actions, children }: Props) {
+export function AppShell({ title, subtitle, actions, children, wide = false }: Props) {
   return (
     <div className="relative min-h-screen">
       <Starfield />
-      <div className="relative z-10 app-shell">
+      <div className={cn("relative z-10 app-shell", wide && "!max-w-[1600px]")}>
         <header className="brand-panel relative mb-4 overflow-hidden rounded-[1.5rem] px-5 py-6">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
