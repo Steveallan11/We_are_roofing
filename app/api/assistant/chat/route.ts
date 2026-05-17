@@ -3,88 +3,76 @@ import { NextResponse } from "next/server";
 import { requireServerEnv } from "@/lib/env";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 import { buildSystemPrompt } from "@/lib/assistant/systemPrompt";
-import {
-  executeToolCall,
-  getAssistantPromptContext
-} from "@/lib/assistant/toolHandlers";
+import { executeToolCall, getAssistantPromptContext } from "@/lib/assistant/toolHandlers";
 import type {
-  AnthropicContentBlock,
-  AnthropicMessageParam,
-  AnthropicMessageResponse,
   AssistantChatRequest,
-  AssistantUiMessage
+  AssistantUiMessage,
+  OpenAIChatResponse,
+  OpenAIMessageParam,
+  OpenAIToolCall
 } from "@/lib/assistant/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-function toAnthropicMessages(messages: AssistantUiMessage[]): AnthropicMessageParam[] {
+function toOpenAIMessages(messages: AssistantUiMessage[]): OpenAIMessageParam[] {
   return messages.map((message) => ({
     role: message.role,
     content: message.text
   }));
 }
 
-function extractUiHistory(messages: AnthropicMessageParam[]): AssistantUiMessage[] {
-  const history: AssistantUiMessage[] = [];
-  for (const message of messages) {
-    if (typeof message.content === "string") {
-      history.push({
-        id: randomUUID(),
-        role: message.role,
-        text: message.content,
-        createdAt: new Date().toISOString()
-      });
-      continue;
-    }
-
-    const text = message.content
-      .filter((block): block is Extract<AnthropicContentBlock, { type: "text" }> => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim();
-    if (!text) continue;
-    history.push({
+function extractUiHistory(messages: OpenAIMessageParam[]): AssistantUiMessage[] {
+  return messages
+    .filter((message) => (message.role === "user" || message.role === "assistant") && typeof message.content === "string" && message.content.trim())
+    .map((message) => ({
       id: randomUUID(),
-      role: message.role,
-      text,
+      role: message.role as "user" | "assistant",
+      text: String(message.content),
       createdAt: new Date().toISOString()
-    });
-  }
-  return history;
+    }));
 }
 
-async function callAnthropic(messages: AnthropicMessageParam[], system: string) {
+function parseToolInput(toolCall: OpenAIToolCall) {
+  if (!toolCall.function.arguments) return {};
+  try {
+    return JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+async function callOpenAI(messages: OpenAIMessageParam[], system: string) {
   const env = requireServerEnv();
-  if (!env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
+  if (!env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured.");
   }
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01"
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "gpt-4.1",
+      temperature: 0.2,
       max_tokens: 1024,
-      system,
+      tool_choice: "auto",
       tools: ASSISTANT_TOOLS,
-      messages
+      messages: [{ role: "system", content: system }, ...messages]
     })
   });
 
   if (!response.ok) {
     const failure = await response.text();
-    throw new Error(`Anthropic request failed: ${failure}`);
+    throw new Error(`OpenAI request failed: ${failure}`);
   }
 
-  return (await response.json()) as AnthropicMessageResponse;
+  return (await response.json()) as OpenAIChatResponse;
 }
 
-async function saveConversation(conversationId: string | null | undefined, businessId: string, messages: AnthropicMessageParam[], firstUserText?: string) {
+async function saveConversation(conversationId: string | null | undefined, businessId: string, messages: OpenAIMessageParam[], firstUserText?: string) {
   const supabase = createSupabaseAdminClient();
   const payload = {
     business_id: businessId,
@@ -101,11 +89,7 @@ async function saveConversation(conversationId: string | null | undefined, busin
     return data.id as string;
   }
 
-  const { data, error } = await supabase
-    .from("assistant_conversations")
-    .insert(payload)
-    .select("*")
-    .single();
+  const { data, error } = await supabase.from("assistant_conversations").insert(payload).select("*").single();
   if (error || !data) {
     throw new Error(error?.message ?? "Unable to create the assistant conversation.");
   }
@@ -136,7 +120,7 @@ export async function GET() {
     return NextResponse.json({ ok: true, conversation: null });
   }
 
-  const messages = (data.messages as AnthropicMessageParam[]) ?? [];
+  const messages = (data.messages as OpenAIMessageParam[]) ?? [];
   return NextResponse.json({
     ok: true,
     conversation: {
@@ -164,7 +148,7 @@ export async function POST(request: Request) {
 
       try {
         let conversationId = body.conversationId ?? null;
-        let currentMessages = toAnthropicMessages(uiMessages);
+        let currentMessages = toOpenAIMessages(uiMessages);
         let loopCount = 0;
         let continueLoop = true;
         const system = buildSystemPrompt({
@@ -178,55 +162,50 @@ export async function POST(request: Request) {
 
         while (continueLoop && loopCount < 6) {
           loopCount += 1;
-          const response = await callAnthropic(currentMessages, system);
-          const assistantText = response.content
-            .filter((block): block is Extract<AnthropicContentBlock, { type: "text" }> => block.type === "text")
-            .map((block) => block.text)
-            .join("\n")
-            .trim();
+          const response = await callOpenAI(currentMessages, system);
+          const responseMessage = response.choices[0]?.message;
+          const assistantText = responseMessage?.content?.trim() ?? "";
 
           if (assistantText) {
             send({ type: "text", text: assistantText });
           }
 
-          if (response.stop_reason === "tool_use") {
-            const toolUses = response.content.filter((block): block is Extract<AnthropicContentBlock, { type: "tool_use" }> => block.type === "tool_use");
-            const toolResults: AnthropicContentBlock[] = [];
-            currentMessages = [...currentMessages, { role: "assistant", content: response.content }];
+          if (responseMessage?.tool_calls?.length) {
+            currentMessages = [
+              ...currentMessages,
+              {
+                role: "assistant",
+                content: assistantText || null,
+                tool_calls: responseMessage.tool_calls
+              }
+            ];
 
             conversationId = await saveConversation(conversationId, promptContext.businessId, currentMessages, uiMessages[0]?.text);
 
-            for (const toolUse of toolUses) {
-              send({ type: "tool_start", tool: toolUse.name });
+            for (const toolCall of responseMessage.tool_calls) {
+              const toolName = toolCall.function.name;
+              const toolInput = parseToolInput(toolCall);
+              send({ type: "tool_start", tool: toolName });
+
               try {
-                const result = await executeToolCall(toolUse.name, toolUse.input, routeContext);
-                await logToolAction(conversationId, toolUse.name, toolUse.input, result, true);
-                send({ type: "tool_done", tool: toolUse.name, result });
+                const result = await executeToolCall(toolName, toolInput, routeContext);
+                await logToolAction(conversationId, toolName, toolInput, result, true);
+                send({ type: "tool_done", tool: toolName, result });
                 if (result.navigation?.path) {
                   send({ type: "navigation", path: result.navigation.path });
                 }
-                toolResults.push({
-                  type: "tool_result",
-                  tool_use_id: toolUse.id,
-                  content: JSON.stringify(result)
-                });
+                currentMessages = [...currentMessages, { role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) }];
               } catch (error) {
                 const result = { ok: false, error: error instanceof Error ? error.message : "Tool failed." };
-                await logToolAction(conversationId, toolUse.name, toolUse.input, result, false);
-                send({ type: "tool_done", tool: toolUse.name, result });
-                toolResults.push({
-                  type: "tool_result",
-                  tool_use_id: toolUse.id,
-                  content: JSON.stringify(result)
-                });
+                await logToolAction(conversationId, toolName, toolInput, result, false);
+                send({ type: "tool_done", tool: toolName, result });
+                currentMessages = [...currentMessages, { role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) }];
               }
             }
-
-            currentMessages = [...currentMessages, { role: "user", content: toolResults }];
             continue;
           }
 
-          currentMessages = [...currentMessages, { role: "assistant", content: response.content }];
+          currentMessages = [...currentMessages, { role: "assistant", content: assistantText }];
           conversationId = await saveConversation(conversationId, promptContext.businessId, currentMessages, uiMessages[0]?.text);
           send({ type: "conversation", conversationId });
           continueLoop = false;

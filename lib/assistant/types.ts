@@ -6,44 +6,43 @@ export type AssistantUiMessage = {
 };
 
 export type AssistantToolDefinition = {
-  name: string;
-  description: string;
-  input_schema: {
-    type: "object";
-    properties: Record<string, unknown>;
-    required?: string[];
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
   };
 };
 
-export type AnthropicTextBlock = {
-  type: "text";
-  text: string;
-};
-
-export type AnthropicToolUseBlock = {
-  type: "tool_use";
+export type OpenAIToolCall = {
   id: string;
-  name: string;
-  input: Record<string, unknown>;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
 };
 
-export type AnthropicToolResultBlock = {
-  type: "tool_result";
-  tool_use_id: string;
-  content: string;
+export type OpenAIMessageParam = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_call_id?: string;
+  tool_calls?: OpenAIToolCall[];
 };
 
-export type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock | AnthropicToolResultBlock;
-
-export type AnthropicMessageParam = {
-  role: "user" | "assistant";
-  content: string | AnthropicContentBlock[];
-};
-
-export type AnthropicMessageResponse = {
-  id: string;
-  content: AnthropicContentBlock[];
-  stop_reason: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence" | null;
+export type OpenAIChatResponse = {
+  choices: Array<{
+    message: {
+      role: "assistant";
+      content: string | null;
+      tool_calls?: OpenAIToolCall[];
+    };
+    finish_reason: "stop" | "tool_calls" | "length" | "content_filter" | null;
+  }>;
 };
 
 export type AssistantRouteContext = {
@@ -71,7 +70,7 @@ export type ToolExecutionResult = {
 export type AssistantConversationRecord = {
   id: string;
   title: string | null;
-  messages: AnthropicMessageParam[];
+  messages: OpenAIMessageParam[];
   history: AssistantUiMessage[];
   updated_at?: string;
 };
