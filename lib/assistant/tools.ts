@@ -197,10 +197,10 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
       description: "Navigate the user to a specific page in the app.",
       parameters: {
         type: "object",
-        required: ["path"],
         properties: {
-          path: { type: "string" },
-          job_ref: { type: "string" }
+          path: { type: "string", description: "Use real app paths: /crm, /jobs/new, /jobs/[jobId], /jobs/[jobId]/survey, /jobs/[jobId]/roof-survey, /jobs/[jobId]/quote, /knowledge." },
+          job_ref: { type: "string", description: "If navigating to a job-specific page, provide the job ref so the handler can resolve the UUID." },
+          destination: { type: "string", enum: ["jobs", "new_job", "job", "survey", "roof_survey", "quote", "knowledge", "dashboard"] }
         }
       }
     }

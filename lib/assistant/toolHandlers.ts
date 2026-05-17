@@ -553,13 +553,28 @@ async function getOverdueItems(): Promise<ToolExecutionResult> {
   };
 }
 
-async function navigateTo(input: Record<string, unknown>): Promise<ToolExecutionResult> {
+async function navigateTo(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
   let path = String(input.path ?? "");
-  if (!path) throw new Error("path is required.");
+  const destination = typeof input.destination === "string" ? input.destination : "";
+  const jobRef = typeof input.job_ref === "string" && input.job_ref.trim() ? input.job_ref.trim() : "";
+  const job = jobRef ? await resolveJobByRef(jobRef) : null;
+  const jobId = job?.id ?? routeContext?.jobId ?? null;
 
-  if (typeof input.job_ref === "string" && input.job_ref.trim()) {
-    const job = await resolveJobByRef(input.job_ref);
-    path = path.replace("[jobId]", job.id);
+  if (!path && destination) {
+    if (destination === "dashboard") path = "/dashboard";
+    if (destination === "jobs") path = "/crm";
+    if (destination === "new_job") path = "/jobs/new";
+    if (destination === "knowledge") path = "/knowledge";
+    if (destination === "job" && jobId) path = `/jobs/${jobId}`;
+    if (destination === "survey" && jobId) path = `/jobs/${jobId}/survey`;
+    if (destination === "roof_survey" && jobId) path = `/jobs/${jobId}/roof-survey`;
+    if (destination === "quote" && jobId) path = `/jobs/${jobId}/quote`;
+  }
+
+  if (!path) throw new Error("path or destination is required.");
+
+  if (jobId) {
+    path = path.replace("[jobId]", jobId).replace("[id]", jobId);
   }
 
   if (path.startsWith("/admin")) {
@@ -571,6 +586,14 @@ async function navigateTo(input: Record<string, unknown>): Promise<ToolExecution
       .replace("/admin/knowledge", "/knowledge");
   }
 
+  if (path === "/quotes" || path === "/quotes/new" || path.startsWith("/quotes/")) {
+    path = jobId ? `/jobs/${jobId}/quote` : "/crm";
+  }
+
+  if (path === "/admin/quotes/new" || path === "/admin/quotes") {
+    path = jobId ? `/jobs/${jobId}/quote` : "/crm";
+  }
+
   return {
     ok: true,
     summary: `Navigating to ${path}.`,
@@ -579,7 +602,7 @@ async function navigateTo(input: Record<string, unknown>): Promise<ToolExecution
   };
 }
 
-export async function executeToolCall(toolName: string, input: Record<string, unknown>, _routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+export async function executeToolCall(toolName: string, input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
   switch (toolName) {
     case "get_jobs":
       return getJobs(input);
@@ -608,7 +631,7 @@ export async function executeToolCall(toolName: string, input: Record<string, un
     case "get_overdue_items":
       return getOverdueItems();
     case "navigate_to":
-      return navigateTo(input);
+      return navigateTo(input, routeContext);
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }
