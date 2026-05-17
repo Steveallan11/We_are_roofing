@@ -13,6 +13,7 @@ type UploadResult = {
   uploaded_url: string | null;
   parsed: number;
   inserted_historical_quotes: number;
+  updated_historical_quotes: number;
   inserted_knowledge_entries: number;
   skipped_duplicates: number;
   warning?: string;
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       uploaded_url: null,
       parsed: 0,
       inserted_historical_quotes: 0,
+      updated_historical_quotes: 0,
       inserted_knowledge_entries: 0,
       skipped_duplicates: 0
     };
@@ -92,7 +94,25 @@ export async function POST(request: Request) {
                 .maybeSingle();
 
           if (byReference.data) {
-            result.skipped_duplicates += 1;
+            const update = await supabase
+              .from("historical_quotes")
+              .update({
+                source_record_id: sourceRecordId,
+                source_url: result.uploaded_url,
+                source_date: record.sourceDate,
+                source_year: record.sourceYear,
+                roof_type: record.roofType,
+                job_type: record.jobType,
+                tags: record.tags,
+                imported_text: record.content,
+                scope_excerpt: record.scopeExcerpt,
+                materials_excerpt: record.materialsExcerpt,
+                original_total: record.originalTotal,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", byReference.data.id);
+            if (update.error) throw update.error;
+            result.updated_historical_quotes += 1;
             continue;
           }
         } else {
@@ -147,12 +167,13 @@ export async function POST(request: Request) {
   }
 
   const insertedHistoricalQuotes = results.reduce((sum, result) => sum + result.inserted_historical_quotes, 0);
+  const updatedHistoricalQuotes = results.reduce((sum, result) => sum + result.updated_historical_quotes, 0);
   const insertedKnowledgeEntries = results.reduce((sum, result) => sum + result.inserted_knowledge_entries, 0);
   const skippedDuplicates = results.reduce((sum, result) => sum + result.skipped_duplicates, 0);
 
   return NextResponse.json({
     ok: true,
-    message: `Processed ${files.length} file${files.length === 1 ? "" : "s"}: ${insertedHistoricalQuotes} quote records, ${insertedKnowledgeEntries} knowledge entries, ${skippedDuplicates} duplicates skipped.`,
+    message: `Processed ${files.length} file${files.length === 1 ? "" : "s"}: ${insertedHistoricalQuotes} quote records, ${updatedHistoricalQuotes} quote records updated, ${insertedKnowledgeEntries} knowledge entries, ${skippedDuplicates} duplicates skipped.`,
     results
   });
 }
