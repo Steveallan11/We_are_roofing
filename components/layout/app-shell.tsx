@@ -29,7 +29,7 @@ export function AppShell({ title, subtitle, actions, children, wide = false }: P
             </div>
             <nav className="hidden items-center gap-3 text-sm text-[var(--muted)] md:flex">
               <Link href="/dashboard">Dashboard</Link>
-              <Link href="/crm">Jobs</Link>
+              <Link href={"/jobs" as Route}>Jobs</Link>
               <Link href="/jobs/new">New Job</Link>
               <Link href={"/settings/rates" as Route}>Rate Card</Link>
               <Link href={"/knowledge" as Route}>Knowledge</Link>
