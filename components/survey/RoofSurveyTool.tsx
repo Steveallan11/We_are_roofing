@@ -29,6 +29,7 @@ import {
   polyArea,
   ptInPoly
 } from "@/lib/survey/geometry";
+import { parseKmlToRoofSurvey } from "@/lib/survey/kml";
 import { useSurveyStore } from "@/components/survey/useSurveyStore";
 
 type Props = {
@@ -61,6 +62,7 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const kmlInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef(false);
   const lastSavedPayloadRef = useRef("");
@@ -87,6 +89,8 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [importingKml, setImportingKml] = useState(false);
+  const [kmlMessage, setKmlMessage] = useState<string | null>(null);
 
   const toCanvas = useCallback(
     (worldPoint: SurveyPoint) => ({
@@ -652,6 +656,35 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
     }
   }
 
+  async function importKml(file: File) {
+    setImportingKml(true);
+    setError(null);
+    setKmlMessage(null);
+    try {
+      const imported = parseKmlToRoofSurvey(await file.text());
+      if (imported.sections.length === 0 && imported.lines.length === 0 && imported.features.length === 0) {
+        throw new Error("The KML was read, but no polygons, lines or points were found.");
+      }
+      setSections((current) => [...current, ...imported.sections]);
+      setLines((current) => [...current, ...imported.lines]);
+      setFeatures((current) => [...current, ...imported.features]);
+      updateSurvey({
+        scale_px_per_m: imported.scale_px_per_m,
+        notes: [survey.notes, imported.notes].filter(Boolean).join("\n\n"),
+        status: "complete"
+      });
+      setPan({ x: 20, y: 70 });
+      setZoom(1);
+      setToolMode("select");
+      setTab(imported.sections.length > 0 ? "areas" : imported.lines.length > 0 ? "lines" : "features");
+      setKmlMessage(imported.notes);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "Unable to import the KML file.");
+    } finally {
+      setImportingKml(false);
+    }
+  }
+
   function updateSection(index: number, updates: Partial<RoofSurveySection>) {
     setSections((current) => current.map((section, currentIndex) => (currentIndex === index ? { ...section, ...updates } : section)));
   }
@@ -741,6 +774,30 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
                     <span>{Math.round(bgOpacity * 100)}%</span>
                   </div>
                 ) : null}
+              </section>
+
+              <section className="rounded-2xl border border-[var(--border)] bg-black/20 p-4">
+                <p className="label">Import CAD / KML Takeoff</p>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Upload a KML export with roof polygons, ridge/valley/hip lines, and point features. It will create accurate measured geometry from the GPS coordinates.
+                </p>
+                <div className="mt-3 grid gap-2">
+                  <button className="button-secondary !py-2 text-sm" disabled={importingKml} onClick={() => kmlInputRef.current?.click()} type="button">
+                    {importingKml ? "Importing KML..." : "Import KML Measurements"}
+                  </button>
+                  <input
+                    accept=".kml,application/vnd.google-earth.kml+xml,application/xml,text/xml"
+                    className="hidden"
+                    onChange={(event) => {
+                      if (event.target.files?.[0]) void importKml(event.target.files[0]);
+                      event.currentTarget.value = "";
+                    }}
+                    ref={kmlInputRef}
+                    type="file"
+                  />
+                  <p className="text-xs text-[var(--dim)]">Tip: upload the matching screenshot above, then import the KML to overlay accurate CAD-style measurements.</p>
+                  {kmlMessage ? <p className="text-xs text-[#7ce3a6]">{kmlMessage}</p> : null}
+                </div>
               </section>
 
               <section>
