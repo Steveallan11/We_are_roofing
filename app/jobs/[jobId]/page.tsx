@@ -6,9 +6,11 @@ import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
 import { QuoteActions } from "@/components/jobs/quote-actions";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle } from "@/lib/data";
 import { getNextActionLabel } from "@/lib/job-workflow";
+import { getNextAction } from "@/lib/jobs/nextAction";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
 
@@ -28,6 +30,11 @@ export default async function JobDetailPage({ params }: Props) {
   const roofSurveyHref = `/jobs/${bundle.job.id}/roof-survey` as Route;
   const surveyHighlights = getSurveyHighlights(bundle.survey);
   const surveyMeasurements = getSurveyMeasurementsSummary(bundle.survey);
+  const nextAction = getNextAction({
+    ...bundle.job,
+    customer: bundle.customer,
+    quote: bundle.quote ?? null
+  });
 
   return (
     <AppShell
@@ -56,9 +63,12 @@ export default async function JobDetailPage({ params }: Props) {
                   {bundle.quote ? <StatusPill status={bundle.quote.status} /> : null}
                 </div>
               </div>
-              <StatusPill status={bundle.job.status} />
+              <StatusBadge status={bundle.job.status} />
             </div>
             <div className="gold-divider my-4" />
+            <a className="button-primary mb-4 w-full md:w-fit" href={nextAction.href}>
+              {nextAction.label}
+            </a>
             <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <p className="section-kicker text-[0.58rem] uppercase">Contact</p>

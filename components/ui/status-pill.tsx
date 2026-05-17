@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { getStatusDisplayLabel } from "@/lib/job-workflow";
+import { getStatusColor } from "@/lib/jobs/statusColors";
 import type { JobStatus, QuoteStatus } from "@/lib/types";
 
 type Props = {
@@ -29,5 +30,13 @@ const statusStyles: Record<string, string> = {
 
 export function StatusPill({ status }: Props) {
   const label = typeof status === "string" ? getStatusDisplayLabel(status as JobStatus) : status;
-  return <span className={cn("status-pill", statusStyles[status] ?? "surface-muted text-[var(--text)]")}>{label}</span>;
+  const colors = statusStyles[status] ? null : getStatusColor(status as JobStatus);
+  return (
+    <span
+      className={cn("status-pill", statusStyles[status] ?? "surface-muted text-[var(--text)]")}
+      style={colors ? { background: colors.bg, borderColor: colors.dot, color: colors.text } : undefined}
+    >
+      {label}
+    </span>
+  );
 }
