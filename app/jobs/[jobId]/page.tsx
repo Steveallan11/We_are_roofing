@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
+import { InvoiceActions } from "@/components/jobs/invoice-actions";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle } from "@/lib/data";
@@ -167,6 +168,14 @@ export default async function JobDetailPage({ params }: Props) {
           </div>
 
           <div className="card p-5">
+            <p className="section-kicker text-[0.65rem] uppercase">Invoices & Filing</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">
+              Raise invoices from the approved quote, file PDFs into this job, and track paid/unpaid status.
+            </p>
+            <InvoiceActions jobId={bundle.job.id} invoices={bundle.invoices} quote={bundle.quote ?? null} />
+          </div>
+
+          <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Materials</p>
             <div className="mt-4 space-y-3">
               {bundle.materials.length > 0 ? (
@@ -201,7 +210,11 @@ export default async function JobDetailPage({ params }: Props) {
                           ? "Quote HTML snapshot"
                           : document.document_type === "quote_pdf"
                             ? "Quote PDF"
-                            : document.document_type}
+                            : document.document_type === "invoice_pdf"
+                              ? "Invoice PDF"
+                              : document.document_type === "invoice_html"
+                                ? "Invoice HTML snapshot"
+                                : document.document_type}
                     </p>
                     {document.public_url ? (
                       <a className="mt-2 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={document.public_url} rel="noreferrer" target="_blank">

@@ -67,6 +67,12 @@ export async function getNextQuoteVersionAndRef(jobId: string) {
   return { versionNumber, quoteRef };
 }
 
+export async function getNextInvoiceRef() {
+  const supabase = createSupabaseAdminClient();
+  const { count } = await supabase.from("invoices").select("*", { count: "exact", head: true });
+  return `WR-I-${String((count ?? 0) + 1001).padStart(4, "0")}`;
+}
+
 export async function getNextJobRef() {
   const supabase = createSupabaseAdminClient();
   const { count } = await supabase.from("jobs").select("*", { count: "exact", head: true });

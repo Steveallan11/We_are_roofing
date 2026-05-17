@@ -10,6 +10,7 @@ import type {
 
 export type JobStatus = (typeof JOB_STATUSES)[number];
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+export type InvoiceStatus = "Draft" | "Sent" | "Part Paid" | "Paid" | "Overdue" | "Void";
 export type PhotoType = (typeof PHOTO_TYPES)[number];
 export type MaterialRequiredStatus = (typeof MATERIAL_REQUIRED_STATUSES)[number];
 export type KnowledgeBaseCategory = (typeof KNOWLEDGE_BASE_CATEGORIES)[number];
@@ -415,6 +416,7 @@ export type JobDocumentRecord = {
   id: string;
   job_id: string;
   quote_id?: string | null;
+  invoice_id?: string | null;
   document_type: string;
   display_name: string;
   storage_bucket?: string | null;
@@ -436,6 +438,39 @@ export type QuoteAttachmentRecord = {
   created_at?: string;
 };
 
+export type InvoiceLineItem = {
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  vat_applicable: boolean;
+  total: number;
+};
+
+export type InvoiceRecord = {
+  id: string;
+  business_id: string;
+  job_id: string;
+  quote_id?: string | null;
+  invoice_ref: string;
+  status: InvoiceStatus;
+  issue_date: string;
+  due_date: string;
+  line_items: InvoiceLineItem[];
+  subtotal: number;
+  vat_amount: number;
+  total: number;
+  amount_paid: number;
+  balance_due: number;
+  notes?: string | null;
+  payment_terms?: string | null;
+  pdf_url?: string | null;
+  sent_at?: string | null;
+  paid_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type EmailLog = {
   id: string;
   job_id: string;
@@ -454,6 +489,7 @@ export type JobBundle = {
   job: Job;
   survey?: SurveyRecord | null;
   quote?: QuoteRecord | null;
+  invoices: InvoiceRecord[];
   materials: MaterialRecord[];
   photos: JobPhoto[];
   documents: JobDocumentRecord[];

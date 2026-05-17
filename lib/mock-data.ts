@@ -2,6 +2,7 @@ import type {
   Business,
   Customer,
   DashboardStats,
+  InvoiceRecord,
   Job,
   JobBundle,
   JobPhoto,
@@ -288,6 +289,35 @@ export const MOCK_MATERIALS: MaterialRecord[] = [
   }
 ];
 
+export const MOCK_INVOICES: InvoiceRecord[] = [
+  {
+    id: "invoice-1",
+    business_id: MOCK_BUSINESS.id,
+    job_id: "job-3",
+    quote_id: "quote-3",
+    invoice_ref: "WR-I-1001",
+    status: "Sent",
+    issue_date: "2026-05-05",
+    due_date: "2026-05-05",
+    line_items: [
+      {
+        description: "UPVC roofline replacement",
+        quantity: 1,
+        unit: "job",
+        unit_price: 2900,
+        vat_applicable: true,
+        total: 2900
+      }
+    ],
+    subtotal: 2900,
+    vat_amount: 580,
+    total: 3480,
+    amount_paid: 0,
+    balance_due: 3480,
+    payment_terms: MOCK_BUSINESS.payment_terms
+  }
+];
+
 export const MOCK_KNOWLEDGE_BASE: KnowledgeBaseRecord[] = KNOWLEDGE_BASE_SEEDS.map((record, index) => ({
   id: `kb-${index + 1}`,
   business_id: MOCK_BUSINESS.id,
@@ -311,6 +341,7 @@ export function getMockBundle(jobId: string): JobBundle | null {
     job,
     survey: MOCK_SURVEYS.find((item) => item.job_id === jobId) ?? null,
     quote: [...MOCK_QUOTES].reverse().find((item) => item.job_id === jobId) ?? null,
+    invoices: MOCK_INVOICES.filter((item) => item.job_id === jobId),
     materials: MOCK_MATERIALS.filter((item) => item.job_id === jobId),
     photos: MOCK_PHOTOS.filter((item) => item.job_id === jobId),
     documents: [],
