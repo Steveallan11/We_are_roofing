@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { createJobSchema } from "@/lib/validators";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase, ensureBusinessRecord, getNextJobRef } from "@/lib/workflows";
+import { JOB_DOCUMENTS_BUCKET, SURVEY_IMAGES_BUCKET } from "@/lib/storage";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -130,5 +131,68 @@ export async function PATCH(request: Request) {
     ok: true,
     message: "Job status updated.",
     job: data
+  });
+}
+
+export async function DELETE(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as {
+    job_id?: string;
+    confirmation?: string;
+  };
+
+  if (!body.job_id || !body.confirmation) {
+    return NextResponse.json({ ok: false, error: "job_id and confirmation are required." }, { status: 400 });
+  }
+
+  if (!canPersistToSupabase()) {
+    return NextResponse.json({ ok: true, message: "Job deleted in preview mode." });
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id, job_ref, job_title")
+    .eq("id", body.job_id)
+    .single();
+
+  if (jobError || !job) {
+    return NextResponse.json({ ok: false, error: jobError?.message ?? "Job not found." }, { status: 404 });
+  }
+
+  const expected = String(job.job_ref || job.job_title || "DELETE").trim();
+  if (body.confirmation.trim() !== expected && body.confirmation.trim().toUpperCase() !== "DELETE") {
+    return NextResponse.json({ ok: false, error: `Type ${expected} to confirm deletion.` }, { status: 400 });
+  }
+
+  const [photoResult, documentResult, roofSurveyResult] = await Promise.all([
+    supabase.from("job_photos").select("storage_path").eq("job_id", body.job_id),
+    supabase.from("job_documents").select("storage_bucket, storage_path").eq("job_id", body.job_id),
+    supabase.from("roof_surveys").select("satellite_image_path").eq("job_id", body.job_id)
+  ]);
+
+  const photoPaths = ((photoResult.data as Array<{ storage_path?: string | null }> | null) ?? [])
+    .map((item) => item.storage_path)
+    .filter((path): path is string => Boolean(path));
+  const documentPaths = ((documentResult.data as Array<{ storage_bucket?: string | null; storage_path?: string | null }> | null) ?? [])
+    .filter((item) => item.storage_bucket === JOB_DOCUMENTS_BUCKET && item.storage_path)
+    .map((item) => item.storage_path as string);
+  const surveyImagePaths = ((roofSurveyResult.data as Array<{ satellite_image_path?: string | null }> | null) ?? [])
+    .map((item) => item.satellite_image_path)
+    .filter((path): path is string => Boolean(path));
+
+  await Promise.allSettled([
+    photoPaths.length > 0 ? supabase.storage.from("job-photos").remove(photoPaths) : Promise.resolve(),
+    documentPaths.length > 0 ? supabase.storage.from(JOB_DOCUMENTS_BUCKET).remove(documentPaths) : Promise.resolve(),
+    surveyImagePaths.length > 0 ? supabase.storage.from(SURVEY_IMAGES_BUCKET).remove(surveyImagePaths) : Promise.resolve()
+  ]);
+
+  const { error } = await supabase.from("jobs").delete().eq("id", body.job_id);
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    message: `${job.job_ref ?? "Job"} deleted.`
   });
 }

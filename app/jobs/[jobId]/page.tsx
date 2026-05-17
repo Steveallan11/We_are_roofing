@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
+import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -245,6 +246,16 @@ export default async function JobDetailPage({ params }: Props) {
               ) : (
                 <p className="text-sm text-[var(--muted)]">No quote emails have been sent yet.</p>
               )}
+            </div>
+          </div>
+
+          <div className="card p-5">
+            <p className="section-kicker text-[0.65rem] uppercase">Danger Zone</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">
+              Use this for test jobs or mistaken records only. Live customer jobs should normally be marked Lost or Archived instead.
+            </p>
+            <div className="mt-4">
+              <DeleteJobAction jobId={bundle.job.id} jobRef={bundle.job.job_ref} jobTitle={bundle.job.job_title} />
             </div>
           </div>
         </aside>
