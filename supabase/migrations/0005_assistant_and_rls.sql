@@ -50,9 +50,9 @@ for each row execute function update_updated_at_column();
 
 do $$
 declare
-  table_name text;
+  target_table text;
 begin
-  foreach table_name in array array[
+  foreach target_table in array array[
     'businesses',
     'customers',
     'jobs',
@@ -68,15 +68,22 @@ begin
     'quote_attachments'
   ]
   loop
-    execute format('alter table public.%I enable row level security', table_name);
-
-    if not exists (
-      select 1 from pg_policies
-      where schemaname = 'public'
-        and tablename = table_name
-        and policyname = 'Authenticated admin access'
+    if exists (
+      select 1
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = target_table
     ) then
-      execute format('create policy "Authenticated admin access" on public.%I for all using (auth.role() = ''authenticated'')', table_name);
+      execute format('alter table public.%I enable row level security', target_table);
+
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = target_table
+          and policyname = 'Authenticated admin access'
+      ) then
+        execute format('create policy "Authenticated admin access" on public.%I for all using (auth.role() = ''authenticated'')', target_table);
+      end if;
     end if;
   end loop;
 end
