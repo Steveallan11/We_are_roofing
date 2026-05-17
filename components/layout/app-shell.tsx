@@ -31,6 +31,7 @@ export function AppShell({ title, subtitle, actions, children, wide = false }: P
               <Link href="/dashboard">Dashboard</Link>
               <Link href={"/jobs" as Route}>Jobs</Link>
               <Link href={"/customers" as Route}>Customers</Link>
+              <Link href={"/money" as Route}>Money</Link>
               <Link href="/jobs/new">New Job</Link>
               <Link href={"/settings/rates" as Route}>Rate Card</Link>
               <Link href={"/knowledge" as Route}>Knowledge</Link>

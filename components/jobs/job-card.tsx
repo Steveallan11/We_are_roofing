@@ -4,12 +4,14 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getContextDateLabel, getNextAction, getSecondaryAction, needsAttention } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
 import { currency } from "@/lib/utils";
-import type { Customer, Job, QuoteRecord } from "@/lib/types";
+import type { Customer, InvoiceRecord, Job, JobDocumentRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
   job: Job & {
     customer?: Customer | null;
     quote?: QuoteRecord | null;
+    documents?: JobDocumentRecord[] | null;
+    invoices?: InvoiceRecord[] | null;
   };
   compact?: boolean;
   list?: boolean;
@@ -27,6 +29,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
     .toUpperCase();
   const town = job.customer?.town ?? job.postcode ?? "Town TBC";
   const statusColor = getStatusColor(job.status);
+  const documentLinks = getDocumentLinks(job);
 
   return (
     <article
@@ -67,6 +70,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
             </span>
             <span>{getContextDateLabel(job)}</span>
           </div>
+          {documentLinks.length > 0 ? <DocumentQuickLinks compact={compact} jobId={job.id} links={documentLinks} /> : null}
           {attention && !compact ? (
             <p className="rounded-2xl border border-[#ef4444]/40 bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ffb3ad]">Needs attention before this gets forgotten.</p>
           ) : null}
@@ -102,6 +106,94 @@ function roofLabel(value?: string | null) {
   if (lower.includes("slate")) return "Slate roof";
   if (lower.includes("tile") || lower.includes("pitched")) return "Pitched roof";
   return "Roof type";
+}
+
+type DocumentLink = {
+  label: string;
+  href?: string | null;
+  external: boolean;
+};
+
+function getDocumentLinks(
+  job: Job & {
+    quote?: QuoteRecord | null;
+    documents?: JobDocumentRecord[] | null;
+    invoices?: InvoiceRecord[] | null;
+  }
+): DocumentLink[] {
+  const links: DocumentLink[] = [];
+
+  if (job.quote?.pdf_url) {
+    links.push({ label: "Quote PDF", href: job.quote.pdf_url, external: true });
+  }
+
+  for (const invoice of job.invoices ?? []) {
+    if (invoice.pdf_url) {
+      links.push({ label: invoice.invoice_ref || "Invoice PDF", href: invoice.pdf_url, external: true });
+    }
+  }
+
+  for (const document of job.documents ?? []) {
+    links.push({
+      label: getDocumentLabel(document),
+      href: document.public_url || null,
+      external: Boolean(document.public_url)
+    });
+  }
+
+  const seen = new Set<string>();
+  return links.filter((link) => {
+    const key = `${link.label}:${link.href ?? "job-file"}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getDocumentLabel(document: JobDocumentRecord) {
+  if (document.document_type === "survey_snapshot") return "Survey";
+  if (document.document_type === "quote_pdf") return "Quote PDF";
+  if (document.document_type === "quote_html") return "Quote";
+  if (document.document_type === "invoice_pdf") return "Invoice PDF";
+  if (document.document_type === "invoice_html") return "Invoice";
+  return document.display_name || "Document";
+}
+
+function DocumentQuickLinks({ compact, jobId, links }: { compact: boolean; jobId: string; links: DocumentLink[] }) {
+  const visible = links.slice(0, compact ? 2 : 4);
+  const hiddenCount = links.length - visible.length;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-black/20 px-3 py-2">
+      <span className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Docs</span>
+      {visible.map((link, index) =>
+        link.external && link.href ? (
+          <a
+            className="rounded-full border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--gold-l)] hover:border-[var(--gold)]"
+            href={link.href}
+            key={`${link.label}-${index}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {link.label}
+          </a>
+        ) : (
+          <Link
+            className="rounded-full border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--gold-l)] hover:border-[var(--gold)]"
+            href={`/jobs/${jobId}` as Route}
+            key={`${link.label}-${index}`}
+          >
+            {link.label}
+          </Link>
+        )
+      )}
+      {hiddenCount > 0 ? (
+        <Link className="text-xs text-[var(--muted)] underline-offset-4 hover:text-[var(--gold-l)] hover:underline" href={`/jobs/${jobId}` as Route}>
+          +{hiddenCount} more
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 function ActionLink({ className, href, children }: { className: string; href: string; children: React.ReactNode }) {

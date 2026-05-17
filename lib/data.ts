@@ -64,26 +64,44 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
-export async function getJobs(): Promise<Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null }>> {
+export async function getJobs(): Promise<Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null; documents?: JobDocumentRecord[]; invoices?: InvoiceRecord[] }>> {
   if (!canUseSupabase()) {
     return MOCK_JOBS.map((job) => ({
       ...job,
       customer: MOCK_CUSTOMERS.find((customer) => customer.id === job.customer_id) ?? null,
-      quote: [...MOCK_QUOTES].reverse().find((quote) => quote.job_id === job.id) ?? null
+      quote: [...MOCK_QUOTES].reverse().find((quote) => quote.job_id === job.id) ?? null,
+      documents: [],
+      invoices: []
     }));
   }
 
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("jobs")
-    .select("*, customers(*), quotes(*)")
+    .select("*, customers(*), quotes(*), job_documents(*), invoices(*)")
     .order("created_at", { ascending: false });
 
-  return ((data as Array<Record<string, unknown>> | null) ?? []).map((job) => ({
-    ...(job as unknown as Job),
-    customer: (job.customers as Customer | null) ?? null,
-    quote: Array.isArray(job.quotes) ? ((job.quotes.at(-1) as QuoteRecord | undefined) ?? null) : null
-  }));
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map((job) => {
+    const quotes = Array.isArray(job.quotes) ? ([...(job.quotes as QuoteRecord[])] as QuoteRecord[]) : [];
+    const invoices = Array.isArray(job.invoices) ? ([...(job.invoices as InvoiceRecord[])] as InvoiceRecord[]) : [];
+    const documents = Array.isArray(job.job_documents) ? ([...(job.job_documents as JobDocumentRecord[])] as JobDocumentRecord[]) : [];
+
+    quotes.sort((left, right) => {
+      const versionDiff = Number(right.version_number ?? 0) - Number(left.version_number ?? 0);
+      if (versionDiff !== 0) return versionDiff;
+      return new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime();
+    });
+    invoices.sort((left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime());
+    documents.sort((left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime());
+
+    return {
+      ...(job as unknown as Job),
+      customer: (job.customers as Customer | null) ?? null,
+      quote: quotes[0] ?? null,
+      documents,
+      invoices
+    };
+  });
 }
 
 export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
