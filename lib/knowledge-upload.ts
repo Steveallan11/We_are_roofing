@@ -185,7 +185,7 @@ function rowToHistoricalQuote(row: Record<string, string>, fileName: string, ind
     content,
     tags,
     category: "Historical Quote",
-    sourceReference: findFirst(row, ["quote ref", "reference", "ref"]) || title,
+    sourceReference: findFirst(row, ["source_ref", "source ref", "quote ref", "reference", "ref"]) || title,
     sourceDate,
     sourceYear,
     roofType: roofType || null,
@@ -194,6 +194,71 @@ function rowToHistoricalQuote(row: Record<string, string>, fileName: string, ind
     scopeExcerpt: content.slice(0, 700) || null,
     materialsExcerpt: allText.match(/\b(tile|slate|felt|epdm|grp|lead|batten|membrane|ridge|valley|gutter|fascia)\b[\s\S]{0,240}/i)?.[0] ?? null
   };
+}
+
+function rowToStyleKnowledge(row: Record<string, string>, historical: ParsedUploadRecord): ParsedUploadRecord | null {
+  const problemDiagnosis = findFirst(row, ["problem_diagnosis", "problem diagnosis"]);
+  const recommendedScope = findFirst(row, ["recommended_scope", "recommended scope"]);
+  const quoteNotes = findFirst(row, ["ai_quote_notes", "ai quote notes"]);
+  const sourceType = findFirst(row, ["source_type", "source type"]).toLowerCase();
+  const pricingUse = findFirst(row, ["current_pricing_use", "current pricing use"]);
+  const priceAnchor = findFirst(row, ["price_anchor_first_gbp", "price anchor"]);
+  const allPrices = findFirst(row, ["all_price_values_gbp", "all price values"]);
+  const scaffold = findFirst(row, ["scaffold_cost_first_gbp", "scaffold cost"]);
+  const materials = findFirst(row, ["system_materials", "system materials"]);
+  const flags = findFirst(row, ["add_ons_exclusions_flags", "add ons exclusions flags"]);
+
+  if (!problemDiagnosis && !recommendedScope && !quoteNotes && !materials) {
+    return null;
+  }
+
+  const styleText = [
+    "Andrew quote wording and roof report style example.",
+    `Source: ${historical.sourceReference}`,
+    `Work type: ${historical.jobType ?? "Unknown"}`,
+    `Roof type: ${historical.roofType ?? "Unknown"}`,
+    pricingUse ? `Pricing use: ${pricingUse}` : "",
+    priceAnchor ? `Primary price anchor: GBP ${priceAnchor}` : "",
+    allPrices ? `Other visible price values: ${allPrices}` : "",
+    scaffold ? `Scaffold allowance/reference: GBP ${scaffold}` : "",
+    problemDiagnosis ? `Roof report / diagnosis wording:\n${problemDiagnosis}` : "",
+    recommendedScope ? `Quote scope wording:\n${recommendedScope}` : "",
+    quoteNotes ? `AI quote notes / tone guidance:\n${quoteNotes}` : "",
+    materials ? `Materials/system references:\n${materials}` : "",
+    flags ? `Add-ons, exclusions, or option flags:\n${flags}` : "",
+    "Use this as a tone, structure, and wording reference only. Do not copy customer-specific details unless they match the current job."
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const category = sourceType.includes("roof report")
+    ? "Roof Report Style"
+    : sourceType.includes("template") || sourceType.includes("guarantee")
+      ? "Quote Template"
+      : "Scope Of Works";
+
+  return {
+    recordType: "knowledge_base",
+    title: `Andrew style - ${historical.title}`,
+    content: styleText,
+    tags: Array.from(new Set([...historical.tags, "andrew-style", "quote-wording", "roof-report-style"])),
+    category,
+    sourceReference: historical.sourceReference,
+    sourceDate: historical.sourceDate,
+    sourceYear: historical.sourceYear,
+    roofType: historical.roofType,
+    jobType: historical.jobType,
+    originalTotal: historical.originalTotal,
+    scopeExcerpt: historical.scopeExcerpt,
+    materialsExcerpt: historical.materialsExcerpt
+  };
+}
+
+function rowToUploadRecords(row: Record<string, string>, fileName: string, index: number) {
+  const historical = rowToHistoricalQuote(row, fileName, index);
+  if (!historical) return [];
+  const style = rowToStyleKnowledge(row, historical);
+  return style ? [historical, style] : [historical];
 }
 
 function splitTextIntoQuoteBlocks(text: string) {
@@ -256,7 +321,7 @@ export async function parseKnowledgeUpload(file: File): Promise<ParsedUpload> {
     if (rows.length === 0) {
       return { records: [], warning: `${file.name} did not contain usable CSV rows.` };
     }
-    return { records: rows.map((row, index) => rowToHistoricalQuote(row, file.name, index)).filter((record): record is ParsedUploadRecord => Boolean(record)) };
+    return { records: rows.flatMap((row, index) => rowToUploadRecords(row, file.name, index)) };
   }
 
   if (extension === ".json") {
@@ -264,7 +329,7 @@ export async function parseKnowledgeUpload(file: File): Promise<ParsedUpload> {
     const rows = Array.isArray(parsed) ? parsed : typeof parsed === "object" && parsed ? Object.values(parsed as Record<string, unknown>).filter((item) => typeof item === "object") : [];
     if (rows.length > 0) {
       return {
-        records: rows.map((row, index) => rowToHistoricalQuote(row as Record<string, string>, file.name, index)).filter((record): record is ParsedUploadRecord => Boolean(record))
+        records: rows.flatMap((row, index) => rowToUploadRecords(row as Record<string, string>, file.name, index))
       };
     }
   }

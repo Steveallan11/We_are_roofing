@@ -10,6 +10,7 @@ import type {
 import { getComparableHistoricalQuotes } from "@/lib/quote-engine";
 
 const PROMPT_VERSION = "weareroofing-v1";
+const STYLE_CATEGORIES = new Set(["Roof Report Style", "Scope Of Works", "Quote Template", "Email Style", "Historical Quote"]);
 
 function buildFallbackMaterials(bundle: JobBundle): MaterialLineItem[] {
   const roofType = bundle.job.roof_type ?? "Other";
@@ -46,6 +47,42 @@ function buildFallbackMaterials(bundle: JobBundle): MaterialLineItem[] {
   ];
 }
 
+function getRelevantKnowledgeBase(bundle: JobBundle, knowledgeBase: KnowledgeBaseRecord[], limit = 16) {
+  const jobTerms = [
+    bundle.job.roof_type,
+    bundle.job.job_type,
+    bundle.job.job_title,
+    bundle.survey?.survey_type,
+    bundle.survey?.roof_type,
+    bundle.survey?.problem_observed,
+    bundle.survey?.recommended_works
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 2);
+  const uniqueJobTerms = Array.from(new Set(jobTerms));
+
+  return knowledgeBase
+    .map((record) => {
+      const haystack = [record.title, record.category, record.content, ...(record.tags ?? [])].join(" ").toLowerCase();
+      let score = 0;
+      if (STYLE_CATEGORIES.has(record.category)) score += 4;
+      if ((record.tags ?? []).some((tag) => ["andrew-style", "quote-wording", "roof-report-style"].includes(tag.toLowerCase()))) score += 8;
+      for (const term of uniqueJobTerms) {
+        if (haystack.includes(term)) score += 1;
+      }
+      if (bundle.job.roof_type && haystack.includes(bundle.job.roof_type.toLowerCase())) score += 3;
+      if (bundle.job.job_type && haystack.includes(bundle.job.job_type.toLowerCase())) score += 2;
+      return { record, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit)
+    .map((item) => item.record);
+}
+
 export async function generateQuoteFromBundle(
   bundle: JobBundle,
   knowledgeBase: KnowledgeBaseRecord[],
@@ -58,7 +95,8 @@ export async function generateQuoteFromBundle(
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const comparables = getComparableHistoricalQuotes(bundle, historicalQuotes, pricingRules);
-  const knowledge = knowledgeBase
+  const relevantKnowledge = getRelevantKnowledgeBase(bundle, knowledgeBase);
+  const knowledge = relevantKnowledge
     .map((record) => `${record.category}: ${record.title}\n${record.content}`)
     .join("\n\n");
   const comparableQuoteContext = comparables
@@ -86,8 +124,11 @@ ${record.imported_text}`
 
   const prompt = `
 You are the We Are Roofing Expert Quote Builder.
-Use the survey and knowledge base below to produce a professional quote in conservative UK roofer language.
+Use the survey and knowledge base below to produce a professional quote in Andrew's We Are Roofing style, wording, and tone.
+The quote should sound like Andrew: practical, direct, customer-facing, diagnostic, and written as a real roofer explaining what he has seen and what he recommends.
+Prioritise knowledge entries tagged andrew-style, quote-wording, and roof-report-style for phrasing and structure.
 Use the historical quotes as style and comparable-price anchors only. Do not blindly copy old totals; instead apply the uplifted totals and current survey facts.
+Never copy an old customer's address, name, or job-specific details into the new quote. Reuse style and structure, not irrelevant facts.
 Return JSON only.
 
 Business:
@@ -106,7 +147,7 @@ Photo metadata:
 ${JSON.stringify(bundle.photos, null, 2)}
 
 Knowledge base:
-${knowledge}
+${knowledge || "No relevant knowledge base entries available."}
 
 Historical quote comparables:
 ${comparableQuoteContext || "No historical quote comparables available."}

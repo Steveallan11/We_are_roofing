@@ -15,6 +15,7 @@ type UploadResult = {
   inserted_historical_quotes: number;
   updated_historical_quotes: number;
   inserted_knowledge_entries: number;
+  updated_knowledge_entries: number;
   skipped_duplicates: number;
   warning?: string;
   error?: string;
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       inserted_historical_quotes: 0,
       updated_historical_quotes: 0,
       inserted_knowledge_entries: 0,
+      updated_knowledge_entries: 0,
       skipped_duplicates: 0
     };
 
@@ -118,7 +120,18 @@ export async function POST(request: Request) {
         } else {
           const duplicate = await supabase.from("knowledge_base").select("id").eq("business_id", business.id).eq("title", record.title).maybeSingle();
           if (duplicate.data) {
-            result.skipped_duplicates += 1;
+            const update = await supabase
+              .from("knowledge_base")
+              .update({
+                category: record.category,
+                content: record.content,
+                source_type: "bulk_upload",
+                tags: record.tags,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", duplicate.data.id);
+            if (update.error) throw update.error;
+            result.updated_knowledge_entries += 1;
             continue;
           }
         }
@@ -169,11 +182,12 @@ export async function POST(request: Request) {
   const insertedHistoricalQuotes = results.reduce((sum, result) => sum + result.inserted_historical_quotes, 0);
   const updatedHistoricalQuotes = results.reduce((sum, result) => sum + result.updated_historical_quotes, 0);
   const insertedKnowledgeEntries = results.reduce((sum, result) => sum + result.inserted_knowledge_entries, 0);
+  const updatedKnowledgeEntries = results.reduce((sum, result) => sum + result.updated_knowledge_entries, 0);
   const skippedDuplicates = results.reduce((sum, result) => sum + result.skipped_duplicates, 0);
 
   return NextResponse.json({
     ok: true,
-    message: `Processed ${files.length} file${files.length === 1 ? "" : "s"}: ${insertedHistoricalQuotes} quote records, ${updatedHistoricalQuotes} quote records updated, ${insertedKnowledgeEntries} knowledge entries, ${skippedDuplicates} duplicates skipped.`,
+    message: `Processed ${files.length} file${files.length === 1 ? "" : "s"}: ${insertedHistoricalQuotes} quote records, ${updatedHistoricalQuotes} quote records updated, ${insertedKnowledgeEntries} knowledge entries, ${updatedKnowledgeEntries} knowledge entries updated, ${skippedDuplicates} duplicates skipped.`,
     results
   });
 }

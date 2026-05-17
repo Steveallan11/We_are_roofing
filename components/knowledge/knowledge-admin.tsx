@@ -7,7 +7,9 @@ type BulkUploadResult = {
   file_name: string;
   parsed: number;
   inserted_historical_quotes: number;
+  updated_historical_quotes?: number;
   inserted_knowledge_entries: number;
+  updated_knowledge_entries?: number;
   skipped_duplicates: number;
   warning?: string;
   error?: string;
@@ -215,7 +217,7 @@ export function KnowledgeAdmin() {
                   <p className="text-xs text-[var(--dim)]">{result.parsed} parsed · {result.skipped_duplicates} skipped</p>
                 </div>
                 <p className="mt-1 text-[var(--muted)]">
-                  {result.inserted_historical_quotes} quotes filed · {result.inserted_knowledge_entries} knowledge entries filed
+                  {result.inserted_historical_quotes} quotes filed · {result.updated_historical_quotes ?? 0} quotes updated · {result.inserted_knowledge_entries} knowledge entries filed · {result.updated_knowledge_entries ?? 0} knowledge entries updated
                 </p>
                 {result.warning ? <p className="mt-1 text-xs text-[#ffd38b]">{result.warning}</p> : null}
                 {result.error ? <p className="mt-1 text-xs text-[#ff9a91]">{result.error}</p> : null}
