@@ -11,6 +11,11 @@ export default function SettingsPage() {
           <h2 className="mt-2 font-condensed text-3xl text-white">Rate Card</h2>
           <p className="mt-2 text-sm text-[var(--muted)]">Set unit rates for roof areas, ridges, valleys, gutters, scaffold, skips, and waste.</p>
         </Link>
+        <Link className="card block p-5 transition hover:border-[var(--gold)]/50" href={"/knowledge" as Route}>
+          <p className="section-kicker text-[0.65rem] uppercase">AI Knowledge</p>
+          <h2 className="mt-2 font-condensed text-3xl text-white">Knowledge Base</h2>
+          <p className="mt-2 text-sm text-[var(--muted)]">Upload quote examples, style references, supplier notes, and Andrew-style wording for Gauge to use.</p>
+        </Link>
       </div>
     </AppShell>
   );
