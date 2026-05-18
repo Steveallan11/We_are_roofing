@@ -147,6 +147,16 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
     );
   }
 
+  function deleteOption(optionId: string) {
+    setOptions((current) => {
+      const next = current.filter((option) => option.id !== optionId);
+      if (next.length > 0 && !next.some((option) => option.recommended)) {
+        return next.map((option, index) => (index === 0 ? { ...option, recommended: true } : option));
+      }
+      return next;
+    });
+  }
+
   function applyRates() {
     const { updated, pricingNotes: newNotes } = applyRateCardToCostBreakdown(costBreakdown, rateCard);
     setCostBreakdown(updated);
@@ -269,7 +279,15 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                 key={option.id}
                 style={{ borderColor: option.recommended ? "var(--gold)" : "var(--border)", background: "var(--surface-deep)" }}
               >
-                {option.recommended ? <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">Recommended</p> : null}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    {option.recommended ? <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">Recommended</p> : null}
+                    {!option.recommended ? <p className="section-kicker text-[0.65rem] uppercase">Quote option</p> : null}
+                  </div>
+                  <button className="button-ghost !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteOption(option.id)} type="button">
+                    Delete Option
+                  </button>
+                </div>
                 <label className="mt-3 block">
                   <span className="label">Option label</span>
                   <input className="field" onChange={(event) => updateOption(option.id, { label: event.target.value })} value={option.label} />
@@ -281,7 +299,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
                     <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
-                      <div className="grid gap-3 md:grid-cols-[1fr_120px_92px_80px]">
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px] xl:grid-cols-[minmax(0,1fr)_120px_92px_96px]">
                         <label className="block">
                           <span className="label">Item</span>
                           <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
@@ -294,7 +312,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                           <input checked={line.vat_applicable} onChange={(event) => updateOptionLine(option.id, index, { vat_applicable: event.target.checked })} type="checkbox" />
                           VAT
                         </label>
-                        <button className="button-ghost mt-5 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteOptionLine(option.id, index)} type="button">
+                        <button className="button-ghost mt-5 !min-h-11 !w-full !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteOptionLine(option.id, index)} type="button">
                           Delete
                         </button>
                       </div>
