@@ -3,6 +3,10 @@ import type { RoofType, SurveyAdaptiveSections, SurveyRecord, SurveyType } from 
 type Analysis = Record<string, any>;
 
 export function structureSurvey(analysis: Analysis, transcript: string): Partial<SurveyRecord> {
+  if (analysis.is_roof_survey === false) {
+    return structureReviewOnlySurvey(analysis, transcript);
+  }
+
   const surveyType = inferSurveyType(analysis);
   const roofType = inferRoofType(analysis, surveyType);
   const adaptiveSections = buildAdaptiveSections(analysis, surveyType);
@@ -29,6 +33,44 @@ export function structureSurvey(analysis: Analysis, transcript: string): Partial
     adaptive_sections: adaptiveSections,
     source_type: "video",
     ai_confidence: overallConfidence,
+    ai_field_confidence: fieldConfidence,
+    ai_review_items: reviewItems,
+    ai_raw_response: analysis,
+    processing_status: "complete",
+    processing_error: null
+  };
+}
+
+function structureReviewOnlySurvey(analysis: Analysis, transcript: string): Partial<SurveyRecord> {
+  const reviewItems = Array.isArray(analysis.review_items) ? analysis.review_items : [];
+  const fieldConfidence = typeof analysis.field_confidence === "object" && analysis.field_confidence ? analysis.field_confidence : {};
+
+  return {
+    survey_type: "Other / Misc",
+    roof_type: "Other",
+    roof_condition: "Unknown",
+    problem_observed: analysis.problems || "The uploaded video does not appear to be a usable roofing survey.",
+    suspected_cause: analysis.suspected_cause || "Not captured from the uploaded video.",
+    recommended_works:
+      analysis.recommendations || "1. Review the uploaded video.\n2. Upload a roof/site survey video with clear visuals and spoken notes.",
+    measurements: "",
+    access_notes: analysis.access_notes || "",
+    scaffold_required: false,
+    scaffold_notes: analysis.scaffold_notes || "",
+    safety_notes: analysis.safety_concerns || "Review required before relying on this survey.",
+    weather_notes: analysis.weather_notes || "",
+    customer_concerns: analysis.customer_concerns || "",
+    voice_note_transcript: transcript,
+    raw_notes: buildRawNotes(analysis, transcript, 0, analysis.manual_review_needed, reviewItems),
+    adaptive_sections: {
+      other: {
+        survey_focus: "Video review needed",
+        issue_tags: Array.isArray(analysis.manual_review_needed) ? analysis.manual_review_needed : ["video_upload"],
+        additional_findings: analysis.not_roof_reason || analysis.visual_summary || "No roofing evidence captured."
+      }
+    },
+    source_type: "video",
+    ai_confidence: 0,
     ai_field_confidence: fieldConfidence,
     ai_review_items: reviewItems,
     ai_raw_response: analysis,

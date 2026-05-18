@@ -40,6 +40,10 @@ export async function transcribeAudio(videoBuffer: Buffer): Promise<string> {
     });
 
     return transcription.text.trim();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Audio transcription failed.";
+    console.warn(`Video survey audio transcription skipped: ${message}`);
+    return "";
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

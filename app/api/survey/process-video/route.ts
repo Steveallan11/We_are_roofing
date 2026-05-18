@@ -3,7 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensurePrivateStorageBucket, ensurePublicStorageBucket, getStoragePublicUrl, JOB_PHOTOS_BUCKET, SURVEY_FRAMES_BUCKET, SURVEY_VIDEOS_BUCKET } from "@/lib/storage";
 import { extractFrames } from "@/lib/survey/frameExtractor";
 import { transcribeAudio } from "@/lib/survey/audioExtractor";
-import { analyseFramesWithOpenAI } from "@/lib/survey/openaiVision";
+import { analyseFramesWithOpenAI, buildReviewOnlyAnalysis } from "@/lib/survey/openaiVision";
 import { structureSurvey } from "@/lib/survey/surveyStructurer";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -77,6 +77,10 @@ export async function POST(request: Request) {
       surveyId: survey.id
     });
 
+    if (frames.length === 0) {
+      throw new Error("No usable frames could be extracted from this video. Try a clearer video or a different file format.");
+    }
+
     const framePaths: string[] = [];
     const photoInserts: Array<Record<string, unknown>> = [];
 
@@ -127,8 +131,12 @@ export async function POST(request: Request) {
       jobTitle: jobContext?.job_title,
       propertyAddress: jobContext?.property_address,
       customerName: customer?.full_name
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : "OpenAI could not analyse this video.";
+      return buildReviewOnlyAnalysis(message, "The video was uploaded and frames were extracted, but AI analysis needs review.", transcript);
     });
     const structured = structureSurvey(analysis, transcript);
+    const isReviewOnly = analysis.is_roof_survey === false || Number(analysis.overall_confidence ?? 0) < 20;
 
     const updatedSurvey = {
       ...structured,
@@ -148,7 +156,7 @@ export async function POST(request: Request) {
     await supabase
       .from("jobs")
       .update({
-        status: "Ready For AI Quote",
+        status: isReviewOnly ? "Survey Complete" : "Ready For AI Quote",
         updated_at: new Date().toISOString()
       })
       .eq("id", jobId);
