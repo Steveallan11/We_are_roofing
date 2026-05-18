@@ -19,10 +19,6 @@ export async function POST(request: Request, { params }: Props) {
     body?: string;
   };
 
-  if (!body.to_email || !body.subject || !body.body) {
-    return NextResponse.json({ ok: false, error: "to_email, subject and body are required" }, { status: 400 });
-  }
-
   if (!canPersistToSupabase()) {
     return NextResponse.json({
       ok: true,
@@ -48,15 +44,23 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: "Related job bundle not found." }, { status: 404 });
   }
 
+  const toEmail = body.to_email?.trim() || bundle.customer.email?.trim();
+  if (!toEmail) {
+    return NextResponse.json({ ok: false, error: "NO_EMAIL", message: "No customer email is saved for this job yet." }, { status: 400 });
+  }
+
+  const subject = body.subject?.trim() || quote.customer_email_subject || `Your We Are Roofing quotation - ${quote.quote_ref}`;
+  const messageBody = body.body?.trim() || quote.customer_email_body || "Please find our quotation below.";
+
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
   const quoteUrl = `${appUrl}/quote/${quoteId}`;
   const emailResult = await sendEmail({
-    to: body.to_email,
-    subject: body.subject,
+    to: toEmail,
+    subject,
     html: quoteSentEmail({ customerName: bundle.customer.full_name, quote, quoteUrl }),
-    text: `${body.body}\n\nView your quote: ${quoteUrl}`,
+    text: `${messageBody}\n\nView your quote: ${quoteUrl}`,
     jobId: quote.job_id,
     quoteId,
     templateType: "quote_sent"
@@ -87,6 +91,10 @@ export async function POST(request: Request, { params }: Props) {
     })
     .eq("id", quote.job_id);
 
+  if (toEmail !== (bundle.customer.email ?? "")) {
+    await supabase.from("customers").update({ email: toEmail }).eq("id", bundle.customer.id);
+  }
+
   if (bundle.customer.phone) {
     await sendSMS({
       to: bundle.customer.phone,
@@ -96,11 +104,21 @@ export async function POST(request: Request, { params }: Props) {
     }).catch((smsError) => console.warn("Quote SMS failed:", smsError));
   }
 
-  await supabase.from("nurture_sequences").insert({
-    job_id: quote.job_id,
-    quote_id: quoteId,
-    status: "active"
-  });
+  const { data: existingSequence } = await supabase
+    .from("nurture_sequences")
+    .select("id")
+    .eq("quote_id", quoteId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+
+  if (!existingSequence) {
+    await supabase.from("nurture_sequences").insert({
+      job_id: quote.job_id,
+      quote_id: quoteId,
+      status: "active"
+    });
+  }
 
   return NextResponse.json({
     ok: true,

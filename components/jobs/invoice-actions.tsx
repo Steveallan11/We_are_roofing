@@ -4,20 +4,25 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
 import { useState, useTransition } from "react";
+import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
 import type { InvoiceRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
   jobId: string;
   quote: QuoteRecord | null;
   invoices: InvoiceRecord[];
+  customerName: string;
+  customerEmail: string | null | undefined;
+  jobTitle: string;
 };
 
-export function InvoiceActions({ jobId, quote, invoices }: Props) {
+export function InvoiceActions({ jobId, quote, invoices, customerName, customerEmail, jobTitle }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sendInvoice, setSendInvoice] = useState<InvoiceRecord | null>(null);
   const latestInvoice = invoices[0] ?? null;
 
   async function createInvoice() {
@@ -102,6 +107,11 @@ export function InvoiceActions({ jobId, quote, invoices }: Props) {
               {activeId === invoice.id ? "Working..." : "Regenerate PDF"}
             </button>
             {invoice.status !== "Paid" && invoice.status !== "Void" ? (
+              <button className="button-secondary !px-3 !py-2 text-sm" disabled={activeId === invoice.id} onClick={() => setSendInvoice(invoice)} type="button">
+                {invoice.status === "Sent" ? "Resend Invoice" : "Send Invoice"}
+              </button>
+            ) : null}
+            {invoice.status !== "Paid" && invoice.status !== "Void" ? (
               <button className="button-secondary !px-3 !py-2 text-sm" disabled={activeId === invoice.id} onClick={() => markPaid(invoice)} type="button">
                 Mark Paid
               </button>
@@ -112,6 +122,23 @@ export function InvoiceActions({ jobId, quote, invoices }: Props) {
 
       {message ? <p className="text-sm text-[#7ce3a6]">{message}</p> : null}
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
+      {sendInvoice ? (
+        <SendInvoiceModal
+          customerEmail={customerEmail}
+          customerName={customerName}
+          invoiceId={sendInvoice.id}
+          invoiceRef={sendInvoice.invoice_ref}
+          jobTitle={jobTitle}
+          onClose={() => setSendInvoice(null)}
+          onSent={(nextMessage) => {
+            setSendInvoice(null);
+            setMessage(nextMessage);
+            setError(null);
+            startTransition(() => router.refresh());
+          }}
+          total={Number(sendInvoice.total ?? 0)}
+        />
+      ) : null}
     </div>
   );
 }

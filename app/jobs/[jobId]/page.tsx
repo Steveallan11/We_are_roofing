@@ -50,12 +50,12 @@ export default async function JobDetailPage({ params }: Props) {
   });
 
   return (
-    <AppShell
+        <AppShell
       title={bundle.job.job_title}
       subtitle="This is the full job file: customer, survey, photos, quote progress, documents, and the next action needed to move the work forward."
       actions={
         <>
-          <QuoteActions customerEmail={bundle.customer.email} jobId={bundle.job.id} quote={bundle.quote ?? null} />
+          <QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
           <Link className="button-ghost" href="/dashboard">
             Back
           </Link>
@@ -273,7 +273,7 @@ export default async function JobDetailPage({ params }: Props) {
             <p className="mt-3 text-sm text-[var(--muted)]">
               Raise invoices from the approved quote, file PDFs into this job, and track paid/unpaid status.
             </p>
-            <InvoiceActions jobId={bundle.job.id} invoices={bundle.invoices} quote={bundle.quote ?? null} />
+            <InvoiceActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} invoices={bundle.invoices} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
           </div>
 
           <div className="card p-5">

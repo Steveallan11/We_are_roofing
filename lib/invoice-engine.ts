@@ -3,14 +3,16 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceLineItem, InvoiceRecord, JobBundle, QuoteRecord } from "@/lib/types";
 
 export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineItem[] {
-  return quote.cost_breakdown.map((line) => ({
+  return quote.cost_breakdown
+    .filter((line) => Number(line.cost ?? 0) > 0)
+    .map((line) => ({
     description: line.item,
     quantity: 1,
     unit: "item",
     unit_price: line.cost,
     vat_applicable: line.vat_applicable,
     total: line.cost
-  }));
+    }));
 }
 
 export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceRecord) {

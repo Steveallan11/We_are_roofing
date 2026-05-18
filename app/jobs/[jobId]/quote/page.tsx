@@ -25,12 +25,14 @@ export default async function QuotePage({ params, searchParams }: Props) {
   const rateCard = savedRateRules.length ? pricingRulesToRateCard(savedRateRules) : [];
   const displayQuoteRef = quote?.quote_ref ?? "No Draft Yet";
   const displayStatus = quote?.status ?? "Draft";
+  const visibleCostBreakdown = quote?.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0) ?? [];
+  const hiddenZeroLineCount = quote ? quote.cost_breakdown.length - visibleCostBreakdown.length : 0;
 
   return (
     <AppShell
       title="Quote Review"
       subtitle="Review the saved quote, approve it when the wording and totals are right, then send it to the customer."
-      actions={<QuoteActions customerEmail={bundle.customer.email} jobId={bundle.job.id} quote={quote} />}
+      actions={<QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={quote} />}
     >
       <section className="page-grid">
         <div className="stack">
@@ -86,21 +88,30 @@ export default async function QuotePage({ params, searchParams }: Props) {
             {quote ? (
               <>
                 <div className="mt-4 space-y-3">
-                  {quote.cost_breakdown.map((line) => (
+                  {visibleCostBreakdown.map((line) => (
                     <div className="flex items-start justify-between gap-3 rounded-2xl border p-3" key={line.item}>
                       <div>
                         <p className="font-semibold text-white">{line.item}</p>
                         <p className="mt-1 text-xs text-[var(--muted)]">{line.notes}</p>
-                        {Number(line.cost || 0) === 0 ? (
-                          <Link className="mt-2 inline-flex text-xs text-[var(--gold-l)] underline-offset-4 hover:underline" href={"/settings/rates" as Route}>
-                            Rate not set - add this item to the Rate Card
-                          </Link>
-                        ) : null}
                       </div>
                       <p className="font-display text-2xl text-[var(--gold-l)]">{currency(line.cost)}</p>
                     </div>
                   ))}
+                  {visibleCostBreakdown.length === 0 ? (
+                    <div className="rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-3 text-sm text-[var(--gold-l)]">
+                      All current line items are still at 0. Add pricing in the editor or Rate Card before sending this quote.
+                    </div>
+                  ) : null}
                 </div>
+                {hiddenZeroLineCount > 0 ? (
+                  <div className="mt-3 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-3 text-sm text-[var(--gold-l)]">
+                    {hiddenZeroLineCount} unpriced line item{hiddenZeroLineCount === 1 ? "" : "s"} hidden from the customer view.{" "}
+                    <Link className="underline-offset-4 hover:underline" href={"/settings/rates" as Route}>
+                      Open the Rate Card
+                    </Link>
+                    .
+                  </div>
+                ) : null}
                 <div className="gold-divider my-4" />
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">

@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandLogo } from "@/components/ui/brand-logo";
+import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { QuoteRecord } from "@/lib/types";
@@ -8,16 +9,19 @@ import type { QuoteRecord } from "@/lib/types";
 type Props = {
   jobId: string;
   quote: QuoteRecord | null;
+  jobTitle: string;
+  customerName: string;
   customerEmail: string | null | undefined;
 };
 
-export function QuoteActions({ jobId, quote, customerEmail }: Props) {
+export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEmail }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeAction, setActiveAction] = useState<"generate" | "approve" | "send" | "pdf" | null>(null);
   const [overlayDismissed, setOverlayDismissed] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
 
   const workingCopy =
     activeAction === "generate"
@@ -72,14 +76,13 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
                 url: `/api/quotes/${quote?.id}/pdf`,
                 body: {}
               }
-          : {
-              url: `/api/quotes/${quote?.id}/send`,
-              body: {
-                to_email: customerEmail,
-                subject: quote?.customer_email_subject || "Your We Are Roofing quotation",
-                body: quote?.customer_email_body || "Please find our quotation below."
-              }
-            };
+          : null;
+
+    if (!request) {
+      setActiveAction(null);
+      setShowSendModal(true);
+      return;
+    }
 
     const response = await fetch(request.url, {
       method: "POST",
@@ -188,17 +191,34 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
             {isPending ? "Approving..." : "Approve Quote"}
           </button>
         ) : null}
-        {quote && quote.status === "Approved" && customerEmail ? (
-          <button className="button-secondary" disabled={isPending} onClick={() => runAction("send")} type="button">
-            {isPending ? "Sending..." : "Send Quote"}
+        {quote && (quote.status === "Approved" || quote.status === "Sent") ? (
+          <button className="button-secondary" disabled={isPending} onClick={() => setShowSendModal(true)} type="button">
+            {quote.status === "Sent" ? "Resend Quote" : "Send Quote"}
           </button>
         ) : null}
       </div>
-      {quote && quote.status !== "Approved" ? <p className="text-sm text-[var(--muted)]">Approve the draft before sending it to the customer.</p> : null}
-      {quote && !customerEmail ? <p className="text-sm text-[#ffcf7d]">Customer email is missing, so send is not available yet.</p> : null}
+      {quote && quote.status !== "Approved" && quote.status !== "Sent" ? <p className="text-sm text-[var(--muted)]">Approve the draft before sending it to the customer.</p> : null}
+      {quote && !customerEmail ? <p className="text-sm text-[#ffcf7d]">Customer email is missing. Use Send Quote to add it and send in one step.</p> : null}
       {!quote ? <p className="text-sm text-[var(--muted)]">Create the first draft once the survey details are ready.</p> : null}
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
       {success ? <p className="text-sm text-[#7ce3a6]">{success}</p> : null}
+      {quote && showSendModal ? (
+        <SendQuoteModal
+          customerEmail={customerEmail}
+          customerName={customerName}
+          jobTitle={jobTitle}
+          onClose={() => setShowSendModal(false)}
+          onSent={(message) => {
+            setShowSendModal(false);
+            setSuccess(message);
+            setError(null);
+            startTransition(() => router.refresh());
+          }}
+          quoteId={quote.id}
+          quoteRef={quote.quote_ref}
+          total={Number(quote.total ?? 0)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -6,6 +6,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
+import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
 import { currency, formatDate } from "@/lib/utils";
 import type { Customer, InvoiceRecord, Job, JobDocumentRecord, QuoteRecord } from "@/lib/types";
 
@@ -89,6 +91,7 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [quoteToSend, setQuoteToSend] = useState<{ job: MoneyJob; quote: QuoteRecord } | null>(null);
 
   async function createInvoice(job: MoneyJob) {
     setMessage(null);
@@ -152,6 +155,10 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
                 <button className="button-primary !px-4 !py-2 text-sm" disabled={isPending || activeJobId === job.id} onClick={() => createInvoice(job)} type="button">
                   {activeJobId === job.id ? "Creating..." : "Create Invoice"}
                 </button>
+              ) : quote.status === "Approved" ? (
+                <button className="button-primary !px-4 !py-2 text-sm" onClick={() => setQuoteToSend({ job, quote })} type="button">
+                  Send Quote
+                </button>
               ) : (
                 <Link className="button-primary !px-4 !py-2 text-sm" href={`/jobs/${job.id}/quote` as Route}>
                   {existingInvoice ? "Open Quote" : getQuoteActionLabel(quote)}
@@ -174,6 +181,23 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
           </article>
         );
       })}
+      {quoteToSend ? (
+        <SendQuoteModal
+          customerEmail={quoteToSend.job.customer?.email}
+          customerName={quoteToSend.job.customer?.full_name ?? "Customer"}
+          jobTitle={quoteToSend.job.job_title}
+          onClose={() => setQuoteToSend(null)}
+          onSent={(nextMessage) => {
+            setQuoteToSend(null);
+            setMessage(nextMessage);
+            setError(null);
+            startTransition(() => router.refresh());
+          }}
+          quoteId={quoteToSend.quote.id}
+          quoteRef={quoteToSend.quote.quote_ref}
+          total={Number(quoteToSend.quote.total ?? 0)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -184,6 +208,7 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
   const [activeId, setActiveId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invoiceToSend, setInvoiceToSend] = useState<{ job: MoneyJob; invoice: InvoiceRecord } | null>(null);
 
   async function markPaid(invoice: InvoiceRecord) {
     setMessage(null);
@@ -263,6 +288,11 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
               {activeId === invoice.id ? "Working..." : invoice.pdf_url ? "Regenerate PDF" : "Generate PDF"}
             </button>
             {invoice.status !== "Paid" && invoice.status !== "Void" ? (
+              <button className="button-secondary !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => setInvoiceToSend({ job, invoice })} type="button">
+                {invoice.status === "Sent" ? "Resend Invoice" : "Send Invoice"}
+              </button>
+            ) : null}
+            {invoice.status !== "Paid" && invoice.status !== "Void" ? (
               <button className="button-secondary !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => markPaid(invoice)} type="button">
                 {activeId === invoice.id ? "Updating..." : "Mark Paid"}
               </button>
@@ -273,6 +303,23 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
           </div>
         </article>
       ))}
+      {invoiceToSend ? (
+        <SendInvoiceModal
+          customerEmail={invoiceToSend.job.customer?.email}
+          customerName={invoiceToSend.job.customer?.full_name ?? "Customer"}
+          invoiceId={invoiceToSend.invoice.id}
+          invoiceRef={invoiceToSend.invoice.invoice_ref}
+          jobTitle={invoiceToSend.job.job_title}
+          onClose={() => setInvoiceToSend(null)}
+          onSent={(nextMessage) => {
+            setInvoiceToSend(null);
+            setMessage(nextMessage);
+            setError(null);
+            startTransition(() => router.refresh());
+          }}
+          total={Number(invoiceToSend.invoice.total ?? 0)}
+        />
+      ) : null}
     </div>
   );
 }

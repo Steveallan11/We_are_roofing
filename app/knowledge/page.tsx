@@ -5,9 +5,13 @@ import { getHistoricalQuotes, getKnowledgeBase, getPricingRules } from "@/lib/da
 export default async function KnowledgePage() {
   const [knowledgeBase, historicalQuotes, pricingRules] = await Promise.all([
     getKnowledgeBase(),
-    getHistoricalQuotes(20),
+    getHistoricalQuotes(1000),
     getPricingRules()
   ]);
+  const syncedHistoricalQuotes = knowledgeBase.filter(
+    (entry) => entry.source_type === "historical_quote" || entry.category === "Historical Quote"
+  ).length;
+  const missingHistoricalQuotes = Math.max(0, historicalQuotes.length - syncedHistoricalQuotes);
 
   return (
     <AppShell
@@ -33,7 +37,11 @@ export default async function KnowledgePage() {
               </div>
             </div>
           </div>
-          <KnowledgeAdmin />
+          <KnowledgeAdmin
+            historicalQuotesCount={historicalQuotes.length}
+            historicalQuotesMissing={missingHistoricalQuotes}
+            syncedHistoricalQuotes={syncedHistoricalQuotes}
+          />
         </div>
 
         <aside className="stack">
@@ -46,6 +54,9 @@ export default async function KnowledgePage() {
             <p className="section-kicker text-[0.65rem] uppercase">Historical Quotes</p>
             <p className="mt-3 text-4xl font-display text-[var(--gold-l)]">{historicalQuotes.length}</p>
             <p className="mt-1 text-sm text-[var(--muted)]">Imported comparables used as style and uplifted price anchors.</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">
+              {syncedHistoricalQuotes} synced into Knowledge Base | {missingHistoricalQuotes} still missing
+            </p>
           </div>
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Pricing Rules</p>
@@ -60,7 +71,7 @@ export default async function KnowledgePage() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-[var(--muted)]">No pricing rules saved yet.</p>
+                <p className="text-sm text-[#ffcf7d]">0 rates configured - quotes can still show unpriced items until the Rate Card is filled in.</p>
               )}
             </div>
           </div>

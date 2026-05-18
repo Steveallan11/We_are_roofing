@@ -24,7 +24,7 @@ export default async function SurveyPage({ params }: Props) {
       subtitle="Capture the details needed for quoting and job overview: condition, measurements, access, likely cause, and what the customer is expecting."
       actions={
         <>
-          <QuoteActions customerEmail={bundle.customer.email} jobId={bundle.job.id} quote={bundle.quote ?? null} />
+          <QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
           <Link className="button-ghost" href={`/jobs/${bundle.job.id}`}>
             Back to Job
           </Link>

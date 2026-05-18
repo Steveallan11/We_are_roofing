@@ -71,6 +71,59 @@ export function quoteSentEmail(props: { customerName: string; quote: QuoteRecord
   );
 }
 
+export function invoiceSentEmail(props: {
+  customerName: string;
+  invoiceRef: string;
+  invoiceUrl: string;
+  jobTitle: string;
+  propertyAddress: string;
+  dueDate: string;
+  total: number;
+  bankName?: string | null;
+  bankSortCode?: string | null;
+  bankAccount?: string | null;
+  bankAccountName?: string | null;
+}) {
+  const firstName = props.customerName.split(" ")[0] || props.customerName;
+  return shell(
+    "Your Roofing Invoice",
+    `
+      <div style="background:#faf6e8;border:1px solid #e8d7a1;border-left:4px solid #D4AF37;border-radius:6px;padding:14px 18px;margin-bottom:22px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00">Payment Due</div>
+        <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-top:6px">Please pay by ${props.dueDate}</div>
+      </div>
+      <p style="font-size:16px;margin-top:0">Hi ${firstName},</p>
+      <p style="font-size:14px;line-height:1.6;color:#555">
+        Please find your invoice for ${props.jobTitle} at ${props.propertyAddress}.
+      </p>
+      <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:16px 18px;margin:20px 0">
+        <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#555">
+          <span>Invoice reference</span>
+          <strong style="color:#1a1a1a">${props.invoiceRef}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#555;margin-top:8px">
+          <span>Total due</span>
+          <strong style="color:#1a1a1a">${currency(props.total)}</strong>
+        </div>
+      </div>
+      <div style="background:#faf9f6;border:1px solid #e8e4da;border-left:4px solid #D4AF37;border-radius:6px;padding:16px 18px;margin:22px 0">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00;margin-bottom:8px">Bank Details</div>
+        <div style="font-size:13px;color:#555;line-height:1.8">
+          <div>Bank: ${props.bankName || "Please contact Andy for bank details"}</div>
+          <div>Sort code: ${props.bankSortCode || "Available on request"}</div>
+          <div>Account number: ${props.bankAccount || "Available on request"}</div>
+          <div>Account name: ${props.bankAccountName || "We Are Roofing UK Ltd"}</div>
+          <div>Payment reference: ${props.invoiceRef}</div>
+        </div>
+      </div>
+      <p style="text-align:center;margin:26px 0">
+        <a href="${props.invoiceUrl}" style="background:#D4AF37;color:#000;padding:12px 22px;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none">View invoice</a>
+      </p>
+      <p style="font-size:13px;color:#555;line-height:1.6">If you have any questions about this invoice, just reply to this email and we will help.</p>
+    `
+  );
+}
+
 export function nurtureEmail(day: number, props: { customerName: string; town?: string | null; quoteUrl: string; quoteRef: string }) {
   const firstName = props.customerName.split(" ")[0] || props.customerName;
   const copy: Record<number, { title: string; body: string }> = {

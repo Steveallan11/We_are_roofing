@@ -15,7 +15,15 @@ type BulkUploadResult = {
   error?: string;
 };
 
-export function KnowledgeAdmin() {
+export function KnowledgeAdmin({
+  historicalQuotesCount,
+  syncedHistoricalQuotes,
+  historicalQuotesMissing
+}: {
+  historicalQuotesCount: number;
+  syncedHistoricalQuotes: number;
+  historicalQuotesMissing: number;
+}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -122,10 +130,15 @@ export function KnowledgeAdmin() {
             <p className="mt-2 text-sm text-[var(--muted)]">
               Pull the live `Quotes` database into historical comparables and the `Master Source Library` into reusable knowledge records. This is migration and enrichment, not day-to-day dual entry.
             </p>
+            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 px-4 py-3 text-sm">
+              <p className="text-white">
+                {historicalQuotesCount} historical quotes in database | {syncedHistoricalQuotes} already in Knowledge Base | {historicalQuotesMissing} not synced
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-3">
             <button className="button-ghost" disabled={syncingKb || isPending} onClick={syncHistoricalQuotes} type="button">
-              {syncingKb ? "Syncing KB..." : "Sync Historical Quotes to KB"}
+              {syncingKb ? "Syncing KB..." : `Sync ${historicalQuotesMissing} Historical Quotes To KB`}
             </button>
             <select
               className="field min-w-[220px]"

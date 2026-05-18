@@ -9,6 +9,8 @@ import { currency, formatDate } from "@/lib/utils";
 import type { JobBundle, QuoteRecord } from "@/lib/types";
 
 export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: QuoteRecord }) {
+  const visibleLineItems = quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
+
   return (
     <DocumentFrame>
       <DocHeader title="Quotation" reference={quote.quote_ref} subtitle={bundle.business.trading_address} meta={`Issued ${formatDate(quote.created_at)}`} />
@@ -38,9 +40,9 @@ export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: Quo
           </div>
         ) : (
           <LineItemTable
-            rows={quote.cost_breakdown.map((line) => ({
+            rows={visibleLineItems.map((line) => ({
               description: line.item,
-              notes: Number(line.cost || 0) === 0 ? `${line.notes || ""} Rate not set - check Rate Card.`.trim() : line.notes,
+              notes: line.notes,
               amount: currency(line.cost)
             }))}
             totals={[

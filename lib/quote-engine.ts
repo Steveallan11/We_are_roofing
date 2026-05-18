@@ -76,7 +76,8 @@ export function getComparableHistoricalQuotes(
 
 export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
   const logoUrl = resolveAssetUrl(bundle.business.logo_url || "/we-are-roofing-logo.png");
-  const rows = quote.cost_breakdown
+  const visibleLineItems = quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
+  const rows = visibleLineItems
     .map(
       (line) => `
         <tr>
@@ -139,7 +140,10 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
               <th style="text-align:right;">Amount</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody>${
+            rows ||
+            `<tr><td colspan="3" style="padding:12px;border-bottom:1px solid #d8c58a;color:#75663b;text-align:center;">No priced line items are ready to show yet.</td></tr>`
+          }</tbody>
         </table>
         <div class="totals">
           <div><span>Subtotal</span><span>${formatCurrency(quote.subtotal)}</span></div>
@@ -176,7 +180,7 @@ export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
     "Cost Breakdown"
   ];
 
-  for (const item of quote.cost_breakdown) {
+  for (const item of quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0)) {
     lines.push(`${item.item} - ${formatCurrency(item.cost)}`);
     if (item.notes) {
       lines.push(...wrapText(`  ${item.notes}`));
