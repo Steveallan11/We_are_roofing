@@ -3,7 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensurePrivateStorageBucket, ensurePublicStorageBucket, getStoragePublicUrl, JOB_PHOTOS_BUCKET, SURVEY_FRAMES_BUCKET, SURVEY_VIDEOS_BUCKET } from "@/lib/storage";
 import { extractFrames } from "@/lib/survey/frameExtractor";
 import { transcribeAudio } from "@/lib/survey/audioExtractor";
-import { analyseFramesWithClaude } from "@/lib/survey/claudeVision";
+import { analyseFramesWithOpenAI } from "@/lib/survey/openaiVision";
 import { structureSurvey } from "@/lib/survey/surveyStructurer";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -115,8 +115,19 @@ export async function POST(request: Request) {
       });
     }
 
+    const { data: jobContext } = await supabase
+      .from("jobs")
+      .select("job_title, property_address, customers(full_name)")
+      .eq("id", jobId)
+      .maybeSingle();
+
     const transcript = await transcribeAudio(videoBuffer);
-    const analysis = await analyseFramesWithClaude(frames, transcript);
+    const customer = Array.isArray(jobContext?.customers) ? jobContext.customers[0] : jobContext?.customers;
+    const analysis = await analyseFramesWithOpenAI(frames, transcript, {
+      jobTitle: jobContext?.job_title,
+      propertyAddress: jobContext?.property_address,
+      customerName: customer?.full_name
+    });
     const structured = structureSurvey(analysis, transcript);
 
     const updatedSurvey = {

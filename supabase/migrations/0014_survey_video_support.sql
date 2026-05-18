@@ -6,6 +6,8 @@ alter table public.surveys
   add column if not exists frames_extracted int,
   add column if not exists frame_paths jsonb default '[]'::jsonb,
   add column if not exists ai_confidence numeric,
+  add column if not exists ai_field_confidence jsonb default '{}'::jsonb,
+  add column if not exists ai_review_items jsonb default '[]'::jsonb,
   add column if not exists ai_raw_response jsonb,
   add column if not exists processing_status text default 'complete'
     check (processing_status in ('pending','processing','complete','failed')),

@@ -372,6 +372,8 @@ export type SurveyRecord = {
   frames_extracted?: number | null;
   frame_paths?: string[] | null;
   ai_confidence?: number | null;
+  ai_field_confidence?: Record<string, number> | null;
+  ai_review_items?: Array<Record<string, unknown>> | null;
   ai_raw_response?: Record<string, unknown> | null;
   processing_status?: "pending" | "processing" | "complete" | "failed" | null;
   processing_error?: string | null;

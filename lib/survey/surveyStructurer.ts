@@ -7,6 +7,8 @@ export function structureSurvey(analysis: Analysis, transcript: string): Partial
   const roofType = inferRoofType(analysis, surveyType);
   const adaptiveSections = buildAdaptiveSections(analysis, surveyType);
   const overallConfidence = numberOrNull(analysis.overall_confidence);
+  const reviewItems = Array.isArray(analysis.review_items) ? analysis.review_items : [];
+  const fieldConfidence = typeof analysis.field_confidence === "object" && analysis.field_confidence ? analysis.field_confidence : {};
 
   return {
     survey_type: surveyType,
@@ -15,14 +17,20 @@ export function structureSurvey(analysis: Analysis, transcript: string): Partial
     problem_observed: analysis.problems || "",
     suspected_cause: analysis.suspected_cause || "",
     recommended_works: analysis.recommendations || "",
+    measurements: analysis.measurements || "",
+    access_notes: analysis.access_notes || "",
     scaffold_required: Boolean(analysis.scaffold_required ?? true),
     scaffold_notes: analysis.scaffold_notes || "",
     safety_notes: analysis.safety_concerns || "",
+    weather_notes: analysis.weather_notes || "",
+    customer_concerns: analysis.customer_concerns || "",
     voice_note_transcript: transcript,
-    raw_notes: buildRawNotes(transcript, overallConfidence, analysis.manual_review_needed),
+    raw_notes: buildRawNotes(analysis, transcript, overallConfidence, analysis.manual_review_needed, reviewItems),
     adaptive_sections: adaptiveSections,
     source_type: "video",
     ai_confidence: overallConfidence,
+    ai_field_confidence: fieldConfidence,
+    ai_review_items: reviewItems,
     ai_raw_response: analysis,
     processing_status: "complete",
     processing_error: null
@@ -108,9 +116,30 @@ function buildAdaptiveSections(analysis: Analysis, surveyType: SurveyType): Surv
   };
 }
 
-function buildRawNotes(transcript: string, confidence: number | null, reviewFields: unknown) {
+function buildRawNotes(analysis: Analysis, transcript: string, confidence: number | null, reviewFields: unknown, reviewItems: unknown[]) {
   const manualReview = Array.isArray(reviewFields) && reviewFields.length > 0 ? `\nReview needed: ${reviewFields.join(", ")}` : "";
-  return `AI Video Analysis${confidence != null ? ` (${confidence}% confidence)` : ""}${manualReview}\n\nVoice transcript:\n${transcript}`.trim();
+  const structuredReview = reviewItems.length
+    ? `\nReview details:\n${reviewItems
+        .map((item) => {
+          const review = item as Record<string, unknown>;
+          return `- ${review.field || "Field"}: ${review.reason || "Needs review"}${review.evidence ? ` Evidence: ${review.evidence}` : ""}`;
+        })
+        .join("\n")}`
+    : "";
+
+  return `AI Video Analysis${confidence != null ? ` (${confidence}% confidence)` : ""}${manualReview}${structuredReview}
+
+Visual understanding:
+${analysis.visual_summary || "No visual summary returned."}
+
+Audio understanding:
+${analysis.audio_summary || "No audio summary returned."}
+
+Job understanding:
+${analysis.job_understanding || "No combined job understanding returned."}
+
+Voice transcript:
+${transcript}`.trim();
 }
 
 function firstRecommendationLine(value: unknown) {

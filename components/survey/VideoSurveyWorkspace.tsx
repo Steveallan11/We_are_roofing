@@ -19,6 +19,13 @@ type ProcessingResult = {
   transcript: string;
 };
 
+type ReviewItem = {
+  field?: string;
+  reason?: string;
+  evidence?: string;
+  confidence?: number;
+};
+
 type ReviewState = {
   surveyor_name: string;
   survey_type: string;
@@ -117,13 +124,28 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
   const confidenceItems = useMemo(() => {
     if (!result) return [];
     const analysis = result.analysis || {};
+    const fieldConfidence = (analysis.field_confidence || {}) as Record<string, number>;
     return [
-      { label: "Roof type", value: Number(analysis.overall_confidence || 0) },
-      { label: "Condition", value: Number(analysis.condition_confidence || analysis.overall_confidence || 0) },
-      { label: "Problems", value: Number(analysis.overall_confidence || 0) },
-      { label: "Recommendations", value: Number(analysis.overall_confidence || 0) }
+      { label: "Roof type", value: Number(fieldConfidence.roof_type || analysis.overall_confidence || 0) },
+      { label: "Condition", value: Number(fieldConfidence.roof_condition || analysis.condition_confidence || analysis.overall_confidence || 0) },
+      { label: "Problems", value: Number(fieldConfidence.problem_observed || analysis.overall_confidence || 0) },
+      { label: "Recommendations", value: Number(fieldConfidence.recommended_works || analysis.overall_confidence || 0) }
     ];
   }, [result]);
+
+  const reviewItems = useMemo<ReviewItem[]>(() => {
+    const items = result?.analysis?.review_items;
+    return Array.isArray(items) ? items : [];
+  }, [result]);
+
+  const fieldConfidence = useMemo<Record<string, number>>(() => {
+    const confidence = result?.analysis?.field_confidence;
+    return typeof confidence === "object" && confidence ? confidence : {};
+  }, [result]);
+
+  function reviewFor(field: string) {
+    return reviewItems.find((item) => normaliseField(item.field) === normaliseField(field));
+  }
 
   function stopCamera() {
     mediaRecorderRef.current = null;
@@ -370,22 +392,38 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
               <p className="section-kicker text-[0.65rem] uppercase">Transcript</p>
               <p className="mt-3 whitespace-pre-line text-sm text-[var(--text)]">{result.transcript || "No transcript returned."}</p>
             </div>
+            <div className="card p-5">
+              <p className="section-kicker text-[0.65rem] uppercase">Needs Review</p>
+              <div className="mt-4 space-y-3">
+                {reviewItems.length > 0 ? (
+                  reviewItems.map((item, index) => (
+                    <div className="rounded-[8px] border border-[#f59e0b66] bg-[rgba(245,158,11,0.08)] p-3 text-sm" key={`${item.field || "field"}-${index}`}>
+                      <p className="font-semibold text-[#fbbf24]">{humaniseField(item.field || "Survey field")}</p>
+                      <p className="mt-1 text-[var(--text)]">{item.reason || "Needs Andy to confirm before quoting."}</p>
+                      {item.evidence ? <p className="mt-2 text-xs text-[var(--muted)]">Evidence: {item.evidence}</p> : null}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-[var(--muted)]">No specific review flags returned.</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Review Survey</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Field label="Surveyor" onChange={(value) => setReviewState((current) => (current ? { ...current, surveyor_name: value } : current))} value={reviewState.surveyor_name} />
-              <Field label="Survey Type" onChange={(value) => setReviewState((current) => (current ? { ...current, survey_type: value } : current))} value={reviewState.survey_type} />
-              <Field label="Roof Type" onChange={(value) => setReviewState((current) => (current ? { ...current, roof_type: value } : current))} value={reviewState.roof_type} />
-              <Field label="Condition" onChange={(value) => setReviewState((current) => (current ? { ...current, roof_condition: value } : current))} value={reviewState.roof_condition} />
-              <Field label="Problem Observed" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, problem_observed: value } : current))} value={reviewState.problem_observed} />
-              <Field label="Suspected Cause" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, suspected_cause: value } : current))} value={reviewState.suspected_cause} />
-              <Field label="Recommended Works" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, recommended_works: value } : current))} value={reviewState.recommended_works} />
-              <Field label="Access Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, access_notes: value } : current))} value={reviewState.access_notes} />
-              <Field label="Scaffold Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, scaffold_notes: value } : current))} value={reviewState.scaffold_notes} />
-              <Field label="Safety Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, safety_notes: value } : current))} value={reviewState.safety_notes} />
-              <Field label="Measurements" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, measurements: value } : current))} value={reviewState.measurements} />
+              <Field confidence={fieldConfidence.survey_type} label="Survey Type" onChange={(value) => setReviewState((current) => (current ? { ...current, survey_type: value } : current))} review={reviewFor("survey_type")} value={reviewState.survey_type} />
+              <Field confidence={fieldConfidence.roof_type} label="Roof Type" onChange={(value) => setReviewState((current) => (current ? { ...current, roof_type: value } : current))} review={reviewFor("roof_type")} value={reviewState.roof_type} />
+              <Field confidence={fieldConfidence.roof_condition} label="Condition" onChange={(value) => setReviewState((current) => (current ? { ...current, roof_condition: value } : current))} review={reviewFor("roof_condition")} value={reviewState.roof_condition} />
+              <Field confidence={fieldConfidence.problem_observed} label="Problem Observed" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, problem_observed: value } : current))} review={reviewFor("problem_observed")} value={reviewState.problem_observed} />
+              <Field confidence={fieldConfidence.suspected_cause} label="Suspected Cause" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, suspected_cause: value } : current))} review={reviewFor("suspected_cause")} value={reviewState.suspected_cause} />
+              <Field confidence={fieldConfidence.recommended_works} label="Recommended Works" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, recommended_works: value } : current))} review={reviewFor("recommended_works")} value={reviewState.recommended_works} />
+              <Field confidence={fieldConfidence.access_notes} label="Access Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, access_notes: value } : current))} review={reviewFor("access_notes")} value={reviewState.access_notes} />
+              <Field confidence={fieldConfidence.scaffold_required} label="Scaffold Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, scaffold_notes: value } : current))} review={reviewFor("scaffold_required")} value={reviewState.scaffold_notes} />
+              <Field confidence={fieldConfidence.safety_notes} label="Safety Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, safety_notes: value } : current))} review={reviewFor("safety_notes")} value={reviewState.safety_notes} />
+              <Field confidence={fieldConfidence.measurements} label="Measurements" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, measurements: value } : current))} review={reviewFor("measurements")} value={reviewState.measurements} />
               <Field label="Raw Notes" multiline onChange={(value) => setReviewState((current) => (current ? { ...current, raw_notes: value } : current))} value={reviewState.raw_notes} />
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
@@ -431,21 +469,32 @@ function Field({
   label,
   value,
   onChange,
-  multiline
+  multiline,
+  confidence,
+  review
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   multiline?: boolean;
+  confidence?: number;
+  review?: ReviewItem;
 }) {
+  const needsReview = Boolean(review) || (typeof confidence === "number" && confidence > 0 && confidence < 60);
+  const fieldClassName = `field ${needsReview ? "!border-[#f59e0b] !bg-[rgba(245,158,11,0.07)]" : ""}`;
+
   return (
     <div>
-      <label className="label">{label}</label>
+      <div className="flex items-center justify-between gap-3">
+        <label className="label">{label}</label>
+        {typeof confidence === "number" ? <span className="text-xs text-[var(--muted)]">{Math.round(confidence)}%</span> : null}
+      </div>
       {multiline ? (
-        <textarea className="field min-h-28" onChange={(event) => onChange(event.target.value)} value={value} />
+        <textarea className={`${fieldClassName} min-h-28`} onChange={(event) => onChange(event.target.value)} value={value} />
       ) : (
-        <input className="field" onChange={(event) => onChange(event.target.value)} value={value} />
+        <input className={fieldClassName} onChange={(event) => onChange(event.target.value)} value={value} />
       )}
+      {review ? <p className="mt-2 text-xs text-[#fbbf24]">{review.reason || "Needs review before quoting."}</p> : null}
     </div>
   );
 }
@@ -454,4 +503,12 @@ function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function normaliseField(value: unknown) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function humaniseField(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
