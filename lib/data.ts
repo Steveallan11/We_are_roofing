@@ -76,15 +76,50 @@ export async function getJobs(): Promise<Array<Job & { customer?: Customer | nul
   }
 
   const supabase = createSupabaseAdminClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("jobs")
-    .select("*, customers(*), quotes(*), job_documents(*), invoices(*)")
+    .select("*, customers(*), quotes(*)")
     .order("created_at", { ascending: false });
 
-  return ((data as Array<Record<string, unknown>> | null) ?? []).map((job) => {
+  if (error) {
+    console.error("Unable to load jobs:", error.message);
+    return [];
+  }
+
+  const rows = (data as Array<Record<string, unknown>> | null) ?? [];
+  const jobIds = rows.map((job) => String(job.id)).filter(Boolean);
+  const [documentsResult, invoicesResult] = jobIds.length
+    ? await Promise.all([
+        supabase.from("job_documents").select("*").in("job_id", jobIds).order("created_at", { ascending: false }),
+        supabase.from("invoices").select("*").in("job_id", jobIds).order("created_at", { ascending: false })
+      ])
+    : [{ data: [] as JobDocumentRecord[], error: null }, { data: [] as InvoiceRecord[], error: null }];
+
+  if (documentsResult.error) {
+    console.warn("Job documents could not be loaded:", documentsResult.error.message);
+  }
+  if (invoicesResult.error) {
+    console.warn("Invoices could not be loaded:", invoicesResult.error.message);
+  }
+
+  const documentsByJob = new Map<string, JobDocumentRecord[]>();
+  for (const document of ((documentsResult.data as JobDocumentRecord[] | null) ?? [])) {
+    const list = documentsByJob.get(document.job_id) ?? [];
+    list.push(document);
+    documentsByJob.set(document.job_id, list);
+  }
+
+  const invoicesByJob = new Map<string, InvoiceRecord[]>();
+  for (const invoice of ((invoicesResult.data as InvoiceRecord[] | null) ?? [])) {
+    const list = invoicesByJob.get(invoice.job_id) ?? [];
+    list.push(invoice);
+    invoicesByJob.set(invoice.job_id, list);
+  }
+
+  return rows.map((job) => {
     const quotes = Array.isArray(job.quotes) ? ([...(job.quotes as QuoteRecord[])] as QuoteRecord[]) : [];
-    const invoices = Array.isArray(job.invoices) ? ([...(job.invoices as InvoiceRecord[])] as InvoiceRecord[]) : [];
-    const documents = Array.isArray(job.job_documents) ? ([...(job.job_documents as JobDocumentRecord[])] as JobDocumentRecord[]) : [];
+    const invoices = invoicesByJob.get(String(job.id)) ?? [];
+    const documents = documentsByJob.get(String(job.id)) ?? [];
 
     quotes.sort((left, right) => {
       const versionDiff = Number(right.version_number ?? 0) - Number(left.version_number ?? 0);

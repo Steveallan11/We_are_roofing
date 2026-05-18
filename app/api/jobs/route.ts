@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   const supabase = createSupabaseAdminClient();
   const business = await ensureBusinessRecord();
-  const businessId = process.env.NEXT_PUBLIC_BUSINESS_ID || business.id || BUSINESS_ID;
+  const businessId = process.env.NEXT_PUBLIC_BUSINESS_ID || BUSINESS_ID || business.id;
   const jobRef = await getNextJobRef();
 
   const customerPayload = parsed.data.customer;
