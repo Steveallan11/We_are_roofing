@@ -20,7 +20,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
   const [activeFilter, setActiveFilter] = useState<PipelineGroupKey | "all" | "attention">(initialFilter);
   const [view, setView] = useState<"board" | "list">("board");
   const attentionJobs = useMemo(() => jobs.filter(needsAttention), [jobs]);
-  const activeJobs = useMemo(() => jobs.filter((job) => !["Completed", "Lost", "Archived"].includes(job.status)), [jobs]);
+  const activeJobs = useMemo(() => jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)), [jobs]);
   const pipelineValue = useMemo(() => activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0), [activeJobs]);
   const filteredJobs = useMemo(() => {
     if (activeFilter === "attention") return attentionJobs;

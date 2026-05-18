@@ -11,8 +11,12 @@ create type job_status as enum (
   'Follow-Up Needed',
   'Accepted',
   'Materials Needed',
+  'Materials Ordered',
+  'Scaffold In Situ',
   'Booked',
+  'In Progress',
   'Completed',
+  'Not Proceeding',
   'Lost',
   'Archived'
 );
@@ -197,4 +201,3 @@ create index if not exists jobs_business_status_idx on jobs (business_id, status
 create index if not exists quotes_job_status_idx on quotes (job_id, status);
 create index if not exists materials_job_quote_idx on materials (job_id, quote_id);
 create index if not exists knowledge_base_business_category_idx on knowledge_base (business_id, category);
-

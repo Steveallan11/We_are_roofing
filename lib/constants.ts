@@ -9,8 +9,12 @@ export const JOB_STATUSES = [
   "Follow-Up Needed",
   "Accepted",
   "Materials Needed",
+  "Materials Ordered",
+  "Scaffold In Situ",
   "Booked",
+  "In Progress",
   "Completed",
+  "Not Proceeding",
   "Lost",
   "Archived"
 ] as const;
@@ -47,4 +51,3 @@ export const SURVEY_TYPES = [
 ] as const;
 
 export const ROOF_TYPES = ["Flat", "Pitched", "Slate", "Tile", "Fascia", "Chimney", "Mixed", "Other"] as const;
-

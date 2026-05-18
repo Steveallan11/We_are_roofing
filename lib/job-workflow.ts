@@ -46,18 +46,43 @@ export const JOBS_BOARD_COLUMNS: Array<{
     description: "Customer has accepted. Ready for ordering and handover."
   },
   {
+    status: "Materials Needed",
+    label: "Materials Needed",
+    description: "Materials list needs confirming before ordering."
+  },
+  {
+    status: "Materials Ordered",
+    label: "Materials Ordered",
+    description: "Materials have been ordered and delivery needs tracking."
+  },
+  {
+    status: "Scaffold In Situ",
+    label: "Scaffold In Situ",
+    description: "Scaffold is up and the site is ready for works."
+  },
+  {
     status: "Booked",
     label: "Booked",
     description: "Work is booked into the diary."
   },
   {
+    status: "In Progress",
+    label: "In Progress",
+    description: "The job is actively being worked on."
+  },
+  {
     status: "Completed",
     label: "Completed",
     description: "Job is complete and closed."
+  },
+  {
+    status: "Not Proceeding",
+    label: "Not Proceeding",
+    description: "Customer did not proceed. Keep the record for history and reporting."
   }
 ];
 
-export const SECONDARY_JOB_STATUSES: JobStatus[] = ["Follow-Up Needed", "Materials Needed", "Lost", "Archived"];
+export const SECONDARY_JOB_STATUSES: JobStatus[] = ["Follow-Up Needed", "Lost", "Archived"];
 
 export type JobWithContext = Job & {
   customer?: Customer | null;
@@ -92,10 +117,18 @@ export function getNextActionLabel(job: JobWithContext) {
       return "Order materials and book work";
     case "Materials Needed":
       return "Confirm materials list";
+    case "Materials Ordered":
+      return "Track delivery and update materials";
+    case "Scaffold In Situ":
+      return "Confirm site is ready to start";
     case "Booked":
       return "Prepare install handover";
+    case "In Progress":
+      return "Update progress and completion photos";
     case "Completed":
       return "Archive and record final value";
+    case "Not Proceeding":
+      return "Record reason and archive when ready";
     case "Lost":
       return "Record outcome and archive";
     case "Archived":
@@ -112,7 +145,7 @@ export function getJobWorkflowMetrics(jobs: JobWithContext[]) {
     needingSurvey: jobs.filter((job) => job.status === "New Lead" || job.status === "Survey Needed").length,
     readyForQuote: jobs.filter((job) => job.status === "Ready For AI Quote").length,
     readyToSend: jobs.filter((job) => job.status === "Ready To Send").length,
-    acceptedOrBooked: jobs.filter((job) => job.status === "Accepted" || job.status === "Booked").length
+    acceptedOrBooked: jobs.filter((job) => ["Accepted", "Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress"].includes(job.status)).length
   };
 }
 

@@ -9,8 +9,12 @@ export const STATUS_COLORS = {
   "Follow-Up Needed": { color: "#ef4444", bg: "rgba(239,68,68,0.10)", border: "rgba(239,68,68,0.20)", label: "Follow Up", dot: "#ef4444" },
   Accepted: { color: "#10b981", bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.20)", label: "Accepted", dot: "#10b981" },
   "Materials Needed": { color: "#059669", bg: "rgba(5,150,105,0.10)", border: "rgba(5,150,105,0.20)", label: "Materials", dot: "#059669" },
+  "Materials Ordered": { color: "#0d9488", bg: "rgba(13,148,136,0.10)", border: "rgba(13,148,136,0.20)", label: "Materials Ordered", dot: "#0d9488" },
+  "Scaffold In Situ": { color: "#06b6d4", bg: "rgba(6,182,212,0.10)", border: "rgba(6,182,212,0.20)", label: "Scaffold Ready", dot: "#06b6d4" },
   Booked: { color: "#047857", bg: "rgba(4,120,87,0.10)", border: "rgba(4,120,87,0.20)", label: "Booked", dot: "#047857" },
+  "In Progress": { color: "#22c55e", bg: "rgba(34,197,94,0.10)", border: "rgba(34,197,94,0.20)", label: "In Progress", dot: "#22c55e" },
   Completed: { color: "#64748b", bg: "rgba(100,116,139,0.10)", border: "rgba(100,116,139,0.20)", label: "Completed", dot: "#64748b" },
+  "Not Proceeding": { color: "#475569", bg: "rgba(71,85,105,0.08)", border: "rgba(71,85,105,0.18)", label: "Not Proceeding", dot: "#475569" },
   Lost: { color: "#475569", bg: "rgba(71,85,105,0.08)", border: "rgba(71,85,105,0.18)", label: "Lost", dot: "#475569" },
   Archived: { color: "#334155", bg: "rgba(51,65,85,0.06)", border: "rgba(51,65,85,0.15)", label: "Archived", dot: "#334155" }
 } as const;

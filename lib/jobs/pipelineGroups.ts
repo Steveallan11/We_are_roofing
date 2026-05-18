@@ -38,7 +38,7 @@ export const PIPELINE_GROUPS: PipelineGroup[] = [
     key: "booked",
     label: "Booked / Active",
     shortLabel: "Booked In",
-    statuses: ["Accepted", "Materials Needed", "Booked"]
+    statuses: ["Accepted", "Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress"]
   }
 ];
 

@@ -81,6 +81,20 @@ export const STATUS_CONFIG: Record<
     label: "Materials",
     column: "active"
   },
+  "Materials Ordered": {
+    color: "#0d9488",
+    bg: "rgba(13,148,136,0.10)",
+    border: "rgba(13,148,136,0.25)",
+    label: "Materials Ordered",
+    column: "active"
+  },
+  "Scaffold In Situ": {
+    color: "#06b6d4",
+    bg: "rgba(6,182,212,0.10)",
+    border: "rgba(6,182,212,0.25)",
+    label: "Scaffold Ready",
+    column: "active"
+  },
   Booked: {
     color: "#047857",
     bg: "rgba(4,120,87,0.12)",
@@ -88,11 +102,25 @@ export const STATUS_CONFIG: Record<
     label: "Booked",
     column: "active"
   },
+  "In Progress": {
+    color: "#22c55e",
+    bg: "rgba(34,197,94,0.10)",
+    border: "rgba(34,197,94,0.25)",
+    label: "In Progress",
+    column: "active"
+  },
   Completed: {
     color: "#64748b",
     bg: "rgba(100,116,139,0.10)",
     border: "rgba(100,116,139,0.25)",
     label: "Completed",
+    column: "done"
+  },
+  "Not Proceeding": {
+    color: "#475569",
+    bg: "rgba(71,85,105,0.10)",
+    border: "rgba(71,85,105,0.20)",
+    label: "Not Proceeding",
     column: "done"
   },
   Lost: {

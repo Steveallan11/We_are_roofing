@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   const [business, jobs, customers] = await Promise.all([getBusiness(), getJobs(), getCustomers()]);
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const activeJobs = jobs.filter((job) => !["Completed", "Lost", "Archived"].includes(job.status));
+  const activeJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
   const attentionJobs = jobs.filter(needsAttention);
   const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
   const revenueThisMonth = jobs

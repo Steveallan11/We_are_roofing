@@ -17,8 +17,12 @@ const VALID_JOB_STATUSES = [
   "Follow-Up Needed",
   "Accepted",
   "Materials Needed",
+  "Materials Ordered",
+  "Scaffold In Situ",
   "Booked",
+  "In Progress",
   "Completed",
+  "Not Proceeding",
   "Lost",
   "Archived"
 ] as const;

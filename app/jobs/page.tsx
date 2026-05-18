@@ -16,7 +16,7 @@ export default async function JobsPage({ searchParams }: Props) {
   const query = searchParams ? await searchParams : undefined;
   const initialFilter = validFilters.has(query?.filter ?? "") ? (query?.filter as PipelineGroupKey | "all" | "attention") : "all";
   const jobs = await getJobs();
-  const activeJobs = jobs.filter((job) => !["Completed", "Lost", "Archived"].includes(job.status));
+  const activeJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
   const urgent = jobs.filter(needsAttention).length;
   const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
 

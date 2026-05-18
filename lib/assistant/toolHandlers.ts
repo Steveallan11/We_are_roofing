@@ -15,8 +15,12 @@ const VALID_JOB_STATUSES: JobStatus[] = [
   "Follow-Up Needed",
   "Accepted",
   "Materials Needed",
+  "Materials Ordered",
+  "Scaffold In Situ",
   "Booked",
+  "In Progress",
   "Completed",
+  "Not Proceeding",
   "Lost",
   "Archived"
 ];
@@ -109,7 +113,7 @@ export async function getAssistantPromptContext(routeContext?: AssistantRouteCon
   return {
     businessId: businessResult.data?.id ?? (await getBusinessId()),
     businessName: businessResult.data?.business_name ?? "We Are Roofing UK Ltd",
-    openJobsCount: (jobsResult.data ?? []).filter((job) => !["Completed", "Lost", "Archived"].includes(job.status)).length,
+    openJobsCount: (jobsResult.data ?? []).filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)).length,
     pendingQuotesCount: (quotesResult.data ?? []).filter((quote) => ["Draft", "Needs Review", "Approved"].includes(quote.status)).length,
     currentJobSummary
   };

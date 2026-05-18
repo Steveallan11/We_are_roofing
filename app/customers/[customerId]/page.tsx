@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { DeleteCustomerAction } from "@/components/customers/delete-customer-action";
 import { JobCard } from "@/components/jobs/job-card";
 import { getCustomers, getJobs } from "@/lib/data";
 import { currency, formatDate } from "@/lib/utils";
@@ -63,7 +64,16 @@ export default async function CustomerDetailPage({ params }: Props) {
             <div className="mt-4 grid gap-3 text-sm">
               <Summary label="Jobs" value={customerJobs.length.toString()} />
               <Summary label="Lifetime Value" value={currency(lifetimeValue)} />
-              <Summary label="Open Jobs" value={customerJobs.filter((job) => !["Completed", "Lost", "Archived"].includes(job.status)).length.toString()} />
+              <Summary label="Open Jobs" value={customerJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)).length.toString()} />
+            </div>
+          </div>
+          <div className="card p-5">
+            <p className="section-kicker text-[0.65rem] uppercase">Danger Zone</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">
+              Test phase only. This permanently removes the customer and all linked jobs/files.
+            </p>
+            <div className="mt-4">
+              <DeleteCustomerAction customerId={customer.id} customerName={customer.full_name} jobCount={customerJobs.length} />
             </div>
           </div>
         </aside>

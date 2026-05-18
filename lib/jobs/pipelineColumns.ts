@@ -32,6 +32,6 @@ export const PIPELINE_COLUMNS = [
     label: "Active",
     color: "#10b981",
     icon: "calendar",
-    statuses: ["Accepted", "Materials Needed", "Booked"]
+    statuses: ["Accepted", "Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress"]
   }
 ] as const;

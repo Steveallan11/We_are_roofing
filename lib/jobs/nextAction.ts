@@ -39,7 +39,7 @@ export function daysSince(value?: string | null) {
 export function needsAttention(job: JobForAction) {
   const sentDays = daysSince(job.quote_sent_at);
   return (
-    (isPastDate(job.follow_up_date) && !["Completed", "Lost", "Archived"].includes(job.status)) ||
+    (isPastDate(job.follow_up_date) && !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)) ||
     job.status === "Ready To Send" ||
     (job.status === "Quote Sent" && sentDays != null && sentDays >= 7) ||
     isToday(job.survey_date)
@@ -67,8 +67,12 @@ export function getNextAction(job: JobForAction): JobAction {
   if (job.status === "Follow-Up Needed") return { label: "Follow Up", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
   if (job.status === "Accepted") return { label: "Book In", href: `/jobs/${job.id}`, kind: "primary" };
   if (job.status === "Materials Needed") return { label: "Order Materials", href: `/jobs/${job.id}/materials`, kind: "primary" };
+  if (job.status === "Materials Ordered") return { label: "Confirm Delivery", href: `/jobs/${job.id}/materials`, kind: "primary" };
+  if (job.status === "Scaffold In Situ") return { label: "Start Work", href: `/jobs/${job.id}`, kind: "primary" };
   if (job.status === "Booked") return { label: "View Job Sheet", href: `/jobs/${job.id}`, kind: "primary" };
+  if (job.status === "In Progress") return { label: "Complete Job", href: `/jobs/${job.id}`, kind: "primary" };
   if (job.status === "Completed") return { label: "Create Invoice", href: `/jobs/${job.id}`, kind: "primary" };
+  if (job.status === "Not Proceeding") return { label: "Archive", href: `/jobs/${job.id}`, kind: "secondary" };
   return { label: "Open Job", href: `/jobs/${job.id}`, kind: "primary" };
 }
 
@@ -77,7 +81,7 @@ export function getSecondaryAction(job: JobForAction): JobAction {
   if (job.status === "Survey Complete") return { label: "View Survey", href: `/jobs/${job.id}/survey`, kind: "secondary" };
   if (job.status === "Quote Drafted" || job.status === "Ready To Send") return { label: "Preview Quote", href: `/jobs/${job.id}/quote`, kind: "secondary" };
   if (job.status === "Quote Sent") return { label: "View Quote", href: `/jobs/${job.id}/quote`, kind: "secondary" };
-  if (job.status === "Booked") return { label: "Check Materials", href: `/jobs/${job.id}/materials`, kind: "secondary" };
+  if (["Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress"].includes(job.status)) return { label: "Check Materials", href: `/jobs/${job.id}/materials`, kind: "secondary" };
   return { label: "Open Job", href: `/jobs/${job.id}`, kind: "secondary" };
 }
 
