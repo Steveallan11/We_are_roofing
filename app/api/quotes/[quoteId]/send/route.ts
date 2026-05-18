@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { getJobBundle } from "@/lib/data";
+import { quoteSentEmail } from "@/lib/email/templates";
+import { sendEmail } from "@/lib/email/sendEmail";
 import { persistQuoteArtifacts } from "@/lib/quote-engine";
+import { sendSMS, SMS_TEMPLATES } from "@/lib/sms/sendSMS";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -48,23 +50,17 @@ export async function POST(request: Request, { params }: Props) {
 
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);
 
-  let providerMessageId: string | null = null;
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
-      to: [body.to_email],
-      subject: body.subject,
-      html: `<div style="font-family:Arial,sans-serif;white-space:pre-line">${body.body}</div>`,
-      attachments: [
-        {
-          filename: `${quote.quote_ref}.pdf`,
-          content: artifacts.pdf.toString("base64")
-        }
-      ]
-    });
-    providerMessageId = result.data?.id ?? null;
-  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
+  const quoteUrl = `${appUrl}/quote/${quoteId}`;
+  const emailResult = await sendEmail({
+    to: body.to_email,
+    subject: body.subject,
+    html: quoteSentEmail({ customerName: bundle.customer.full_name, quote, quoteUrl }),
+    text: `${body.body}\n\nView your quote: ${quoteUrl}`,
+    jobId: quote.job_id,
+    quoteId,
+    templateType: "quote_sent"
+  });
 
   const { data: sentQuote, error: updateError } = await supabase
     .from("quotes")
@@ -91,21 +87,25 @@ export async function POST(request: Request, { params }: Props) {
     })
     .eq("id", quote.job_id);
 
-  await supabase.from("email_logs").insert({
+  if (bundle.customer.phone) {
+    await sendSMS({
+      to: bundle.customer.phone,
+      message: SMS_TEMPLATES.quote_sent(bundle.customer.full_name, quote.quote_ref),
+      jobId: quote.job_id,
+      templateType: "quote_sent"
+    }).catch((smsError) => console.warn("Quote SMS failed:", smsError));
+  }
+
+  await supabase.from("nurture_sequences").insert({
     job_id: quote.job_id,
     quote_id: quoteId,
-    to_email: body.to_email,
-    subject: body.subject,
-    body: body.body,
-    provider_message_id: providerMessageId,
-    sent_at: new Date().toISOString(),
-    status: process.env.RESEND_API_KEY ? "Sent" : "Logged - no provider configured"
+    status: "active"
   });
 
   return NextResponse.json({
     ok: true,
     quoteId,
-    provider_message_id: providerMessageId,
+    provider_message_id: emailResult.id,
     pdf_url: artifacts.pdfUrl,
     message: process.env.RESEND_API_KEY
       ? "Quote email sent and saved."

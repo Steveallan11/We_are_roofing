@@ -56,9 +56,9 @@ export function getAttentionReason(job: JobForAction) {
 }
 
 export function getNextAction(job: JobForAction): JobAction {
-  if (job.status === "New Lead") return { label: "Book Survey", href: `/jobs/${job.id}/survey`, kind: "primary" };
+  if (job.status === "New Lead") return { label: "Book Survey", href: `/jobs/${job.id}/book-survey`, kind: "primary" };
   if (job.status === "Survey Needed" && isPastDate(job.follow_up_date)) return { label: "Chase Up", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
-  if (job.status === "Survey Needed") return { label: "Book Survey", href: `/jobs/${job.id}/survey`, kind: "primary" };
+  if (job.status === "Survey Needed") return { label: "Book Survey", href: `/jobs/${job.id}/book-survey`, kind: "primary" };
   if (job.status === "Survey Complete") return { label: "Generate Quote", href: `/jobs/${job.id}/survey`, kind: "primary" };
   if (job.status === "Ready For AI Quote") return { label: "Generate Quote", href: `/jobs/${job.id}/survey`, kind: "primary" };
   if (job.status === "Quote Drafted") return { label: "Review Quote", href: `/jobs/${job.id}/quote`, kind: "primary" };

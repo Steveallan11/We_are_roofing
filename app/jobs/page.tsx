@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { JobsWorkspace } from "@/components/jobs/jobs-workspace";
-import { getJobs } from "@/lib/data";
+import { WeatherStrip } from "@/components/weather/WeatherStrip";
+import { getBusiness, getJobs } from "@/lib/data";
 import { needsAttention } from "@/lib/jobs/nextAction";
 import type { PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
 import { currency } from "@/lib/utils";
@@ -15,7 +16,7 @@ const validFilters = new Set(["all", "attention", "new", "survey", "quoting", "s
 export default async function JobsPage({ searchParams }: Props) {
   const query = searchParams ? await searchParams : undefined;
   const initialFilter = validFilters.has(query?.filter ?? "") ? (query?.filter as PipelineGroupKey | "all" | "attention") : "all";
-  const jobs = await getJobs();
+  const [business, jobs] = await Promise.all([getBusiness(), getJobs()]);
   const activeJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
   const urgent = jobs.filter(needsAttention).length;
   const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
@@ -36,6 +37,9 @@ export default async function JobsPage({ searchParams }: Props) {
         </>
       }
     >
+      <section className="mb-4 card p-4">
+        <WeatherStrip location={business.weather_location ?? "Yateley"} />
+      </section>
       <JobsWorkspace initialFilter={initialFilter} jobs={jobs} />
     </AppShell>
   );

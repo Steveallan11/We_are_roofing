@@ -13,6 +13,7 @@ import {
 import { groupJobsIntoColumns } from "@/lib/job-workflow";
 import type {
   Business,
+  BookingRecord,
   Customer,
   DashboardStats,
   EmailLog,
@@ -25,6 +26,8 @@ import type {
   KnowledgeBaseRecord,
   PricingRuleRecord,
   QuoteRecord,
+  PaymentScheduleRecord,
+  PaymentStageRecord,
   SupplierRecord,
   SurveyRecord
 } from "@/lib/types";
@@ -234,6 +237,41 @@ export async function getSuppliers(): Promise<SupplierRecord[]> {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase.from("suppliers").select("*").eq("business_id", business.id).order("name", { ascending: true });
   return (data as SupplierRecord[] | null) ?? [];
+}
+
+export async function getBookings(): Promise<BookingRecord[]> {
+  if (!canUseSupabase()) return [];
+
+  const business = await getBusiness();
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*, jobs(*, customers(*))")
+    .eq("business_id", business.id)
+    .order("date", { ascending: true })
+    .order("time_start", { ascending: true });
+
+  if (error) {
+    console.warn("Bookings could not be loaded:", error.message);
+    return [];
+  }
+
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map((booking) => ({
+    ...(booking as unknown as BookingRecord),
+    job: booking.jobs as Job | null,
+    customer: (booking.jobs as { customers?: Customer | null } | null)?.customers ?? null
+  }));
+}
+
+export async function getPaymentSchedule(jobId: string): Promise<PaymentScheduleRecord | null> {
+  if (!canUseSupabase()) return null;
+
+  const supabase = createSupabaseAdminClient();
+  const { data: schedule } = await supabase.from("payment_schedules").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!schedule) return null;
+
+  const { data: stages } = await supabase.from("payment_stages").select("*").eq("schedule_id", schedule.id).order("stage_number", { ascending: true });
+  return { ...(schedule as PaymentScheduleRecord), stages: (stages as PaymentStageRecord[] | null) ?? [] };
 }
 
 export async function getKanbanColumns(): Promise<Array<KanbanColumn & { customer?: Customer | null; quote?: QuoteRecord | null }>> {

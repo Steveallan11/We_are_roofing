@@ -5,10 +5,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
+import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { QuoteActions } from "@/components/jobs/quote-actions";
+import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusPill } from "@/components/ui/status-pill";
-import { getJobBundle } from "@/lib/data";
+import { getJobBundle, getPaymentSchedule } from "@/lib/data";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
@@ -21,7 +23,7 @@ type Props = {
 
 export default async function JobDetailPage({ params }: Props) {
   const { jobId } = await params;
-  const bundle = await getJobBundle(jobId);
+  const [bundle, paymentSchedule] = await Promise.all([getJobBundle(jobId), getPaymentSchedule(jobId)]);
 
   if (!bundle) {
     notFound();
@@ -134,6 +136,9 @@ export default async function JobDetailPage({ params }: Props) {
               </div>
             </div>
           </div>
+
+          <ScheduleWorks job={bundle.job} />
+          <PaymentSchedule initialSchedule={paymentSchedule} job={bundle.job} quote={bundle.quote ?? null} />
 
           <div className="card p-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

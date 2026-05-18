@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { MetricCard } from "@/components/layout/metric-card";
 import { JobCard } from "@/components/jobs/job-card";
+import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { getBusiness, getCustomers, getJobs } from "@/lib/data";
 import { PIPELINE_GROUPS } from "@/lib/jobs/pipelineGroups";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
@@ -46,6 +47,16 @@ export default async function DashboardPage() {
         <MetricCard hint="Estimated value across active jobs" label="Pipeline Value" value={currency(pipelineValue)} />
         <MetricCard hint="Completed jobs this month" label="Revenue This Month" value={currency(revenueThisMonth)} />
         <MetricCard hint="Saved customer records" label="Customers" value={customers.length} />
+      </section>
+
+      <section className="mt-4 card p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="section-kicker text-[0.65rem] uppercase">Weather</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">Roofing forecast for booking surveys and planning site work.</p>
+          </div>
+          <WeatherStrip location={business.weather_location ?? "Yateley"} />
+        </div>
       </section>
 
       <section className="mt-6 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">

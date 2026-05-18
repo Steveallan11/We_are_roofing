@@ -299,6 +299,14 @@ export type Job = {
   urgency?: string | null;
   source?: string | null;
   survey_date?: string | null;
+  survey_time?: string | null;
+  survey_duration?: number | null;
+  survey_confirmed?: boolean | null;
+  survey_notes?: string | null;
+  survey_address?: string | null;
+  start_date?: string | null;
+  expected_end_date?: string | null;
+  actual_end_date?: string | null;
   quote_sent_at?: string | null;
   follow_up_date?: string | null;
   accepted_at?: string | null;
@@ -308,6 +316,29 @@ export type Job = {
   internal_notes?: string | null;
   created_at?: string;
   updated_at?: string;
+};
+
+export type BookingRecord = {
+  id: string;
+  business_id?: string | null;
+  job_id?: string | null;
+  booking_type: "survey" | "start" | "inspection" | "other";
+  title?: string | null;
+  date: string;
+  time_start?: string | null;
+  time_end?: string | null;
+  duration_mins?: number | null;
+  address?: string | null;
+  postcode?: string | null;
+  notes?: string | null;
+  status: "tentative" | "confirmed" | "completed" | "cancelled" | "rescheduled";
+  confirmed_at?: string | null;
+  cancelled_at?: string | null;
+  reschedule_reason?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  job?: Job | null;
+  customer?: Customer | null;
 };
 
 export type SurveyRecord = {
@@ -541,6 +572,42 @@ export type EmailLog = {
   provider_message_id?: string | null;
   sent_at?: string;
   status: string;
+  template_type?: string | null;
+  channel?: "email" | "sms" | null;
+  to_phone?: string | null;
+  scheduled_at?: string | null;
+  opened_at?: string | null;
+  clicked_at?: string | null;
+  resend_id?: string | null;
+  twilio_sid?: string | null;
+  sequence_day?: number | null;
+};
+
+export type PaymentScheduleRecord = {
+  id: string;
+  job_id: string;
+  quote_id?: string | null;
+  business_id?: string | null;
+  created_at?: string;
+  stages?: PaymentStageRecord[];
+};
+
+export type PaymentStageRecord = {
+  id: string;
+  schedule_id: string;
+  job_id: string;
+  stage_name: string;
+  stage_number: number;
+  percentage?: number | null;
+  amount?: number | null;
+  due_trigger?: string | null;
+  due_date?: string | null;
+  status: "pending" | "invoiced" | "paid" | "overdue";
+  invoice_id?: string | null;
+  paid_at?: string | null;
+  payment_ref?: string | null;
+  notes?: string | null;
+  created_at?: string;
 };
 
 export type JobBundle = {

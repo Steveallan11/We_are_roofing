@@ -76,6 +76,12 @@ const NAV: NavGroup[] = [
     section: "Tools",
     items: [
       {
+        id: "calendar",
+        label: "Calendar",
+        href: "/calendar",
+        icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+      },
+      {
         id: "knowledge",
         label: "Knowledge",
         href: "/knowledge",
