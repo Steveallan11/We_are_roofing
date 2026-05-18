@@ -19,7 +19,7 @@ export function StatusBadge({ status }: Props) {
   const colors = quoteStyles[status] ?? getStatusColor(status as JobStatus);
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
+      className="inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-1 font-ui text-[9px] font-bold uppercase tracking-[0.06em]"
       style={{ background: colors.bg, borderColor: colors.dot, color: colors.text }}
     >
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: colors.dot }} />

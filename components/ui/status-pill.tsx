@@ -8,7 +8,7 @@ type Props = {
 };
 
 const statusStyles: Record<string, string> = {
-  "New Lead": "border-[rgba(255,255,255,0.18)] bg-[rgba(255,255,255,0.06)] text-[var(--text)]",
+  "New Lead": "border-[rgba(59,130,246,0.30)] bg-[rgba(59,130,246,0.12)] text-[#3b82f6]",
   "Survey Needed": "border-[rgba(84,160,255,0.38)] bg-[rgba(84,160,255,0.12)] text-[#b7d2ff]",
   "Survey Complete": "border-[rgba(212,175,55,0.35)] bg-[rgba(212,175,55,0.12)] text-[var(--gold-l)]",
   "Ready For AI Quote": "border-[rgba(212,175,55,0.35)] bg-[rgba(212,175,55,0.12)] text-[var(--gold-l)]",
@@ -33,7 +33,7 @@ export function StatusPill({ status }: Props) {
   const colors = statusStyles[status] ? null : getStatusColor(status as JobStatus);
   return (
     <span
-      className={cn("status-pill", statusStyles[status] ?? "surface-muted text-[var(--text)]")}
+      className={cn("status-pill font-ui uppercase tracking-[0.06em]", statusStyles[status] ?? "surface-muted text-[var(--text)]")}
       style={colors ? { background: colors.bg, borderColor: colors.dot, color: colors.text } : undefined}
     >
       {label}
