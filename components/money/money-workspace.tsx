@@ -78,20 +78,46 @@ export function MoneyWorkspace({ jobs }: Props) {
         </p>
       </div>
 
-      {tab === "quotes" ? <QuotesTab quotes={quotes} /> : <InvoicesTab invoices={invoices} />}
+      {tab === "quotes" ? <QuotesTab onInvoiceCreated={() => setTab("invoices")} quotes={quotes} /> : <InvoicesTab invoices={invoices} />}
     </div>
   );
 }
 
-function QuotesTab({ quotes }: { quotes: Array<{ job: MoneyJob; quote: QuoteRecord }> }) {
+function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob; quote: QuoteRecord }>; onInvoiceCreated: () => void }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function createInvoice(job: MoneyJob) {
+    setMessage(null);
+    setError(null);
+    setActiveJobId(job.id);
+    const response = await fetch(`/api/jobs/${job.id}/invoices`, { method: "POST" });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
+    setActiveJobId(null);
+    if (!response.ok || !result?.ok) {
+      setError(result?.error || "Invoice could not be created.");
+      return;
+    }
+    setMessage([result.message, result.warning].filter(Boolean).join(" ") || "Invoice created.");
+    onInvoiceCreated();
+    startTransition(() => router.refresh());
+  }
+
   if (quotes.length === 0) {
     return <EmptyState actionHref="/jobs" actionLabel="Open Jobs" message="Generate a quote from a completed survey and it will appear here." title="No quotes yet" />;
   }
 
   return (
     <div className="grid gap-3">
+      {message ? <p className="rounded-2xl border border-[#10b981]/30 bg-[#10b981]/10 px-4 py-3 text-sm text-[#7ce3a6]">{message}</p> : null}
+      {error ? <p className="rounded-2xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ff9a91]">{error}</p> : null}
       {quotes.map(({ job, quote }) => {
         const zeroLines = quote.cost_breakdown?.filter((line) => Number(line.cost ?? 0) === 0) ?? [];
+        const existingInvoice = (job.invoices ?? []).find((invoice) => invoice.quote_id === quote.id && invoice.status !== "Void");
+        const canCreateInvoice = quote.status === "Accepted" && !existingInvoice;
         return (
           <article className="card p-4" key={quote.id}>
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -110,6 +136,11 @@ function QuotesTab({ quotes }: { quotes: Array<{ job: MoneyJob; quote: QuoteReco
                     Pricing needed for {zeroLines.slice(0, 3).map((line) => line.item).join(", ")}
                   </p>
                 ) : null}
+                {existingInvoice ? (
+                  <p className="mt-3 rounded-2xl border border-[#10b981]/30 bg-[#10b981]/10 px-3 py-2 text-sm text-[#7ce3a6]">
+                    Invoice already filed: {existingInvoice.invoice_ref} | {existingInvoice.status}
+                  </p>
+                ) : null}
               </div>
               <div className="shrink-0 text-left md:text-right">
                 <p className="font-display text-3xl text-[var(--gold-l)]">{currency(Number(quote.total ?? 0))}</p>
@@ -117,15 +148,26 @@ function QuotesTab({ quotes }: { quotes: Array<{ job: MoneyJob; quote: QuoteReco
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link className="button-primary !px-4 !py-2 text-sm" href={`/jobs/${job.id}/quote` as Route}>
-                {getQuoteActionLabel(quote)}
-              </Link>
+              {canCreateInvoice ? (
+                <button className="button-primary !px-4 !py-2 text-sm" disabled={isPending || activeJobId === job.id} onClick={() => createInvoice(job)} type="button">
+                  {activeJobId === job.id ? "Creating..." : "Create Invoice"}
+                </button>
+              ) : (
+                <Link className="button-primary !px-4 !py-2 text-sm" href={`/jobs/${job.id}/quote` as Route}>
+                  {existingInvoice ? "Open Quote" : getQuoteActionLabel(quote)}
+                </Link>
+              )}
               <Link className="button-ghost !px-4 !py-2 text-sm" href={`/jobs/${job.id}` as Route}>
                 Open Job File
               </Link>
               {quote.pdf_url ? (
                 <a className="button-ghost !px-4 !py-2 text-sm" href={quote.pdf_url} rel="noreferrer" target="_blank">
                   Open PDF
+                </a>
+              ) : null}
+              {existingInvoice?.pdf_url ? (
+                <a className="button-secondary !px-4 !py-2 text-sm" href={existingInvoice.pdf_url} rel="noreferrer" target="_blank">
+                  Open Invoice PDF
                 </a>
               ) : null}
             </div>
@@ -162,6 +204,21 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
     startTransition(() => router.refresh());
   }
 
+  async function regeneratePdf(invoice: InvoiceRecord) {
+    setMessage(null);
+    setError(null);
+    setActiveId(invoice.id);
+    const response = await fetch(`/api/invoices/${invoice.id}/pdf`, { method: "POST" });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string } | null;
+    setActiveId(null);
+    if (!response.ok || !result?.ok) {
+      setError(result?.error || "Invoice PDF could not be generated.");
+      return;
+    }
+    setMessage(result.message || "Invoice PDF regenerated.");
+    startTransition(() => router.refresh());
+  }
+
   if (invoices.length === 0) {
     return <EmptyState actionHref="/jobs" actionLabel="Open Jobs" message="Create invoices from approved quotes and they will file here." title="No invoices yet" />;
   }
@@ -183,6 +240,9 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
               <p className="mt-1 text-sm text-[var(--muted)]">
                 Due {formatDate(invoice.due_date)} | Balance {currency(Number(invoice.balance_due ?? 0))}
               </p>
+              <p className={`mt-3 rounded-2xl border px-3 py-2 text-sm ${invoice.pdf_url ? "border-[#10b981]/30 bg-[#10b981]/10 text-[#7ce3a6]" : "border-[var(--gold)]/35 bg-[var(--gold)]/10 text-[var(--gold-l)]"}`}>
+                {invoice.pdf_url ? "PDF filed and ready" : "PDF not filed yet"}
+              </p>
             </div>
             <div className="text-left md:text-right">
               <p className="font-display text-3xl text-[var(--gold-l)]">{currency(Number(invoice.total ?? 0))}</p>
@@ -199,6 +259,9 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
                 Open Invoice
               </Link>
             )}
+            <button className="button-ghost !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => regeneratePdf(invoice)} type="button">
+              {activeId === invoice.id ? "Working..." : invoice.pdf_url ? "Regenerate PDF" : "Generate PDF"}
+            </button>
             {invoice.status !== "Paid" && invoice.status !== "Void" ? (
               <button className="button-secondary !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => markPaid(invoice)} type="button">
                 {activeId === invoice.id ? "Updating..." : "Mark Paid"}
