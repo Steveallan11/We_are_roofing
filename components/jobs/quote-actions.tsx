@@ -169,6 +169,11 @@ export function QuoteActions({ jobId, quote, customerEmail }: Props) {
           </button>
         ) : null}
         {quote ? (
+          <button className="button-primary" disabled={isPending} onClick={() => router.push(`/jobs/${jobId}/quote/preview`)} type="button">
+            Preview Before Send
+          </button>
+        ) : null}
+        {quote ? (
           <button className="button-secondary" disabled={isPending} onClick={() => runAction("generate")} type="button">
             {isPending ? "Refreshing..." : "Regenerate Draft"}
           </button>

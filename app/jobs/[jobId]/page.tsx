@@ -249,6 +249,9 @@ export default async function JobDetailPage({ params }: Props) {
                 <Link className="button-secondary !mt-4 w-full !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote`}>
                   Open Quote Review
                 </Link>
+                <Link className="button-primary !mt-2 w-full !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote/preview`}>
+                  Preview Before Send
+                </Link>
               </div>
             ) : (
               <div className="mt-4 space-y-3">
@@ -291,6 +294,27 @@ export default async function JobDetailPage({ params }: Props) {
 
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Documents</p>
+            <div className="mt-4 grid gap-2">
+              {bundle.quote ? (
+                <Link className="button-primary !justify-start !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote/preview`}>
+                  Preview Quote
+                </Link>
+              ) : null}
+              {bundle.invoices.map((invoice) => (
+                <Link className="button-secondary !justify-start !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/invoice/${invoice.id}/preview`} key={invoice.id}>
+                  Preview Invoice {invoice.invoice_ref}
+                </Link>
+              ))}
+              <Link className="button-ghost !justify-start !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/jobsheet/preview`}>
+                Preview Job Sheet
+              </Link>
+              <Link className="button-ghost !justify-start !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/survey/report/preview`}>
+                Preview Survey Report
+              </Link>
+              <Link className="button-ghost !justify-start !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/completion/preview`}>
+                Preview Completion Certificate
+              </Link>
+            </div>
             <div className="mt-4 grid gap-3">
               {bundle.documents.length > 0 ? (
                 Object.entries(documentGroups).map(([group, documents]) =>

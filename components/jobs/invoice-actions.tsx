@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { Route } from "next";
 import { useState, useTransition } from "react";
 import type { InvoiceRecord, QuoteRecord } from "@/lib/types";
 
@@ -88,6 +90,9 @@ export function InvoiceActions({ jobId, quote, invoices }: Props) {
             <p className="text-right font-display text-2xl text-[var(--gold-l)]">{formatCurrency(invoice.total)}</p>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
+            <Link className="button-primary !px-3 !py-2 text-sm" href={`/jobs/${jobId}/invoice/${invoice.id}/preview` as Route}>
+              Preview
+            </Link>
             {invoice.pdf_url ? (
               <a className="button-ghost !px-3 !py-2 text-sm" href={invoice.pdf_url} rel="noreferrer" target="_blank">
                 Open PDF
