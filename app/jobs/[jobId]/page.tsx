@@ -204,6 +204,9 @@ export default async function JobDetailPage({ params }: Props) {
                 <Link className="button-secondary" href={`/jobs/${bundle.job.id}/survey`}>
                   Open Survey Workspace
                 </Link>
+                <Link className="button-secondary" href={`/jobs/${bundle.job.id}/survey/video`}>
+                  Video Survey
+                </Link>
                 <Link className="button-ghost" href={roofSurveyHref}>
                   Roof Survey Tool
                 </Link>

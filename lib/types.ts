@@ -366,6 +366,15 @@ export type SurveyRecord = {
   survey_type?: string | null;
   roof_type?: string | null;
   no_photo_confirmation: boolean;
+  source_type?: "manual" | "video" | "voice" | "glasses_import" | null;
+  video_path?: string | null;
+  video_duration_sec?: number | null;
+  frames_extracted?: number | null;
+  frame_paths?: string[] | null;
+  ai_confidence?: number | null;
+  ai_raw_response?: Record<string, unknown> | null;
+  processing_status?: "pending" | "processing" | "complete" | "failed" | null;
+  processing_error?: string | null;
   adaptive_sections?: SurveyAdaptiveSections;
   created_at?: string;
   updated_at?: string;

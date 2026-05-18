@@ -1,7 +1,10 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const JOB_DOCUMENTS_BUCKET = "job-documents";
+export const JOB_PHOTOS_BUCKET = "job-photos";
 export const SURVEY_IMAGES_BUCKET = "survey-images";
+export const SURVEY_VIDEOS_BUCKET = "survey-videos";
+export const SURVEY_FRAMES_BUCKET = "survey-frames";
 
 type AdminSupabaseClient = ReturnType<typeof createSupabaseAdminClient>;
 
