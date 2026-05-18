@@ -127,6 +127,26 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
     );
   }
 
+  function addOptionLine(optionId: string) {
+    setOptions((current) =>
+      current.map((option) => {
+        if (option.id !== optionId) return option;
+        const cost_breakdown = [...option.cost_breakdown, { item: "Additional works", cost: 0, vat_applicable: true, notes: "" }];
+        return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
+      })
+    );
+  }
+
+  function deleteOptionLine(optionId: string, index: number) {
+    setOptions((current) =>
+      current.map((option) => {
+        if (option.id !== optionId) return option;
+        const cost_breakdown = option.cost_breakdown.filter((_, lineIndex) => lineIndex !== index);
+        return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
+      })
+    );
+  }
+
   function applyRates() {
     const { updated, pricingNotes: newNotes } = applyRateCardToCostBreakdown(costBreakdown, rateCard);
     setCostBreakdown(updated);
@@ -260,18 +280,53 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                 </label>
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
-                    <div className="grid gap-3 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[1fr_120px]" key={`${option.id}-${line.item}-${index}`}>
-                      <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
-                      <input className="field" onChange={(event) => updateOptionLine(option.id, index, { cost: Number(event.target.value || 0) })} step="0.01" type="number" value={line.cost} />
+                    <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
+                      <div className="grid gap-3 md:grid-cols-[1fr_120px_92px_80px]">
+                        <label className="block">
+                          <span className="label">Item</span>
+                          <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
+                        </label>
+                        <label className="block">
+                          <span className="label">Price</span>
+                          <input className="field" inputMode="decimal" onChange={(event) => updateOptionLine(option.id, index, { cost: Number(event.target.value || 0) })} step="0.01" type="number" value={line.cost} />
+                        </label>
+                        <label className="mt-6 flex min-h-11 items-center gap-2 text-sm text-[var(--text)]">
+                          <input checked={line.vat_applicable} onChange={(event) => updateOptionLine(option.id, index, { vat_applicable: event.target.checked })} type="checkbox" />
+                          VAT
+                        </label>
+                        <button className="button-ghost mt-5 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteOptionLine(option.id, index)} type="button">
+                          Delete
+                        </button>
+                      </div>
+                      <label className="mt-3 block">
+                        <span className="label">Notes</span>
+                        <textarea className="field min-h-16" onChange={(event) => updateOptionLine(option.id, index, { notes: event.target.value })} value={line.notes} />
+                      </label>
                     </div>
                   ))}
+                  <button className="button-ghost !px-3 !py-2 text-xs" onClick={() => addOptionLine(option.id)} type="button">
+                    + Add line to {option.label}
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-2 rounded-xl border border-[var(--border)] bg-black/10 p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--muted)]">Subtotal</span>
+                    <span>{currency(option.subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--muted)]">VAT</span>
+                    <span>{currency(option.vat_amount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-semibold text-[var(--gold-l)]">
+                    <span>Total</span>
+                    <span>{currency(option.total)}</span>
+                  </div>
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                     <input checked={option.recommended} onChange={() => updateOption(option.id, { recommended: true })} type="radio" />
                     Mark recommended
                   </label>
-                  <p className="font-display text-2xl text-[var(--gold-l)]">{currency(option.total)}</p>
                 </div>
               </div>
             ))}
