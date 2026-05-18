@@ -34,18 +34,31 @@ export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: Quo
         <p style={paragraphStyle}>{quote.roof_report}</p>
         <SectionHead>Scope of Works & Pricing</SectionHead>
         <p style={{ ...paragraphStyle, marginBottom: 14 }}>{quote.scope_of_works}</p>
-        <LineItemTable
-          rows={quote.cost_breakdown.map((line) => ({
-            description: line.item,
-            notes: Number(line.cost || 0) === 0 ? `${line.notes || ""} Rate not set - check Rate Card.`.trim() : line.notes,
-            amount: currency(line.cost)
-          }))}
-          totals={[
-            { label: "Subtotal", value: currency(quote.subtotal) },
-            { label: "VAT", value: currency(quote.vat_amount) },
-            { label: "Total", value: currency(quote.total), strong: true }
-          ]}
-        />
+        {quote.options?.length ? (
+          <div style={{ display: "grid", gridTemplateColumns: quote.options.length > 1 ? "1fr 1fr" : "1fr", gap: 14 }}>
+            {quote.options.map((option) => (
+              <div key={option.id} style={{ border: `2px solid ${option.recommended ? DOC.gold : DOC.lightRule}`, borderRadius: 14, padding: 14 }}>
+                {option.recommended ? <p style={{ margin: 0, color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>Recommended</p> : null}
+                <h3 style={{ margin: "8px 0 4px", color: DOC.body, fontFamily: DOC.fontSerif, fontSize: 22 }}>{option.label}</h3>
+                <p style={{ ...paragraphStyle, margin: "0 0 10px" }}>{option.description}</p>
+                <p style={{ margin: 0, color: DOC.gold, fontFamily: DOC.fontSerif, fontSize: 26, fontWeight: 700 }}>{currency(option.total)}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <LineItemTable
+            rows={quote.cost_breakdown.map((line) => ({
+              description: line.item,
+              notes: Number(line.cost || 0) === 0 ? `${line.notes || ""} Rate not set - check Rate Card.`.trim() : line.notes,
+              amount: currency(line.cost)
+            }))}
+            totals={[
+              { label: "Subtotal", value: currency(quote.subtotal) },
+              { label: "VAT", value: currency(quote.vat_amount) },
+              { label: "Total", value: currency(quote.total), strong: true }
+            ]}
+          />
+        )}
         <SectionHead>Guarantee, Notes & Acceptance</SectionHead>
         <p style={paragraphStyle}>{quote.guarantee_text}</p>
         <div style={{ marginTop: 16, background: "#f2eddf", borderLeft: `4px solid ${DOC.gold}`, padding: 16, borderRadius: 12 }}>

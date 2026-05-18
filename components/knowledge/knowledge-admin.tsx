@@ -30,6 +30,9 @@ export function KnowledgeAdmin() {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadResults, setUploadResults] = useState<BulkUploadResult[]>([]);
+  const [syncingKb, setSyncingKb] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   function addFiles(files: FileList | File[]) {
     const nextFiles = Array.from(files);
@@ -93,6 +96,23 @@ export function KnowledgeAdmin() {
     startTransition(() => router.refresh());
   }
 
+  async function syncHistoricalQuotes() {
+    setSyncingKb(true);
+    setSyncMessage(null);
+    setSyncError(null);
+    const response = await fetch("/api/knowledge/sync");
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; synced?: number; total?: number; error?: string } | null;
+    setSyncingKb(false);
+
+    if (!response.ok || !result?.ok) {
+      setSyncError(result?.error || "Knowledge sync failed.");
+      return;
+    }
+
+    setSyncMessage(`Synced ${result.synced ?? 0} of ${result.total ?? 0} historical quotes into the Knowledge Base.`);
+    startTransition(() => router.refresh());
+  }
+
   return (
     <div className="stack">
       <div className="card p-5">
@@ -104,6 +124,9 @@ export function KnowledgeAdmin() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button className="button-ghost" disabled={syncingKb || isPending} onClick={syncHistoricalQuotes} type="button">
+              {syncingKb ? "Syncing KB..." : "Sync Historical Quotes to KB"}
+            </button>
             <select
               className="field min-w-[220px]"
               disabled={isPending}
@@ -119,6 +142,8 @@ export function KnowledgeAdmin() {
             </button>
           </div>
         </div>
+        {syncMessage ? <p className="mt-4 text-sm text-[#7ce3a6]">{syncMessage}</p> : null}
+        {syncError ? <p className="mt-4 text-sm text-[#ff9a91]">{syncError}</p> : null}
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-2xl border border-[var(--border)] p-4">
             <p className="label">Quotes Source</p>

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { CostLineItem, QuoteRecord } from "@/lib/types";
+import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
 import { currency } from "@/lib/utils";
 
@@ -35,6 +35,23 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
       : [{ item: "Main works", cost: 0, vat_applicable: true, notes: "Draft pricing line item" }];
     return rateCard.length ? applyRateCardToCostBreakdown(initial, rateCard).updated : initial;
   });
+  const [options, setOptions] = useState<QuoteOption[]>(() => quote?.options ?? []);
+  const [messages, setMessages] = useState<Array<{ id: string; sender_type: string; sender_name?: string | null; message: string; created_at?: string }>>([]);
+  const [reply, setReply] = useState("");
+
+  useEffect(() => {
+    if (!quote?.id) return;
+    let active = true;
+    fetch(`/api/quotes/${quote.id}/message`)
+      .then((response) => response.json())
+      .then((result) => {
+        if (active && result?.ok) setMessages(result.messages ?? []);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [quote?.id]);
 
   const totals = useMemo(() => {
     const subtotal = Math.round(costBreakdown.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
@@ -58,6 +75,56 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
 
   function updateLine(index: number, updates: Partial<CostLineItem>) {
     setCostBreakdown((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...updates } : item)));
+  }
+
+  function calculateOption(lines: CostLineItem[]) {
+    const subtotal = Math.round(lines.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
+    const vatAmount =
+      Math.round(lines.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
+    return { subtotal, vat_amount: vatAmount, total: subtotal + vatAmount };
+  }
+
+  function makeOption(id: string, label: string, recommended: boolean, lines = costBreakdown): QuoteOption {
+    const pricedLines = lines.map((line) => ({ ...line, cost: Number(line.cost || 0) }));
+    return {
+      id,
+      label,
+      description: recommended ? "Recommended specification based on the current survey and quote draft." : "Alternative specification for comparison.",
+      cost_breakdown: pricedLines,
+      recommended,
+      ...calculateOption(pricedLines)
+    };
+  }
+
+  function addOption() {
+    setOptions((current) => {
+      if (current.length === 0) {
+        return [makeOption("option_a", "Option A - Standard", true), makeOption("option_b", "Option B - Alternative", false)];
+      }
+      const nextLetter = String.fromCharCode(65 + current.length);
+      return [...current, makeOption(`option_${nextLetter.toLowerCase()}`, `Option ${nextLetter} - Alternative`, false)];
+    });
+  }
+
+  function updateOption(optionId: string, updates: Partial<QuoteOption>) {
+    setOptions((current) =>
+      current.map((option) => {
+        if (option.id !== optionId) return updates.recommended ? { ...option, recommended: false } : option;
+        const next = { ...option, ...updates };
+        const totals = calculateOption(next.cost_breakdown);
+        return { ...next, ...totals };
+      })
+    );
+  }
+
+  function updateOptionLine(optionId: string, index: number, updates: Partial<CostLineItem>) {
+    setOptions((current) =>
+      current.map((option) => {
+        if (option.id !== optionId) return option;
+        const cost_breakdown = option.cost_breakdown.map((line, lineIndex) => (lineIndex === index ? { ...line, ...updates } : line));
+        return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
+      })
+    );
   }
 
   function applyRates() {
@@ -96,7 +163,8 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
         missing_info: missingInfo
           .split("\n")
           .map((item) => item.trim())
-          .filter(Boolean)
+          .filter(Boolean),
+        options
       })
     });
 
@@ -123,6 +191,22 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
     startTransition(() => router.refresh());
   }
 
+  async function sendReply() {
+    if (!reply.trim()) return;
+    const response = await fetch(`/api/quotes/${quoteId}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sender_type: "admin", sender_name: "Andy", message: reply })
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: (typeof messages)[number]; error?: string } | null;
+    if (!response.ok || !result?.ok) {
+      setError(result?.error || "Reply could not be sent.");
+      return;
+    }
+    if (result.message) setMessages((current) => [...current, result.message as (typeof messages)[number]]);
+    setReply("");
+  }
+
   return (
     <div className="stack">
       <div className="card p-5">
@@ -145,6 +229,58 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-kicker text-[0.65rem] uppercase">Quote Options</p>
+            <p className="mt-2 text-sm text-[var(--muted)]">Create Option A/B/C comparisons before the customer accepts a route.</p>
+          </div>
+          <button className="button-ghost" onClick={addOption} type="button">
+            {options.length ? "Add Option" : "Create Option A/B"}
+          </button>
+        </div>
+        {options.length > 0 ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            {options.map((option) => (
+              <div
+                className="rounded-2xl border p-4"
+                key={option.id}
+                style={{ borderColor: option.recommended ? "var(--gold)" : "var(--border)", background: "var(--surface-deep)" }}
+              >
+                {option.recommended ? <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">Recommended</p> : null}
+                <label className="mt-3 block">
+                  <span className="label">Option label</span>
+                  <input className="field" onChange={(event) => updateOption(option.id, { label: event.target.value })} value={option.label} />
+                </label>
+                <label className="mt-3 block">
+                  <span className="label">Customer description</span>
+                  <textarea className="field min-h-20" onChange={(event) => updateOption(option.id, { description: event.target.value })} value={option.description} />
+                </label>
+                <div className="mt-4 space-y-3">
+                  {option.cost_breakdown.map((line, index) => (
+                    <div className="grid gap-3 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[1fr_120px]" key={`${option.id}-${line.item}-${index}`}>
+                      <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
+                      <input className="field" onChange={(event) => updateOptionLine(option.id, index, { cost: Number(event.target.value || 0) })} step="0.01" type="number" value={line.cost} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input checked={option.recommended} onChange={() => updateOption(option.id, { recommended: true })} type="radio" />
+                    Mark recommended
+                  </label>
+                  <p className="font-display text-2xl text-[var(--gold-l)]">{currency(option.total)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl border border-[var(--border)] bg-black/10 p-4 text-sm text-[var(--muted)]">
+            No quote options yet. The single cost breakdown above is still used unless you create options.
+          </p>
+        )}
       </div>
 
       <div className="card p-5">
@@ -315,6 +451,28 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
             </label>
             <textarea className="field min-h-24" id="missing-info" onChange={(event) => setMissingInfo(event.target.value)} value={missingInfo} />
           </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <p className="section-kicker text-[0.65rem] uppercase">Customer Messages</p>
+        <div className="mt-4 space-y-3">
+          {messages.length ? (
+            messages.map((message) => (
+              <div className="rounded-2xl border border-[var(--border)] bg-black/10 p-4 text-sm" key={message.id}>
+                <p className="font-semibold text-white">{message.sender_type === "admin" ? "We Are Roofing" : message.sender_name || "Customer"}</p>
+                <p className="mt-2 text-[var(--muted)]">{message.message}</p>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-2xl border border-[var(--border)] bg-black/10 p-4 text-sm text-[var(--muted)]">No customer questions on this quote yet.</p>
+          )}
+        </div>
+        <div className="mt-4 flex flex-col gap-3 md:flex-row">
+          <textarea className="field min-h-20 md:flex-1" onChange={(event) => setReply(event.target.value)} placeholder="Reply to the customer..." value={reply} />
+          <button className="button-primary h-11" onClick={sendReply} type="button">
+            Send Reply
+          </button>
         </div>
       </div>
 

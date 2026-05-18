@@ -47,7 +47,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as SaveRatesBody;
   const business = await getBusiness();
-  const rates = (body.rates?.length ? body.rates : DEFAULT_RATES.map((rate) => ({ ...rate, rate: rate.default_rate, active: true }))).map((rate) => ({
+  const rates: RateCardEntry[] = (body.rates?.length ? body.rates : DEFAULT_RATES.map((rate) => ({ ...rate, rate: rate.default_rate, active: true }))).map((rate) => ({
     ...rate,
     rate: Number(rate.rate || rate.default_rate || 0)
   }));
@@ -66,10 +66,20 @@ export async function POST(request: Request) {
     flat_adjustment: rate.rate,
     uplift_multiplier: 1,
     active: rate.active !== false,
+    preferred_supplier_id: rate.preferred_supplier_id || null,
     notes: "Rate Card unit price"
   }));
 
-  const { error } = await supabase.from("pricing_rules").upsert(rows, { onConflict: "business_id,rule_name,rule_type" });
+  const deleteExisting = await supabase
+    .from("pricing_rules")
+    .delete()
+    .eq("business_id", business.id)
+    .not("rule_name", "is", null);
+  if (deleteExisting.error) {
+    return NextResponse.json({ ok: false, error: deleteExisting.error.message }, { status: 500 });
+  }
+
+  const { error } = await supabase.from("pricing_rules").insert(rows);
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

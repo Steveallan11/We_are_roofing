@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { getJobBundle } from "@/lib/data";
-import { currency } from "@/lib/utils";
+import { MaterialsEditor } from "@/components/materials/materials-editor";
+import { getJobBundle, getSuppliers } from "@/lib/data";
 
 type Props = {
   params: Promise<{ jobId: string }>;
@@ -10,7 +10,7 @@ type Props = {
 
 export default async function MaterialsPage({ params }: Props) {
   const { jobId } = await params;
-  const bundle = await getJobBundle(jobId);
+  const [bundle, suppliers] = await Promise.all([getJobBundle(jobId), getSuppliers()]);
   if (!bundle) notFound();
 
   return (
@@ -35,24 +35,8 @@ export default async function MaterialsPage({ params }: Props) {
           <p className="mt-2 text-sm text-[var(--muted)]">{bundle.job.property_address}</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {bundle.materials.map((material) => (
-            <div className="card p-5" key={material.id}>
-              <p className="section-kicker text-[0.65rem] uppercase">{material.category}</p>
-              <h3 className="mt-2 font-condensed text-2xl text-white">{material.item_name}</h3>
-              <p className="mt-2 text-sm text-[var(--text)]">
-                {material.quantity} {material.unit}
-              </p>
-              <p className="mt-1 text-sm text-[var(--muted)]">{material.required_status}</p>
-              <p className="mt-3 text-sm text-[var(--muted)]">{material.notes}</p>
-              {material.estimated_price ? (
-                <p className="mt-4 font-display text-2xl text-[var(--gold-l)]">{currency(material.estimated_price)}</p>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <MaterialsEditor initialMaterials={bundle.materials} jobId={bundle.job.id} quoteId={bundle.quote?.id ?? null} suppliers={suppliers} />
       </div>
     </AppShell>
   );
 }
-

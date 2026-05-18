@@ -25,6 +25,7 @@ import type {
   KnowledgeBaseRecord,
   PricingRuleRecord,
   QuoteRecord,
+  SupplierRecord,
   SurveyRecord
 } from "@/lib/types";
 
@@ -222,6 +223,17 @@ export async function getPricingRules(): Promise<PricingRuleRecord[]> {
     .order("year_from", { ascending: true, nullsFirst: false });
 
   return (data as PricingRuleRecord[] | null) ?? [];
+}
+
+export async function getSuppliers(): Promise<SupplierRecord[]> {
+  if (!canUseSupabase()) {
+    return [];
+  }
+
+  const business = await getBusiness();
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase.from("suppliers").select("*").eq("business_id", business.id).order("name", { ascending: true });
+  return (data as SupplierRecord[] | null) ?? [];
 }
 
 export async function getKanbanColumns(): Promise<Array<KanbanColumn & { customer?: Customer | null; quote?: QuoteRecord | null }>> {

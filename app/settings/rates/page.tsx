@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { RateCardEditor } from "@/components/settings/rate-card-editor";
 import { AppShell } from "@/components/layout/app-shell";
-import { getPricingRules } from "@/lib/data";
+import { getPricingRules, getSuppliers } from "@/lib/data";
 import { DEFAULT_RATES, mergeRateCardWithDefaults, pricingRulesToRateCard } from "@/lib/pricing/rateCard";
 
 export default async function RateCardPage() {
-  const rules = await getPricingRules();
+  const [rules, suppliers] = await Promise.all([getPricingRules(), getSuppliers()]);
   const savedRateRules = rules.filter((rule) => rule.rule_name && rule.flat_adjustment != null);
   const rates = savedRateRules.length
     ? mergeRateCardWithDefaults(pricingRulesToRateCard(savedRateRules))
@@ -21,7 +21,7 @@ export default async function RateCardPage() {
         </Link>
       }
     >
-      <RateCardEditor hasSavedRates={savedRateRules.length > 0} initialRates={rates} />
+      <RateCardEditor hasSavedRates={savedRateRules.length > 0} initialRates={rates} suppliers={suppliers} />
     </AppShell>
   );
 }

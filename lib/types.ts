@@ -22,6 +22,21 @@ export type CostLineItem = {
   cost: number;
   vat_applicable: boolean;
   notes: string;
+  quantity?: number;
+  unit?: string;
+  unit_rate?: number;
+  pricing_source?: string;
+};
+
+export type QuoteOption = {
+  id: string;
+  label: string;
+  description: string;
+  cost_breakdown: CostLineItem[];
+  subtotal: number;
+  vat_amount: number;
+  total: number;
+  recommended: boolean;
 };
 
 export type MaterialLineItem = {
@@ -345,6 +360,8 @@ export type QuoteRecord = {
   subtotal: number;
   vat_amount: number;
   total: number;
+  options?: QuoteOption[] | null;
+  accepted_option_id?: string | null;
   guarantee_text?: string | null;
   exclusions?: string | null;
   terms?: string | null;
@@ -366,6 +383,38 @@ export type MaterialRecord = MaterialLineItem & {
   id: string;
   job_id: string;
   quote_id?: string | null;
+  unit_cost?: number | null;
+  total_cost?: number | null;
+  actual_price?: number | null;
+  margin_pct?: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SupplierRecord = {
+  id: string;
+  business_id: string;
+  name: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  account_ref?: string | null;
+  notes?: string | null;
+  categories?: string[] | null;
+  is_preferred?: boolean | null;
+  created_at?: string;
+};
+
+export type QuoteMessageRecord = {
+  id: string;
+  quote_id: string;
+  job_id?: string | null;
+  sender_type: "customer" | "admin";
+  sender_name?: string | null;
+  sender_email?: string | null;
+  message: string;
+  read_at?: string | null;
   created_at?: string;
 };
 
@@ -418,6 +467,7 @@ export type PricingRuleRecord = {
   job_type?: string | null;
   uplift_multiplier: number;
   notes?: string | null;
+  preferred_supplier_id?: string | null;
   created_at?: string;
   updated_at?: string;
 };

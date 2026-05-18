@@ -2,14 +2,16 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { RateCardEntry } from "@/lib/pricing/rateCard";
+import type { SupplierRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type Props = {
   initialRates: RateCardEntry[];
   hasSavedRates: boolean;
+  suppliers?: SupplierRecord[];
 };
 
-export function RateCardEditor({ initialRates, hasSavedRates }: Props) {
+export function RateCardEditor({ initialRates, hasSavedRates, suppliers = [] }: Props) {
   const [rates, setRates] = useState(initialRates);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +26,10 @@ export function RateCardEditor({ initialRates, hasSavedRates }: Props) {
 
   function updateRate(item: string, category: string, value: number) {
     setRates((current) => current.map((rate) => (rate.item === item && rate.category === category ? { ...rate, rate: value } : rate)));
+  }
+
+  function updateSupplier(item: string, category: string, supplierId: string | null) {
+    setRates((current) => current.map((rate) => (rate.item === item && rate.category === category ? { ...rate, preferred_supplier_id: supplierId } : rate)));
   }
 
   async function saveRates() {
@@ -75,7 +81,7 @@ export function RateCardEditor({ initialRates, hasSavedRates }: Props) {
               <div className="grid gap-3">
                 {categoryRates.map((rate) => (
                   <div
-                    className="grid gap-3 rounded-2xl border border-[var(--border)] bg-black/10 p-4 md:grid-cols-[1.4fr_0.5fr_0.7fr]"
+                    className="grid gap-3 rounded-2xl border border-[var(--border)] bg-black/10 p-4 md:grid-cols-[1.4fr_0.5fr_0.7fr_0.9fr]"
                     key={`${rate.category}-${rate.item}`}
                   >
                     <div>
@@ -104,6 +110,24 @@ export function RateCardEditor({ initialRates, hasSavedRates }: Props) {
                         />
                       </div>
                       <p className="mt-1 text-[0.68rem] text-[var(--muted)]">{currency(rate.rate)} per {rate.unit}</p>
+                    </div>
+                    <div>
+                      <label className="label mb-1" htmlFor={`supplier-${rate.category}-${rate.item}`}>
+                        Supplier
+                      </label>
+                      <select
+                        className="field"
+                        id={`supplier-${rate.category}-${rate.item}`}
+                        onChange={(event) => updateSupplier(rate.item, rate.category, event.target.value || null)}
+                        value={rate.preferred_supplier_id ?? ""}
+                      >
+                        <option value="">No preference</option>
+                        {suppliers.map((supplier) => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.is_preferred ? "★ " : ""}{supplier.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 ))}

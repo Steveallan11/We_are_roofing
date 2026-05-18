@@ -23,16 +23,19 @@ type QuoteUpdateBody = {
   missing_info?: string[];
   pricing_notes?: string[];
   confidence?: "Low" | "Medium" | "High";
+  options?: Array<Record<string, unknown>>;
+  accepted_option_id?: string | null;
 };
 
 export async function PATCH(request: Request, { params }: Props) {
   const { quoteId } = await params;
   const body = (await request.json()) as QuoteUpdateBody;
 
-  const subtotal = Math.round((body.cost_breakdown ?? []).reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
+  const lineItems = body.cost_breakdown ?? [];
+  const subtotal = Math.round(lineItems.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
   const vatAmount =
     Math.round(
-      (body.cost_breakdown ?? [])
+      lineItems
         .filter((item) => item.vat_applicable)
         .reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100
     ) / 100;
@@ -61,7 +64,7 @@ export async function PATCH(request: Request, { params }: Props) {
   const vatRate = Number(business?.vat_rate ?? 20) / 100;
   const recomputedVat =
     Math.round(
-      (body.cost_breakdown ?? [])
+      lineItems
         .filter((item) => item.vat_applicable)
         .reduce((sum, item) => sum + Number(item.cost || 0) * vatRate, 0) * 100
     ) / 100;

@@ -11,6 +11,7 @@ export type RateCardEntry = RateCardInput & {
   id?: string;
   rate: number;
   active: boolean;
+  preferred_supplier_id?: string | null;
 };
 
 export type PricedLineItem = CostLineItem & {
@@ -78,7 +79,8 @@ export function pricingRulesToRateCard(rules: PricingRuleRecord[]): RateCardEntr
       unit: typeof rule.conditions?.unit === "string" ? rule.conditions.unit : "item",
       default_rate: Number(rule.flat_adjustment ?? 0),
       rate: Number(rule.flat_adjustment ?? 0),
-      active: rule.active !== false
+      active: rule.active !== false,
+      preferred_supplier_id: rule.preferred_supplier_id ?? null
     }));
 
   return entries.length > 0 ? entries : DEFAULT_RATES.map((rate) => ({ ...rate, rate: rate.default_rate, active: true }));

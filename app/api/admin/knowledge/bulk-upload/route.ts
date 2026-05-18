@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getBusiness } from "@/lib/data";
 import { parseKnowledgeUpload, createSourceRecordId } from "@/lib/knowledge-upload";
+import { syncHistoricalQuotesToKnowledgeBase } from "@/lib/knowledge-sync";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
   const results: UploadResult[] = [];
 
   for (const file of files) {
+    const historicalQuotesForKb: Array<Record<string, unknown>> = [];
     const result: UploadResult = {
       file_name: file.name,
       uploaded_url: null,
@@ -114,6 +116,23 @@ export async function POST(request: Request) {
               })
               .eq("id", byReference.data.id);
             if (update.error) throw update.error;
+            historicalQuotesForKb.push({
+              business_id: business.id,
+              title: record.title,
+              source_reference: record.sourceReference,
+              source_record_id: sourceRecordId,
+              source_url: result.uploaded_url,
+              source_date: record.sourceDate,
+              source_year: record.sourceYear,
+              roof_type: record.roofType,
+              job_type: record.jobType,
+              tags: record.tags,
+              imported_text: record.content,
+              scope_excerpt: record.scopeExcerpt,
+              materials_excerpt: record.materialsExcerpt,
+              original_total: record.originalTotal,
+              uplifted_reference_total: null
+            });
             result.updated_historical_quotes += 1;
             continue;
           }
@@ -150,7 +169,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const insert = await supabase.from("historical_quotes").insert({
+        const historicalQuotePayload = {
           business_id: business.id,
           title: record.title,
           source_reference: record.sourceReference,
@@ -167,10 +186,18 @@ export async function POST(request: Request) {
           materials_excerpt: record.materialsExcerpt,
           original_total: record.originalTotal,
           uplifted_reference_total: null
-        });
+        };
+
+        const insert = await supabase.from("historical_quotes").insert(historicalQuotePayload);
 
         if (insert.error) throw insert.error;
+        historicalQuotesForKb.push(historicalQuotePayload);
         result.inserted_historical_quotes += 1;
+      }
+
+      if (historicalQuotesForKb.length > 0) {
+        const synced = await syncHistoricalQuotesToKnowledgeBase(supabase, historicalQuotesForKb);
+        result.inserted_knowledge_entries += synced;
       }
     } catch (error) {
       result.error = error instanceof Error ? error.message : "Unable to process this file.";

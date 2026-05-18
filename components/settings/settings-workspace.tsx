@@ -58,8 +58,9 @@ export function SettingsWorkspace({ business }: Props) {
         </div>
       )}
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <SettingsTile href="/settings/rates" kicker="Pricing" title="Rate Card" text="Set the unit rates that stop quotes coming out at £0." />
+        <SettingsTile href="/settings/suppliers" kicker="Materials" title="Suppliers" text="Manage trade accounts and preferred suppliers for materials." />
         <SettingsTile href="/knowledge" kicker="AI Knowledge" title="Knowledge Base" text="Upload quote examples and Andrew-style wording for Gauge." />
         <SettingsTile href="/money" kicker="Finance" title="Money Workspace" text="Review quotes, invoices, payment status, and PDFs." />
       </section>
