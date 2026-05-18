@@ -131,56 +131,62 @@ create trigger conversations_updated_at
 before update on public.conversations
 for each row execute function update_updated_at_column();
 
+with target_business as (
+  select id
+  from public.businesses
+  order by id
+  limit 1
+),
+templates (name, category, channels, subject, body, is_auto, trigger_event) as (
+  values
+    (
+      'Survey Confirmation',
+      'survey',
+      array['email','sms'],
+      'Your roof survey is confirmed - {{job_ref}}',
+      'Hi {{first_name}}, your roof survey is confirmed for {{survey_date}} at {{survey_time}} at {{address}}. Our surveyor {{surveyor_name}} will be with you then. Any questions call 01252 000000. We Are Roofing',
+      true,
+      'survey_booked'
+    ),
+    (
+      'Survey Reminder',
+      'survey',
+      array['sms'],
+      null,
+      'Hi {{first_name}}, reminder: your roof survey is tomorrow at {{survey_time}}. We Are Roofing 01252 000000',
+      true,
+      'survey_day_before'
+    ),
+    (
+      'Quote Follow-Up Day 2',
+      'nurture',
+      array['email'],
+      'Any questions about your quote, {{first_name}}?',
+      'Hi {{first_name}}, just checking in on the quote we sent for the works at {{address}}. Happy to talk through anything or answer any questions - just reply here or call 01252 000000. Andy @ We Are Roofing',
+      true,
+      'quote_sent_day_2'
+    ),
+    (
+      'Works Starting Tomorrow',
+      'works',
+      array['sms','whatsapp'],
+      null,
+      'Hi {{first_name}}, our team will be at {{address}} tomorrow at {{start_time}} to start your roofing works. Any questions call 01252 000000. Andy @ We Are Roofing',
+      false,
+      null
+    ),
+    (
+      'Request Google Review',
+      'review',
+      array['sms','email'],
+      'Thank you from We Are Roofing - would you leave us a review?',
+      'Hi {{first_name}}, thank you for choosing We Are Roofing. If you were happy with the work, a Google review would mean a lot: https://g.page/r/weareroofing/review. Thank you, Andy',
+      true,
+      'job_completed'
+    )
+)
 insert into public.message_templates (business_id, name, category, channels, subject, body, is_auto, trigger_event)
-values
-  (
-    '6f9a6dca-a747-4a20-ab87-111808577bc7',
-    'Survey Confirmation',
-    'survey',
-    array['email','sms'],
-    'Your roof survey is confirmed - {{job_ref}}',
-    'Hi {{first_name}}, your roof survey is confirmed for {{survey_date}} at {{survey_time}} at {{address}}. Our surveyor {{surveyor_name}} will be with you then. Any questions call 01252 000000. We Are Roofing',
-    true,
-    'survey_booked'
-  ),
-  (
-    '6f9a6dca-a747-4a20-ab87-111808577bc7',
-    'Survey Reminder',
-    'survey',
-    array['sms'],
-    null,
-    'Hi {{first_name}}, reminder: your roof survey is tomorrow at {{survey_time}}. We Are Roofing 01252 000000',
-    true,
-    'survey_day_before'
-  ),
-  (
-    '6f9a6dca-a747-4a20-ab87-111808577bc7',
-    'Quote Follow-Up Day 2',
-    'nurture',
-    array['email'],
-    'Any questions about your quote, {{first_name}}?',
-    'Hi {{first_name}}, just checking in on the quote we sent for the works at {{address}}. Happy to talk through anything or answer any questions - just reply here or call 01252 000000. Andy @ We Are Roofing',
-    true,
-    'quote_sent_day_2'
-  ),
-  (
-    '6f9a6dca-a747-4a20-ab87-111808577bc7',
-    'Works Starting Tomorrow',
-    'works',
-    array['sms','whatsapp'],
-    null,
-    'Hi {{first_name}}, our team will be at {{address}} tomorrow at {{start_time}} to start your roofing works. Any questions call 01252 000000. Andy @ We Are Roofing',
-    false,
-    null
-  ),
-  (
-    '6f9a6dca-a747-4a20-ab87-111808577bc7',
-    'Request Google Review',
-    'review',
-    array['sms','email'],
-    'Thank you from We Are Roofing - would you leave us a review?',
-    'Hi {{first_name}}, thank you for choosing We Are Roofing. If you were happy with the work, a Google review would mean a lot: https://g.page/r/weareroofing/review. Thank you, Andy',
-    true,
-    'job_completed'
-  )
+select target_business.id, templates.name, templates.category, templates.channels, templates.subject, templates.body, templates.is_auto, templates.trigger_event
+from target_business
+cross join templates
 on conflict do nothing;

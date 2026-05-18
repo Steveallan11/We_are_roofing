@@ -11,8 +11,6 @@ type FindConversationParams = {
   quoteId?: string | null;
 };
 
-const BUSINESS_ID = "6f9a6dca-a747-4a20-ab87-111808577bc7";
-
 export async function findOrCreateConversation({
   customerEmail,
   customerPhone,
@@ -26,20 +24,33 @@ export async function findOrCreateConversation({
   const normalizedPhone = customerPhone?.trim() ? formatUkPhone(customerPhone) : null;
 
   let customerId: string | null = null;
+  let businessId: string | null = null;
 
   if (normalizedEmail) {
-    const { data } = await supabase.from("customers").select("id").eq("email", normalizedEmail).maybeSingle();
+    const { data } = await supabase.from("customers").select("id, business_id").eq("email", normalizedEmail).maybeSingle();
     customerId = data?.id ?? null;
+    businessId = data?.business_id ?? null;
   }
 
   if (!customerId && normalizedPhone) {
-    const { data: customers } = await supabase.from("customers").select("id, phone, contact_person_phone");
+    const { data: customers } = await supabase.from("customers").select("id, business_id, phone, contact_person_phone");
     const match = (customers ?? []).find((customer) => {
       const phone = customer.phone ? formatUkPhone(customer.phone) : null;
       const contactPhone = customer.contact_person_phone ? formatUkPhone(customer.contact_person_phone) : null;
       return phone === normalizedPhone || contactPhone === normalizedPhone;
     });
     customerId = match?.id ?? null;
+    businessId = match?.business_id ?? null;
+  }
+
+  if (!businessId && jobId) {
+    const { data: job } = await supabase.from("jobs").select("business_id").eq("id", jobId).maybeSingle();
+    businessId = job?.business_id ?? null;
+  }
+
+  if (!businessId) {
+    const { data: business } = await supabase.from("businesses").select("id").limit(1).maybeSingle();
+    businessId = business?.id ?? null;
   }
 
   let query = supabase
@@ -66,7 +77,7 @@ export async function findOrCreateConversation({
   const { data, error } = await supabase
     .from("conversations")
     .insert({
-      business_id: BUSINESS_ID,
+      business_id: businessId,
       customer_id: customerId,
       job_id: jobId || null,
       quote_id: quoteId || null,
