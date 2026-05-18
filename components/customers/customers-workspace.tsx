@@ -20,7 +20,20 @@ export function CustomersWorkspace({ customers }: Props) {
     const needle = query.trim().toLowerCase();
     if (!needle) return customers;
     return customers.filter((customer) =>
-      [customer.full_name, customer.phone, customer.email, customer.postcode, customer.town, customer.county].filter(Boolean).join(" ").toLowerCase().includes(needle)
+      [
+        customer.full_name,
+        customer.business_name,
+        customer.contact_person_name,
+        customer.phone,
+        customer.email,
+        customer.postcode,
+        customer.town,
+        customer.county
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
     );
   }, [customers, query]);
 
@@ -63,7 +76,10 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
     .filter(Boolean)
     .sort()
     .at(-1);
-  const initials = customer.full_name
+  const displayName = customer.business_name || customer.full_name;
+  const subtitle = customer.customer_type === "business" ? customer.contact_person_name || "No contact person saved" : customer.email ?? "No email saved";
+  const phone = customer.customer_type === "business" ? customer.contact_person_phone || customer.phone : customer.phone;
+  const initials = displayName
     .split(" ")
     .map((part) => part[0])
     .join("")
@@ -78,11 +94,11 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-condensed text-3xl text-white">{customer.full_name}</h3>
-            <p className="mt-1 truncate text-sm text-[var(--muted)]">{customer.email ?? "No email saved"}</p>
-            {customer.phone ? (
-              <a className="mt-1 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={`tel:${customer.phone}`}>
-                {customer.phone}
+            <h3 className="truncate font-condensed text-3xl text-white">{displayName}</h3>
+            <p className="mt-1 truncate text-sm text-[var(--muted)]">{subtitle}</p>
+            {phone ? (
+              <a className="mt-1 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={`tel:${phone}`}>
+                {phone}
               </a>
             ) : (
               <p className="mt-1 text-sm text-[var(--muted)]">No phone saved</p>

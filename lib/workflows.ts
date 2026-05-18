@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { MOCK_BUSINESS } from "@/lib/mock-data";
 import type { Business, GeneratedQuote, QuoteRecord } from "@/lib/types";
@@ -74,9 +75,9 @@ export async function getNextInvoiceRef() {
 }
 
 export async function getNextJobRef() {
-  const supabase = createSupabaseAdminClient();
-  const { count } = await supabase.from("jobs").select("*", { count: "exact", head: true });
-  return `WR-J-${String((count ?? 0) + 1001).padStart(4, "0")}`;
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const suffix = randomBytes(2).toString("hex").toUpperCase();
+  return `WR-J-${stamp}-${suffix}`;
 }
 
 export function deriveQuoteStatus(quote: GeneratedQuote): QuoteRecord["status"] {

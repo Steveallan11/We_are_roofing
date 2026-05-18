@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { deleteCustomerWithJobs } from "@/lib/customers/deleteCustomer";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -23,6 +24,11 @@ export async function POST(request: Request, { params }: Props) {
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   }
+
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  revalidatePath("/crm");
+  revalidatePath("/jobs");
 
   return NextResponse.json({ ok: true, message: result.message });
 }

@@ -1,17 +1,48 @@
 import { z } from "zod";
 
 export const createJobSchema = z.object({
-  customer: z.object({
-    customer_id: z.string().uuid().optional().or(z.literal("")),
-    full_name: z.string().min(1),
-    phone: z.string().min(1),
-    email: z.string().email().optional().or(z.literal("")),
-    property_address: z.string().min(1),
-    postcode: z.string().optional(),
-    town: z.string().optional(),
-    county: z.string().optional(),
-    source: z.string().optional()
-  }),
+  customer: z
+    .object({
+      customer_id: z.string().uuid().optional().or(z.literal("")),
+      customer_type: z.enum(["person", "business"]).default("person"),
+      full_name: z.string().optional().default(""),
+      business_name: z.string().optional().default(""),
+      phone: z.string().min(1),
+      email: z.string().email().optional().or(z.literal("")),
+      contact_person_name: z.string().optional().default(""),
+      contact_person_phone: z.string().optional().default(""),
+      contact_person_email: z.string().email().optional().or(z.literal("")),
+      property_address: z.string().min(1),
+      postcode: z.string().optional(),
+      town: z.string().optional(),
+      county: z.string().optional(),
+      source: z.string().optional()
+    })
+    .superRefine((customer, ctx) => {
+      if (customer.customer_type === "person" && !customer.full_name.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["full_name"],
+          message: "Customer name is required."
+        });
+      }
+
+      if (customer.customer_type === "business" && !customer.business_name.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["business_name"],
+          message: "Business name is required."
+        });
+      }
+
+      if (customer.customer_type === "business" && !customer.contact_person_name.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["contact_person_name"],
+          message: "Contact person is required for business customers."
+        });
+      }
+    }),
   job: z.object({
     job_title: z.string().min(1),
     job_type: z.string().min(1),

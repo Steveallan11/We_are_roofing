@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -37,5 +38,9 @@ export async function DELETE(_request: Request, { params }: Props) {
 
   const { error } = await supabase.from("customers").delete().eq("id", customerId);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  revalidatePath("/crm");
+  revalidatePath("/jobs");
   return NextResponse.json({ ok: true });
 }

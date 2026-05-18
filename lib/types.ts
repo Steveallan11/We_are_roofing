@@ -271,11 +271,16 @@ export type Business = {
 export type Customer = {
   id: string;
   business_id: string;
+  customer_type?: "person" | "business" | null;
   first_name?: string | null;
   last_name?: string | null;
   full_name: string;
+  business_name?: string | null;
   phone?: string | null;
   email?: string | null;
+  contact_person_name?: string | null;
+  contact_person_phone?: string | null;
+  contact_person_email?: string | null;
   address_line_1?: string | null;
   address_line_2?: string | null;
   town?: string | null;

@@ -12,9 +12,14 @@ const urgencies = ["Low", "Medium", "High", "Emergency"];
 
 type FormState = {
   customer_id: string;
+  customer_type: "person" | "business";
   full_name: string;
+  business_name: string;
   phone: string;
   email: string;
+  contact_person_name: string;
+  contact_person_phone: string;
+  contact_person_email: string;
   source: string;
   property_address: string;
   postcode: string;
@@ -30,9 +35,14 @@ type FormState = {
 
 const initialState: FormState = {
   customer_id: "",
+  customer_type: "person",
   full_name: "",
+  business_name: "",
   phone: "",
   email: "",
+  contact_person_name: "",
+  contact_person_phone: "",
+  contact_person_email: "",
   source: "Phone Call",
   property_address: "",
   postcode: "",
@@ -71,13 +81,26 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
     const query = customerSearch.trim().toLowerCase();
     if (!query) return customers.slice(0, 5);
     return customers
-      .filter((customer) => [customer.full_name, customer.phone, customer.email, customer.postcode].filter(Boolean).join(" ").toLowerCase().includes(query))
+      .filter((customer) =>
+        [
+          customer.full_name,
+          customer.business_name,
+          customer.contact_person_name,
+          customer.phone,
+          customer.email,
+          customer.postcode
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
+      )
       .slice(0, 8);
   }, [customerSearch, customers]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
-    if (key === "phone") {
+    if (key === "phone" || key === "contact_person_phone" || key === "customer_type") {
       setDuplicateCustomer(null);
       setDuplicateOverride(false);
     }
@@ -85,7 +108,7 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
 
   function selectCustomer(customer: Customer) {
     setForm((current) => customerToForm(customer, current));
-    setCustomerSearch(customer.full_name);
+    setCustomerSearch(customer.business_name || customer.full_name);
     setDuplicateCustomer(null);
     setDuplicateOverride(false);
   }
@@ -115,9 +138,28 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
   }
 
   function findDuplicateCustomer() {
+    if (form.customer_id || duplicateOverride) return null;
+
+    if (form.customer_type === "business") {
+      const businessName = form.business_name.trim().toLowerCase();
+      const phone = form.phone.trim();
+      const contactName = form.contact_person_name.trim().toLowerCase();
+      if (!businessName && !phone && !contactName) return null;
+
+      return (
+        customers.find((customer) => {
+          if (customer.customer_type !== "business") return false;
+          const sameBusinessName = (customer.business_name ?? "").trim().toLowerCase() === businessName;
+          const samePhone = (customer.phone ?? "").trim() === phone;
+          const sameContactName = (customer.contact_person_name ?? "").trim().toLowerCase() === contactName;
+          return sameBusinessName || samePhone || sameContactName;
+        }) ?? null
+      );
+    }
+
     const phone = form.phone.trim();
-    if (!phone || form.customer_id || duplicateOverride) return null;
-    return customers.find((customer) => customer.phone?.trim() === phone) ?? null;
+    if (!phone) return null;
+    return customers.find((customer) => customer.customer_type !== "business" && customer.phone?.trim() === phone) ?? null;
   }
 
   async function handleNext() {
@@ -158,7 +200,11 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
   }
 
   function canContinue() {
-    if (step === 1) return Boolean(form.full_name && form.phone);
+    if (step === 1) {
+      return form.customer_type === "business"
+        ? Boolean(form.business_name && form.phone && form.contact_person_name)
+        : Boolean(form.full_name && form.phone);
+    }
     if (step === 2) return Boolean(form.property_address && form.job_type && form.roof_type);
     if (step === 3) return Boolean(form.job_title && form.urgency && form.source);
     return true;
@@ -175,9 +221,14 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
         body: JSON.stringify({
           customer: {
             customer_id: form.customer_id,
+            customer_type: form.customer_type,
             full_name: form.full_name.trim() || "Unknown",
+            business_name: form.business_name.trim(),
             phone: form.phone,
             email: form.email,
+            contact_person_name: form.contact_person_name,
+            contact_person_phone: form.contact_person_phone,
+            contact_person_email: form.contact_person_email,
             property_address: form.property_address,
             postcode: form.postcode.trim().toUpperCase(),
             town: form.town,
@@ -234,7 +285,7 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
         {step === 1 ? (
           <section className="grid gap-5">
             <StepHeader title="Customer" text="Search first. If they already exist, use the existing record and avoid duplicates." />
-            <input className="field" onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search existing customers by name, phone, email or postcode" value={customerSearch} />
+            <input className="field" onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search existing customers by name, business, phone, email or postcode" value={customerSearch} />
             {matches.length ? (
               <div className="grid gap-2">
                 {matches.map((customer) => (
@@ -244,8 +295,10 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
                     onClick={() => selectCustomer(customer)}
                     type="button"
                   >
-                    <p className="font-semibold text-white">{customer.full_name}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">{[customer.phone, customer.email, customer.postcode].filter(Boolean).join(" | ")}</p>
+                    <p className="font-semibold text-white">{customer.business_name || customer.full_name}</p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      {[customer.contact_person_name, customer.phone, customer.email, customer.postcode].filter(Boolean).join(" | ")}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -254,7 +307,7 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
               <div className="rounded-[8px] border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-4 text-sm text-[var(--warning)]">
                 <p className="font-ui text-xs font-bold uppercase tracking-[0.12em] text-[var(--warning)]">Possible duplicate customer</p>
                 <p className="mt-2 text-sm text-[var(--text-second)]">
-                  {duplicateCustomer.full_name} already uses this phone number. Use the existing record to keep job history tidy.
+                  {(duplicateCustomer.business_name || duplicateCustomer.full_name)} already looks like an existing record. Use it to keep job history tidy.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button className="button-secondary !min-h-9 !px-3 !py-2 text-xs" onClick={() => selectCustomer(duplicateCustomer)} type="button">
@@ -274,9 +327,25 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
               </div>
             ) : null}
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Full Name" value={form.full_name} onChange={(value) => updateField("full_name", value)} autoComplete="name" />
-              <Field label="Phone" value={form.phone} onChange={(value) => updateField("phone", value)} autoComplete="tel" inputMode="tel" type="tel" />
-              <Field label="Email" value={form.email} onChange={(value) => updateField("email", value)} autoComplete="email" type="email" />
+              <SelectField label="Customer Type" value={form.customer_type} options={["person", "business"]} onChange={(value) => updateField("customer_type", value as FormState["customer_type"])} />
+              <div />
+              {form.customer_type === "business" ? (
+                <>
+                  <Field label="Business Name" value={form.business_name} onChange={(value) => updateField("business_name", value)} autoComplete="organization" />
+                  <Field label="Business Phone" value={form.phone} onChange={(value) => updateField("phone", value)} autoComplete="tel" inputMode="tel" type="tel" />
+                  <Field label="Business Email" value={form.email} onChange={(value) => updateField("email", value)} autoComplete="email" type="email" />
+                  <Field label="Contact Person" value={form.contact_person_name} onChange={(value) => updateField("contact_person_name", value)} autoComplete="name" />
+                  <Field label="Contact Phone" value={form.contact_person_phone} onChange={(value) => updateField("contact_person_phone", value)} autoComplete="tel" inputMode="tel" type="tel" />
+                  <Field label="Contact Email" value={form.contact_person_email} onChange={(value) => updateField("contact_person_email", value)} autoComplete="email" type="email" />
+                </>
+              ) : (
+                <>
+                  <Field label="Full Name" value={form.full_name} onChange={(value) => updateField("full_name", value)} autoComplete="name" />
+                  <Field label="Phone" value={form.phone} onChange={(value) => updateField("phone", value)} autoComplete="tel" inputMode="tel" type="tel" />
+                  <Field label="Email" value={form.email} onChange={(value) => updateField("email", value)} autoComplete="email" type="email" />
+                  <div />
+                </>
+              )}
               <SelectField label="Source" value={form.source} options={leadSources} onChange={(value) => updateField("source", value)} />
             </div>
           </section>
@@ -333,7 +402,14 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
           <section className="grid gap-5">
             <StepHeader title="Confirm" text="Check the details, then create the job file and permanent job number." />
             <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-black/20 p-5 text-sm">
-              <Summary label="Customer" value={`${form.full_name} | ${form.phone}`} />
+              <Summary
+                label="Customer"
+                value={
+                  form.customer_type === "business"
+                    ? `${form.business_name} | ${form.contact_person_name || "No contact"} | ${form.phone}`
+                    : `${form.full_name} | ${form.phone}`
+                }
+              />
               <Summary label="Property" value={`${form.property_address} ${form.postcode}`.trim()} />
               <Summary label="Job" value={`${form.job_title} | ${form.roof_type} | ${form.job_type}`} />
               <Summary label="Urgency / Source" value={`${form.urgency} | ${form.source}`} />
@@ -374,9 +450,14 @@ function customerToForm(customer: Customer, current: FormState): FormState {
   return {
     ...current,
     customer_id: customer.id,
-    full_name: customer.full_name,
+    customer_type: customer.customer_type === "business" ? "business" : "person",
+    full_name: customer.customer_type === "business" ? customer.contact_person_name ?? "" : customer.full_name,
+    business_name: customer.business_name ?? "",
     phone: customer.phone ?? "",
     email: customer.email ?? "",
+    contact_person_name: customer.contact_person_name ?? "",
+    contact_person_phone: customer.contact_person_phone ?? "",
+    contact_person_email: customer.contact_person_email ?? "",
     property_address: customer.address_line_1 ?? current.property_address,
     postcode: customer.postcode ?? current.postcode,
     town: customer.town ?? current.town,
@@ -426,7 +507,9 @@ function SelectField({ label, value, options, onChange }: { label: string; value
       <label className="label" htmlFor={id}>{label}</label>
       <select className="field min-h-11" id={id} onChange={(event) => onChange(event.target.value)} value={value}>
         {options.map((option) => (
-          <option key={option}>{option}</option>
+          <option key={option} value={option}>
+            {option === "person" ? "Person" : option === "business" ? "Business" : option}
+          </option>
         ))}
       </select>
     </div>

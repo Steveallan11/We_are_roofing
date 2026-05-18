@@ -27,6 +27,19 @@ const VALID_JOB_STATUSES = [
   "Archived"
 ] as const;
 
+function splitPersonName(fullName: string) {
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return { firstName: null, lastName: null };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  return {
+    firstName: parts[0] ?? null,
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : null
+  };
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const parsed = createJobSchema.safeParse(body);
@@ -48,12 +61,13 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdminClient();
   const business = await ensureBusinessRecord();
   const businessId = process.env.NEXT_PUBLIC_BUSINESS_ID || BUSINESS_ID || business.id;
-  const jobRef = await getNextJobRef();
 
   const customerPayload = parsed.data.customer;
   const jobPayload = parsed.data.job;
-  const fullName = customerPayload.full_name.trim() || "Unknown";
-  const nameParts = fullName.split(/\s+/).filter(Boolean);
+  const isBusinessCustomer = customerPayload.customer_type === "business";
+  const fullName = customerPayload.full_name.trim();
+  const displayName = isBusinessCustomer ? customerPayload.business_name.trim() : fullName || "Unknown";
+  const { firstName, lastName } = splitPersonName(fullName);
   const jobTitle = jobPayload.job_title.trim() || `${jobPayload.roof_type} ${jobPayload.job_type}`.trim() || "Untitled Job";
   const propertyAddress = customerPayload.property_address.trim() || "Address to confirm";
 
@@ -61,27 +75,44 @@ export async function POST(request: Request) {
     ? await supabase.from("customers").select("*").eq("business_id", businessId).eq("id", customerPayload.customer_id).maybeSingle()
     : { data: null };
 
-  const { data: existingCustomer } = selectedCustomer
-    ? { data: selectedCustomer }
+  const { data: possibleCustomers } = selectedCustomer
+    ? { data: [selectedCustomer] }
     : await supabase
         .from("customers")
         .select("*")
         .eq("business_id", businessId)
-        .eq("phone", customerPayload.phone)
-        .limit(1)
-        .maybeSingle();
+        .eq("customer_type", customerPayload.customer_type)
+        .eq("full_name", displayName)
+        .limit(10);
 
-  let customer = existingCustomer;
+  const existingCustomer =
+    (possibleCustomers ?? []).find((customer) => {
+      const sameAddress = (customer.address_line_1 ?? "").trim() === propertyAddress;
+      const samePhone = (customer.phone ?? "").trim() === customerPayload.phone.trim();
+      const sameBusinessName = (customer.business_name ?? "").trim() === (customerPayload.business_name ?? "").trim();
+      const sameContactName = (customer.contact_person_name ?? "").trim() === (customerPayload.contact_person_name ?? "").trim();
+
+      return isBusinessCustomer
+        ? sameAddress && sameBusinessName && (samePhone || sameContactName)
+        : sameAddress && samePhone;
+    }) ?? null;
+
+  let customer = existingCustomer ?? null;
   if (!customer) {
     const { data: createdCustomer, error: customerError } = await supabase
       .from("customers")
       .insert({
         business_id: businessId,
-        full_name: fullName,
-        first_name: nameParts[0] || null,
-        last_name: nameParts.length > 1 ? nameParts.slice(1).join(" ") : null,
+        customer_type: customerPayload.customer_type,
+        first_name: isBusinessCustomer ? null : firstName,
+        last_name: isBusinessCustomer ? null : lastName,
+        full_name: displayName,
+        business_name: isBusinessCustomer ? customerPayload.business_name.trim() : null,
         phone: customerPayload.phone || null,
         email: customerPayload.email || null,
+        contact_person_name: isBusinessCustomer ? customerPayload.contact_person_name || null : null,
+        contact_person_phone: isBusinessCustomer ? customerPayload.contact_person_phone || null : null,
+        contact_person_email: isBusinessCustomer ? customerPayload.contact_person_email || null : null,
         address_line_1: propertyAddress,
         town: customerPayload.town || null,
         county: customerPayload.county || null,
@@ -100,24 +131,48 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Unable to create or find customer." }, { status: 500 });
   }
 
-  const { data: job, error: jobError } = await supabase
-    .from("jobs")
-    .insert({
-      business_id: businessId,
-      customer_id: customer.id,
-      job_ref: jobRef,
-      job_title: jobTitle,
-      property_address: propertyAddress,
-      postcode: customerPayload.postcode?.toUpperCase() || null,
-      job_type: jobPayload.job_type,
-      roof_type: jobPayload.roof_type,
-      status: "New Lead",
-      urgency: jobPayload.urgency || "Medium",
-      source: customerPayload.source || null,
-      internal_notes: jobPayload.internal_notes || null
-    })
-    .select("*")
-    .single();
+  const jobInsertBase = {
+    business_id: businessId,
+    customer_id: customer.id,
+    job_title: jobTitle,
+    property_address: propertyAddress,
+    postcode: customerPayload.postcode?.toUpperCase() || null,
+    job_type: jobPayload.job_type,
+    roof_type: jobPayload.roof_type,
+    status: "New Lead" as const,
+    urgency: jobPayload.urgency || "Medium",
+    source: customerPayload.source || null,
+    internal_notes: jobPayload.internal_notes || null
+  };
+
+  let job: Record<string, unknown> | null = null;
+  let jobError: { message?: string; details?: string | null } | null = null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const jobRef = await getNextJobRef();
+    const result = await supabase
+      .from("jobs")
+      .insert({
+        ...jobInsertBase,
+        job_ref: jobRef
+      })
+      .select("*")
+      .single();
+
+    job = (result.data as Record<string, unknown> | null) ?? null;
+    jobError = result.error ? { message: result.error.message, details: result.error.details } : null;
+
+    if (job) {
+      break;
+    }
+
+    const errorText = `${result.error?.message ?? ""} ${result.error?.details ?? ""}`;
+    if (/jobs_business_job_ref_idx|duplicate key value violates unique constraint/i.test(errorText)) {
+      continue;
+    }
+
+    break;
+  }
 
   if (jobError || !job) {
     return NextResponse.json({ ok: false, error: jobError?.message ?? "Unable to create job." }, { status: 500 });
@@ -127,7 +182,7 @@ export async function POST(request: Request) {
     ok: true,
     message: "Job created in Supabase.",
     customer_id: customer.id,
-    job_id: job.id,
+    job_id: String(job.id),
     next_status: "New Lead",
     received: parsed.data,
     duplicate_customer_reused: Boolean(existingCustomer),
