@@ -3,7 +3,6 @@ import { DocFooter } from "@/components/documents/shared/DocFooter";
 import { DocHeader } from "@/components/documents/shared/DocHeader";
 import { DocumentBody, DocumentFrame, paragraphStyle } from "@/components/documents/shared/DocumentFrame";
 import { LineItemTable } from "@/components/documents/shared/LineItemTable";
-import { MetaStrip } from "@/components/documents/shared/MetaStrip";
 import { SectionHead } from "@/components/documents/shared/SectionHead";
 import { DOC } from "@/lib/theme/documentTheme";
 import { currency, formatDate } from "@/lib/utils";
@@ -14,14 +13,6 @@ export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: Quo
     <DocumentFrame>
       <DocHeader title="Quotation" reference={quote.quote_ref} subtitle={bundle.business.trading_address} meta={`Issued ${formatDate(quote.created_at)}`} />
       <DocumentBody>
-        <MetaStrip
-          items={[
-            { label: "Job Ref", value: bundle.job.job_ref },
-            { label: "Prepared By", value: "Andy - We Are Roofing" },
-            { label: "Guarantee", value: quote.guarantee_text || "10 Year Workmanship" },
-            { label: "Status", value: quote.status }
-          ]}
-        />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <AddressBlock label="Customer" lines={[bundle.customer.full_name, bundle.customer.email, bundle.customer.phone]} />
           <AddressBlock label="Site Address" lines={[bundle.job.property_address, bundle.job.postcode, bundle.customer.town]} />
