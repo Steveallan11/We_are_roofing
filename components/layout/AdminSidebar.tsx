@@ -27,6 +27,7 @@ type NavItem = {
   href: string;
   icon: string;
   children?: NavChild[];
+  badgeColor?: string;
 };
 
 type NavGroup = {
@@ -59,6 +60,13 @@ const NAV: NavGroup[] = [
         label: "Customers",
         href: "/customers",
         icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+      },
+      {
+        id: "comms",
+        label: "Communications",
+        href: "/comms",
+        icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
+        badgeColor: "#ef4444"
       },
       {
         id: "money",
@@ -107,10 +115,30 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ jobs: true, money: false });
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const saved = localStorage.getItem("war_sidebar_collapsed");
     if (saved) setCollapsed(saved === "true");
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUnreadCount() {
+      const response = await fetch("/api/comms/conversations?summary=1", { cache: "no-store" });
+      const result = (await response.json().catch(() => null)) as { unreadCount?: number } | null;
+      if (active) {
+        setUnreadCount(Number(result?.unreadCount ?? 0));
+      }
+    }
+
+    void loadUnreadCount();
+    const timer = window.setInterval(loadUnreadCount, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const width = collapsed ? 56 : 240;
@@ -225,6 +253,25 @@ export function AdminSidebar() {
                     {!collapsed ? (
                       <>
                         <span style={{ flex: 1 }}>{item.label}</span>
+                        {item.id === "comms" && unreadCount > 0 ? (
+                          <span
+                            style={{
+                              minWidth: 20,
+                              height: 20,
+                              borderRadius: 999,
+                              background: item.badgeColor || "#ef4444",
+                              color: "#fff",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "0 6px"
+                            }}
+                          >
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        ) : null}
                         {item.children ? <NavIcon color="var(--text-ghost)" path={expanded[item.id] ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} size={12} /> : null}
                       </>
                     ) : null}

@@ -28,6 +28,9 @@ import type {
   QuoteRecord,
   PaymentScheduleRecord,
   PaymentStageRecord,
+  ConversationRecord,
+  MessageRecord,
+  MessageTemplateRecord,
   SupplierRecord,
   SurveyRecord
 } from "@/lib/types";
@@ -196,6 +199,73 @@ export async function getCustomers(): Promise<Customer[]> {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase.from("customers").select("*").order("created_at", { ascending: false });
   return (data as Customer[] | null) ?? MOCK_CUSTOMERS;
+}
+
+export async function getConversations(): Promise<ConversationRecord[]> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("*, customers(*), jobs(*), quotes(*)")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.warn("Conversations could not be loaded:", error.message);
+    return [];
+  }
+
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map((conversation) => ({
+    ...(conversation as unknown as ConversationRecord),
+    customer: (conversation.customers as Customer | null) ?? null,
+    job: (conversation.jobs as Job | null) ?? null,
+    quote: (conversation.quotes as QuoteRecord | null) ?? null
+  }));
+}
+
+export async function getMessages(conversationId: string): Promise<MessageRecord[]> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("sent_at", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("Messages could not be loaded:", error.message);
+    return [];
+  }
+
+  return (data as MessageRecord[] | null) ?? [];
+}
+
+export async function getMessageTemplates(): Promise<MessageTemplateRecord[]> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("message_templates")
+    .select("*")
+    .eq("is_active", true)
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.warn("Message templates could not be loaded:", error.message);
+    return [];
+  }
+
+  return (data as MessageTemplateRecord[] | null) ?? [];
+}
+
+export async function getUnreadConversationCount(): Promise<number> {
+  if (!canUseSupabase()) return 0;
+  const conversations = await getConversations();
+  return conversations.reduce((sum, conversation) => sum + Number(conversation.unread_count ?? 0), 0);
 }
 
 export async function getHistoricalQuotes(limit = 100): Promise<HistoricalQuoteRecord[]> {

@@ -4,7 +4,7 @@ import { canPersistToSupabase } from "@/lib/workflows";
 type SendSMSParams = {
   to: string;
   message: string;
-  jobId: string;
+  jobId?: string | null;
   templateType: string;
 };
 
@@ -57,7 +57,7 @@ export async function sendSMS({ to, message, jobId, templateType }: SendSMSParam
 
   if (canPersistToSupabase()) {
     await createSupabaseAdminClient().from("email_logs").insert({
-      job_id: jobId,
+      job_id: jobId ?? null,
       to_phone: formatted,
       to_email: "",
       subject: templateType,

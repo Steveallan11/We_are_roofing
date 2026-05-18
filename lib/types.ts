@@ -454,6 +454,69 @@ export type QuoteMessageRecord = {
   created_at?: string;
 };
 
+export type ConversationChannel = "email" | "sms" | "whatsapp" | "google_business" | "facebook" | "instagram" | "platform";
+export type ConversationStatus = "open" | "snoozed" | "resolved" | "spam";
+export type MessageDirection = "inbound" | "outbound";
+export type MessageSenderType = "customer" | "admin" | "system" | "ai";
+export type MessageDeliveryStatus = "pending" | "sent" | "delivered" | "read" | "failed";
+
+export type ConversationRecord = {
+  id: string;
+  business_id?: string | null;
+  customer_id?: string | null;
+  job_id?: string | null;
+  quote_id?: string | null;
+  primary_channel: ConversationChannel;
+  subject?: string | null;
+  status: ConversationStatus;
+  unread_count: number;
+  last_message_at?: string | null;
+  last_message_preview?: string | null;
+  snoozed_until?: string | null;
+  assigned_to?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  customer?: Customer | null;
+  job?: Job | null;
+  quote?: QuoteRecord | null;
+};
+
+export type MessageRecord = {
+  id: string;
+  conversation_id: string;
+  direction: MessageDirection;
+  channel: ConversationChannel;
+  sender_type: MessageSenderType;
+  sender_name?: string | null;
+  sender_email?: string | null;
+  sender_phone?: string | null;
+  body: string;
+  subject?: string | null;
+  html_body?: string | null;
+  attachments?: Array<Record<string, unknown>>;
+  provider?: string | null;
+  provider_msg_id?: string | null;
+  status: MessageDeliveryStatus;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  created_at?: string;
+};
+
+export type MessageTemplateRecord = {
+  id: string;
+  business_id?: string | null;
+  name: string;
+  category?: string | null;
+  channels?: string[] | null;
+  subject?: string | null;
+  body: string;
+  is_auto: boolean;
+  trigger_event?: string | null;
+  is_active: boolean;
+  created_at?: string;
+};
+
 export type KnowledgeBaseRecord = {
   id: string;
   business_id: string;
@@ -569,9 +632,9 @@ export type InvoiceRecord = {
 
 export type EmailLog = {
   id: string;
-  job_id: string;
+  job_id?: string | null;
   quote_id?: string | null;
-  to_email: string;
+  to_email?: string | null;
   subject: string;
   body: string;
   provider_message_id?: string | null;

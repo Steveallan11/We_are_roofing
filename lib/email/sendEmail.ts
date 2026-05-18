@@ -7,7 +7,7 @@ type SendEmailParams = {
   subject: string;
   html: string;
   text?: string;
-  jobId: string;
+  jobId?: string | null;
   quoteId?: string | null;
   templateType: string;
   sequenceDay?: number | null;
@@ -34,7 +34,7 @@ export async function sendEmail({ to, subject, html, text, jobId, quoteId, templ
 
   if (canPersistToSupabase()) {
     await createSupabaseAdminClient().from("email_logs").insert({
-      job_id: jobId,
+      job_id: jobId ?? null,
       quote_id: quoteId ?? null,
       to_email: to,
       subject,

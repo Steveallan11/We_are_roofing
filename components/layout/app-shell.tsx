@@ -40,6 +40,9 @@ export function AppShell({ title, subtitle, actions, children, wide = false }: P
                   <Link className="button-ghost !min-h-9 !px-3 !py-2" href={"/money" as Route}>
                     Money
                   </Link>
+                  <Link className="button-ghost !min-h-9 !px-3 !py-2" href={"/comms" as Route}>
+                    Comms
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
