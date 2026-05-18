@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getContextDateLabel, getNextAction, getSecondaryAction, needsAttention } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
+import { URGENCY_COLORS } from "@/lib/theme/statusColors";
 import { currency } from "@/lib/utils";
 import type { Customer, InvoiceRecord, Job, JobDocumentRecord, QuoteRecord } from "@/lib/types";
 
@@ -30,20 +31,27 @@ export function JobCard({ job, compact = false, list = false }: Props) {
   const town = job.customer?.town ?? job.postcode ?? "Town TBC";
   const statusColor = getStatusColor(job.status);
   const documentLinks = getDocumentLinks(job);
+  const urgency = job.urgency ? URGENCY_COLORS[job.urgency as keyof typeof URGENCY_COLORS] : null;
 
   return (
     <article
-      className={`card overflow-hidden transition hover:-translate-y-0.5 ${list ? "border-l-4" : ""}`}
-      style={{ borderColor: attention ? "#ef4444" : statusColor.dot }}
+      className="card overflow-hidden border-l-4 transition hover:-translate-y-0.5"
+      style={{ borderLeftColor: attention ? "#ef4444" : statusColor.dot }}
     >
       <div className={compact ? "p-3" : "p-4"}>
         <div className="flex items-start gap-3">
           <div
-            className={`flex shrink-0 items-center justify-center border border-[var(--border)] bg-black/30 font-bold text-[var(--gold-l)] ${
+            className={`relative flex shrink-0 items-center justify-center border border-[var(--border)] bg-black/30 font-bold text-[var(--gold-l)] ${
               compact ? "h-9 w-9 rounded-xl text-xs" : "h-12 w-12 rounded-2xl text-sm"
             }`}
           >
             {initials}
+            {urgency && job.urgency !== "Low" ? (
+              <span
+                className={`absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full ${job.urgency === "Emergency" ? "animate-pulse" : ""}`}
+                style={{ background: urgency.color, boxShadow: `0 0 10px ${urgency.color}70` }}
+              />
+            ) : null}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">

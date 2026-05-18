@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { lookupPostcode as lookupPostcodeApi } from "@/lib/postcode";
 import type { Customer } from "@/lib/types";
 
 const leadSources = ["Referral", "Phone Call", "Website", "Google", "Facebook", "Checkatrade", "Returning Customer", "Other"];
@@ -61,6 +62,9 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [postcodeStatus, setPostcodeStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [duplicateCustomer, setDuplicateCustomer] = useState<Customer | null>(null);
+  const [duplicateOverride, setDuplicateOverride] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const matches = useMemo(() => {
@@ -73,11 +77,17 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    if (key === "phone") {
+      setDuplicateCustomer(null);
+      setDuplicateOverride(false);
+    }
   }
 
   function selectCustomer(customer: Customer) {
     setForm((current) => customerToForm(customer, current));
     setCustomerSearch(customer.full_name);
+    setDuplicateCustomer(null);
+    setDuplicateOverride(false);
   }
 
   function autoTitle() {
@@ -88,32 +98,62 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
     const postcode = form.postcode.trim();
     if (!postcode) return;
     setPostcodeStatus("Looking up postcode...");
-    try {
-      const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
-      const result = (await response.json()) as {
-        result?: {
-          postcode?: string;
-          admin_district?: string;
-          admin_county?: string | null;
-          region?: string | null;
-        };
-      };
+    const result = await lookupPostcodeApi(postcode);
+    if (!result) {
+      setPostcodeStatus("Postcode not found. Enter address manually.");
+      return;
+    }
 
-      if (!response.ok || !result.result) {
-        setPostcodeStatus("Postcode not found. Enter address manually.");
+    setForm((current) => ({
+      ...current,
+      postcode: current.postcode.trim().toUpperCase(),
+      town: result.town || current.town,
+      county: result.county || current.county,
+      property_address: current.property_address || [result.town, current.postcode.trim().toUpperCase()].filter(Boolean).join(", ")
+    }));
+    setPostcodeStatus("Postcode found. Town and county filled.");
+  }
+
+  function findDuplicateCustomer() {
+    const phone = form.phone.trim();
+    if (!phone || form.customer_id || duplicateOverride) return null;
+    return customers.find((customer) => customer.phone?.trim() === phone) ?? null;
+  }
+
+  async function handleNext() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (step === 1) {
+        const duplicate = findDuplicateCustomer();
+        if (duplicate && duplicateCustomer?.id !== duplicate.id) {
+          setDuplicateCustomer(duplicate);
+          return;
+        }
+        setStep(2);
         return;
       }
 
-      setForm((current) => ({
-        ...current,
-        postcode: result.result?.postcode ?? current.postcode,
-        town: result.result?.admin_district ?? current.town,
-        county: result.result?.admin_county || result.result?.region || current.county,
-        property_address: current.property_address || [result.result?.admin_district, result.result?.postcode].filter(Boolean).join(", ")
-      }));
-      setPostcodeStatus("Postcode found. Town and county filled.");
-    } catch {
-      setPostcodeStatus("Postcode lookup unavailable. Enter address manually.");
+      if (step === 2) {
+        if (form.postcode) {
+          await lookupPostcode();
+        }
+        setStep(3);
+        return;
+      }
+
+      if (step === 3) {
+        setStep(4);
+        return;
+      }
+
+      await handleSubmit();
+    } catch (err) {
+      console.error("Wizard error:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -128,45 +168,50 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
     setError(null);
     setSuccess(null);
 
-    const response = await fetch("/api/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customer: {
-          customer_id: form.customer_id,
-          full_name: form.full_name,
-          phone: form.phone,
-          email: form.email,
-          property_address: form.property_address,
-          postcode: form.postcode,
-          town: form.town,
-          county: form.county,
-          source: form.source
-        },
-        job: {
-          job_title: form.job_title,
-          job_type: form.job_type,
-          roof_type: form.roof_type,
-          urgency: form.urgency,
-          internal_notes: form.internal_notes
-        }
-      })
-    });
+    try {
+      const response = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer: {
+            customer_id: form.customer_id,
+            full_name: form.full_name.trim() || "Unknown",
+            phone: form.phone,
+            email: form.email,
+            property_address: form.property_address,
+            postcode: form.postcode.trim().toUpperCase(),
+            town: form.town,
+            county: form.county,
+            source: form.source
+          },
+          job: {
+            job_title: form.job_title || `${form.roof_type} ${form.job_type}`,
+            job_type: form.job_type,
+            roof_type: form.roof_type,
+            urgency: form.urgency || "Medium",
+            internal_notes: form.internal_notes
+          }
+        })
+      });
 
-    const result = (await response.json().catch(() => null)) as
-      | { ok?: boolean; error?: string | { fieldErrors?: Record<string, string[]> }; job_id?: string; job?: { job_ref?: string }; duplicate_customer_reused?: boolean }
-      | null;
+      const result = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string | { fieldErrors?: Record<string, string[]> }; job_id?: string; job?: { job_ref?: string }; duplicate_customer_reused?: boolean }
+        | null;
 
-    if (!response.ok || !result?.ok || !result.job_id) {
-      setError("Unable to save the job. Check the required details and try again.");
-      return;
+      if (!response.ok || !result?.ok || !result.job_id) {
+        setError(typeof result?.error === "string" ? result.error : "Unable to save the job. Check the required details and try again.");
+        return;
+      }
+
+      setSuccess(`${result.job?.job_ref ?? "Job"} created. Opening job file.`);
+      startTransition(() => {
+        router.push(`/jobs/${result.job_id}`);
+        router.refresh();
+      });
+    } catch (err) {
+      console.error("Wizard submit error:", err);
+      setError("Something went wrong while creating the job. Please try again.");
     }
-
-    setSuccess(`${result.job?.job_ref ?? "Job"} created. Opening job file.`);
-    startTransition(() => {
-      router.push(`/jobs/${result.job_id}`);
-      router.refresh();
-    });
   }
 
   return (
@@ -203,6 +248,29 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
                     <p className="mt-1 text-sm text-[var(--muted)]">{[customer.phone, customer.email, customer.postcode].filter(Boolean).join(" | ")}</p>
                   </button>
                 ))}
+              </div>
+            ) : null}
+            {duplicateCustomer ? (
+              <div className="rounded-[8px] border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-4 text-sm text-[var(--warning)]">
+                <p className="font-ui text-xs font-bold uppercase tracking-[0.12em] text-[var(--warning)]">Possible duplicate customer</p>
+                <p className="mt-2 text-sm text-[var(--text-second)]">
+                  {duplicateCustomer.full_name} already uses this phone number. Use the existing record to keep job history tidy.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="button-secondary !min-h-9 !px-3 !py-2 text-xs" onClick={() => selectCustomer(duplicateCustomer)} type="button">
+                    Use Existing Customer
+                  </button>
+                  <button
+                    className="button-ghost !min-h-9 !px-3 !py-2 text-xs"
+                    onClick={() => {
+                      setDuplicateOverride(true);
+                      setDuplicateCustomer(null);
+                    }}
+                    type="button"
+                  >
+                    Continue Anyway
+                  </button>
+                </div>
               </div>
             ) : null}
             <div className="grid gap-4 md:grid-cols-2">
@@ -283,17 +351,17 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
         </div>
         <div className="flex gap-3">
           {step > 1 ? (
-            <button className="button-ghost min-h-11" onClick={() => setStep((current) => current - 1)} type="button">
+            <button className="button-ghost min-h-11" disabled={loading || isPending} onClick={() => setStep((current) => current - 1)} type="button">
               Back
             </button>
           ) : null}
           {step < 4 ? (
-            <button className="button-primary min-h-11" disabled={!canContinue()} onClick={() => setStep((current) => current + 1)} type="button">
-              Next
+            <button className="button-primary min-h-11" disabled={!canContinue() || loading || isPending} onClick={handleNext} type="button">
+              {loading ? "Processing..." : "Continue"}
             </button>
           ) : (
-            <button className="button-primary min-h-11" disabled={isPending} onClick={handleSubmit} type="button">
-              {isPending ? "Creating..." : "Create Job"}
+            <button className="button-primary min-h-11" disabled={isPending || loading} onClick={handleNext} type="button">
+              {isPending || loading ? "Processing..." : "Create Job"}
             </button>
           )}
         </div>

@@ -1,4 +1,5 @@
 import type { JobStatus } from "@/lib/types";
+import { STATUS_COLORS as THEME_STATUS_COLORS } from "@/lib/theme/statusColors";
 
 export const STATUS_CONFIG: Record<
   JobStatus,
@@ -111,12 +112,12 @@ export const STATUS_CONFIG: Record<
 };
 
 export const STATUS_COLORS: Record<JobStatus, { bg: string; text: string; dot: string }> = Object.fromEntries(
-  Object.entries(STATUS_CONFIG).map(([status, config]) => [
+  Object.entries(THEME_STATUS_COLORS).map(([status, config]) => [
     status,
     {
       bg: config.bg,
       text: config.color,
-      dot: config.color
+      dot: config.dot
     }
   ])
 ) as Record<JobStatus, { bg: string; text: string; dot: string }>;

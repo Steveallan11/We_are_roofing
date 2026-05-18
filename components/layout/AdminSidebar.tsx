@@ -6,6 +6,7 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 function NavIcon({ path, size = 16, color = "currentColor" }: { path: string; size?: number; color?: string }) {
   return (
@@ -110,8 +111,8 @@ export function AdminSidebar() {
       style={{
         width,
         minHeight: "100vh",
-        background: "#0a0a0a",
-        borderRight: "1px solid #1a1a1a",
+        background: "var(--obsidian)",
+        borderRight: "1px solid var(--border)",
         flexDirection: "column",
         flexShrink: 0,
         transition: "width 0.2s ease",
@@ -123,7 +124,7 @@ export function AdminSidebar() {
       <div
         style={{
           padding: collapsed ? "14px 0" : "16px 18px 14px",
-          borderBottom: "1px solid #141414",
+          borderBottom: "1px solid var(--border)",
           display: "flex",
           alignItems: "center",
           justifyContent: collapsed ? "center" : "space-between",
@@ -148,10 +149,10 @@ export function AdminSidebar() {
               <Image alt="We Are Roofing UK Ltd" height={32} src="/we-are-roofing-logo.png" style={{ objectFit: "contain" }} width={32} />
             </div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#D4AF37", letterSpacing: "0.03em", fontFamily: "var(--font-display)" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--gold)", letterSpacing: "0.03em", fontFamily: "var(--font-display)" }}>
                 We Are Roofing
               </div>
-              <div style={{ fontSize: 9, color: "#444", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 1 }}>Admin</div>
+              <div style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 1 }}>Admin</div>
             </div>
           </div>
         ) : null}
@@ -161,7 +162,7 @@ export function AdminSidebar() {
             setCollapsed(next);
             localStorage.setItem("war_sidebar_collapsed", String(next));
           }}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#444", padding: 4, borderRadius: 4, display: "flex" }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-faint)", padding: 4, borderRadius: 4, display: "flex" }}
           type="button"
         >
           <NavIcon path={collapsed ? "M13 5l7 7-7 7M5 5l7 7-7 7" : "M11 19l-7-7 7-7M19 19l-7-7 7-7"} size={14} />
@@ -199,20 +200,20 @@ export function AdminSidebar() {
                       fontFamily: "var(--font-ui)",
                       fontSize: 13,
                       fontWeight: active ? 700 : 500,
-                      color: active ? "#ffffff" : "#666",
+                      color: active ? "var(--text-primary)" : "var(--text-muted)",
                       background: active ? "rgba(212,175,55,0.06)" : "transparent",
-                      borderLeft: `2px solid ${active ? "#D4AF37" : "transparent"}`,
+                      borderLeft: `2px solid ${active ? "var(--gold)" : "transparent"}`,
                       textDecoration: "none",
                       cursor: "pointer",
                       transition: "all 0.12s"
                     }}
                     title={collapsed ? item.label : undefined}
                   >
-                    <NavIcon color={active ? "#D4AF37" : "#555"} path={item.icon} size={16} />
+                    <NavIcon color={active ? "var(--gold)" : "var(--text-faint)"} path={item.icon} size={16} />
                     {!collapsed ? (
                       <>
                         <span style={{ flex: 1 }}>{item.label}</span>
-                        {item.children ? <NavIcon color="#333" path={expanded[item.id] ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} size={12} /> : null}
+                        {item.children ? <NavIcon color="var(--text-ghost)" path={expanded[item.id] ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} size={12} /> : null}
                       </>
                     ) : null}
                   </Link>
@@ -227,7 +228,7 @@ export function AdminSidebar() {
                             padding: "5px 10px",
                             fontSize: 11,
                             fontFamily: "var(--font-ui)",
-                            color: pathname === child.href ? "#D4AF37" : "#555",
+                            color: pathname === child.href ? "var(--gold)" : "var(--text-faint)",
                             textDecoration: "none"
                           }}
                         >
@@ -244,7 +245,7 @@ export function AdminSidebar() {
         ))}
       </div>
 
-      <div style={{ padding: collapsed ? "10px 0" : "10px 12px", borderTop: "1px solid #141414" }}>
+      <div style={{ padding: collapsed ? "10px 0" : "10px 12px", borderTop: "1px solid var(--border)" }}>
         <div
           style={{
             width: "100%",
@@ -260,16 +261,19 @@ export function AdminSidebar() {
         >
           <div style={{ position: "relative", flexShrink: 0 }}>
             <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(212,175,55,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <NavIcon color="#D4AF37" path="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" size={14} />
+              <NavIcon color="var(--gold)" path="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" size={14} />
             </div>
-            <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#D4AF37", animation: "goldPulse 2.4s ease-in-out infinite" }} />
+            <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "var(--gold)", animation: "goldPulse 2.4s ease-in-out infinite" }} />
           </div>
           {!collapsed ? (
             <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#D4AF37", fontFamily: "var(--font-ui)" }}>Ask Gauge</div>
-              <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>Your AI assistant</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--gold)", fontFamily: "var(--font-ui)" }}>Ask Gauge</div>
+              <div style={{ fontSize: 9, color: "var(--text-faint)", marginTop: 1 }}>Your AI assistant</div>
             </div>
           ) : null}
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <ThemeToggle compact={collapsed} />
         </div>
         <div style={{ marginTop: 8 }}>
           <LogoutButton />

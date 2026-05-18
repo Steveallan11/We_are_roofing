@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { Business } from "@/lib/types";
 
 type Props = {
@@ -61,6 +62,19 @@ export function SettingsWorkspace({ business }: Props) {
         <SettingsTile href="/settings/rates" kicker="Pricing" title="Rate Card" text="Set the unit rates that stop quotes coming out at £0." />
         <SettingsTile href="/knowledge" kicker="AI Knowledge" title="Knowledge Base" text="Upload quote examples and Andrew-style wording for Gauge." />
         <SettingsTile href="/money" kicker="Finance" title="Money Workspace" text="Review quotes, invoices, payment status, and PDFs." />
+      </section>
+
+      <section className="card p-5">
+        <p className="section-kicker text-[0.65rem] uppercase">Appearance</p>
+        <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-condensed text-3xl text-white">Theme</h2>
+            <p className="mt-2 text-sm text-[var(--muted)]">Choose between the obsidian field mode and a lighter office view.</p>
+          </div>
+          <div className="w-full md:w-48">
+            <ThemeToggle />
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">

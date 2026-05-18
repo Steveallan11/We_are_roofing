@@ -55,6 +55,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
       <AttentionBanner jobs={attentionJobs} onViewAll={() => setActiveFilter("attention")} />
       <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={jobs} onSelect={setActiveFilter} />
+      <PipelineTotalsBar jobs={activeJobs} />
       <JobFilters active={activeFilter} attentionCount={attentionJobs.length} onSelect={setActiveFilter} />
 
       {filteredJobs.length === 0 ? (
@@ -96,6 +97,46 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function PipelineTotalsBar({ jobs }: { jobs: JobForAction[] }) {
+  const total = Math.max(jobs.length, 1);
+  const segments = PIPELINE_GROUPS.map((group) => {
+    const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
+    const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+    const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--border-mid)";
+    return {
+      color,
+      count: groupJobs.length,
+      label: group.label,
+      value,
+      width: `${(groupJobs.length / total) * 100}%`
+    };
+  }).filter((segment) => segment.count > 0);
+
+  if (jobs.length === 0) return null;
+
+  return (
+    <div className="card p-3">
+      <div className="flex h-3 overflow-hidden rounded-full bg-[var(--surface-deep)]">
+        {segments.map((segment) => (
+          <div
+            key={segment.label}
+            style={{ background: segment.color, width: segment.width }}
+            title={`${segment.label}: ${segment.count} job${segment.count === 1 ? "" : "s"} · ${currency(segment.value)}`}
+          />
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-3 text-xs text-[var(--muted)]">
+        {segments.map((segment) => (
+          <span className="inline-flex items-center gap-2" key={segment.label}>
+            <span className="h-2 w-2 rounded-full" style={{ background: segment.color }} />
+            {segment.label}: {segment.count}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

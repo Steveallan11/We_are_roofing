@@ -1,29 +1,71 @@
-import { getStatusDisplayLabel } from "@/lib/job-workflow";
-import { getStatusColor } from "@/lib/jobs/statusColors";
-import type { JobStatus, QuoteStatus } from "@/lib/types";
+import { CONDITION_COLORS, INVOICE_STATUS_COLORS, QUOTE_STATUS_COLORS, STATUS_COLORS, URGENCY_COLORS } from "@/lib/theme/statusColors";
 
-type Props = {
-  status: JobStatus | QuoteStatus;
+type BadgeType = "job" | "quote" | "invoice" | "condition" | "urgency";
+
+type StatusBadgeProps = {
+  status: string;
+  type?: BadgeType;
+  size?: "sm" | "md";
+  showDot?: boolean;
 };
 
-const quoteStyles: Record<string, { bg: string; text: string; dot: string }> = {
-  Draft: { bg: "rgba(212,175,55,0.08)", text: "#f0e8d0", dot: "#D4AF37" },
-  Approved: { bg: "rgba(16,185,129,0.1)", text: "#10b981", dot: "#10b981" },
-  Sent: { bg: "rgba(139,92,246,0.1)", text: "#8b5cf6", dot: "#8b5cf6" },
-  "Needs Review": { bg: "rgba(239,68,68,0.1)", text: "#ef4444", dot: "#ef4444" },
-  Accepted: { bg: "rgba(16,185,129,0.1)", text: "#10b981", dot: "#10b981" },
-  Declined: { bg: "rgba(100,116,139,0.1)", text: "#64748b", dot: "#64748b" }
+type BadgeConfig = {
+  color: string;
+  bg: string;
+  border?: string;
+  label: string;
 };
 
-export function StatusBadge({ status }: Props) {
-  const colors = quoteStyles[status] ?? getStatusColor(status as JobStatus);
+export function StatusBadge({ status, type = "job", size = "md", showDot = true }: StatusBadgeProps) {
+  const map =
+    type === "quote"
+      ? QUOTE_STATUS_COLORS
+      : type === "invoice"
+        ? INVOICE_STATUS_COLORS
+        : type === "condition"
+          ? CONDITION_COLORS
+          : type === "urgency"
+            ? URGENCY_COLORS
+            : STATUS_COLORS;
+  const cfg = ((map as Record<string, BadgeConfig>)[status] ?? {
+    color: "var(--text-muted)",
+    bg: "rgba(136,136,136,0.10)",
+    border: "rgba(136,136,136,0.20)",
+    label: status
+  }) as BadgeConfig;
+
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-1 font-ui text-[9px] font-bold uppercase tracking-[0.06em]"
-      style={{ background: colors.bg, borderColor: colors.dot, color: colors.text }}
+      style={{
+        alignItems: "center",
+        background: cfg.bg,
+        border: `1px solid ${cfg.border || cfg.bg}`,
+        borderRadius: 4,
+        color: cfg.color,
+        display: "inline-flex",
+        fontFamily: "var(--font-ui)",
+        fontSize: size === "sm" ? 8 : 9,
+        fontWeight: 700,
+        gap: showDot ? 5 : 0,
+        letterSpacing: "0.06em",
+        padding: size === "sm" ? "1px 6px" : "2px 8px",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap"
+      }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: colors.dot }} />
-      {getStatusDisplayLabel(status as JobStatus)}
+      {showDot ? (
+        <span
+          style={{
+            background: cfg.color,
+            borderRadius: "50%",
+            boxShadow: `0 0 4px ${cfg.color}60`,
+            flexShrink: 0,
+            height: 5,
+            width: 5
+          }}
+        />
+      ) : null}
+      {cfg.label || status}
     </span>
   );
 }

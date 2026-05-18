@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "We Are Roofing OS",
@@ -9,10 +10,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        {children}
-        <AssistantPanel />
+        <ThemeProvider>
+          {children}
+          <AssistantPanel />
+        </ThemeProvider>
       </body>
     </html>
   );
