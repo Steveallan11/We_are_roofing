@@ -63,7 +63,7 @@ const NAV: NavGroup[] = [
       },
       {
         id: "comms",
-        label: "Communications",
+        label: "Comms",
         href: "/comms",
         icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
         badgeColor: "#ef4444"
@@ -77,6 +77,12 @@ const NAV: NavGroup[] = [
           { label: "Quotes & Invoices", href: "/money" },
           { label: "Rate Card", href: "/settings/rates" }
         ]
+      },
+      {
+        id: "surveys",
+        label: "Surveys",
+        href: "/surveys",
+        icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
       }
     ]
   },
@@ -88,6 +94,12 @@ const NAV: NavGroup[] = [
         label: "Calendar",
         href: "/calendar",
         icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+      },
+      {
+        id: "map",
+        label: "Job Map",
+        href: "/jobs",
+        icon: "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
       },
       {
         id: "knowledge",
@@ -141,13 +153,13 @@ export function AdminSidebar() {
     };
   }, []);
 
-  const width = collapsed ? 56 : 240;
+  const width = collapsed ? 56 : 220;
   const isActive = (href: string) => (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href));
   const sectionActive = (item: NavItem) => isActive(item.href) || Boolean(item.children?.some((child) => pathname.startsWith(child.href)));
 
   return (
     <aside
-      className="no-print hidden md:flex"
+      className="no-print hidden lg:flex"
       style={{
         width,
         minHeight: "100vh",
@@ -235,6 +247,7 @@ export function AdminSidebar() {
                       display: "flex",
                       alignItems: "center",
                       gap: collapsed ? 0 : 10,
+                      minHeight: 44,
                       padding: collapsed ? "10px 0" : "9px 16px",
                       justifyContent: collapsed ? "center" : "flex-start",
                       fontFamily: "var(--font-ui)",
@@ -305,7 +318,8 @@ export function AdminSidebar() {
       </div>
 
       <div style={{ padding: collapsed ? "10px 0" : "10px 12px", borderTop: "1px solid var(--border)" }}>
-        <div
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("gauge:prompt", { detail: { prompt: "" } }))}
           style={{
             width: "100%",
             padding: collapsed ? "10px 0" : "10px 12px",
@@ -315,8 +329,10 @@ export function AdminSidebar() {
             justifyContent: collapsed ? "center" : "flex-start",
             background: "rgba(212,175,55,0.06)",
             border: "1px solid rgba(212,175,55,0.20)",
-            borderRadius: 8
+            borderRadius: 8,
+            cursor: "pointer"
           }}
+          type="button"
         >
           <div style={{ position: "relative", flexShrink: 0 }}>
             <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(212,175,55,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -330,7 +346,7 @@ export function AdminSidebar() {
               <div style={{ fontSize: 9, color: "var(--text-faint)", marginTop: 1 }}>Your AI assistant</div>
             </div>
           ) : null}
-        </div>
+        </button>
         <div style={{ marginTop: 8 }}>
           <ThemeToggle compact={collapsed} />
         </div>

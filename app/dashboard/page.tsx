@@ -42,7 +42,7 @@ export default async function DashboardPage() {
         </>
       }
     >
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <MetricCard hint="Open work excluding completed, lost, and archived" label="Active Jobs" value={activeJobs.length} />
         <MetricCard hint="Estimated value across active jobs" label="Pipeline Value" value={currency(pipelineValue)} />
         <MetricCard hint="Completed jobs this month" label="Revenue This Month" value={currency(revenueThisMonth)} />

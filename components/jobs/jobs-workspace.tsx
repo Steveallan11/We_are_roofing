@@ -43,7 +43,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
           <p className="section-kicker text-[0.65rem] uppercase">Roofing Pipeline</p>
           <p className="mt-1 text-sm text-[var(--muted)]">Board for the day-to-day flow. List view is for quick scanning.</p>
         </div>
-        <div className="flex rounded-2xl border border-[var(--border)] bg-black/20 p-1">
+        <div className="hidden rounded-2xl border border-[var(--border)] bg-black/20 p-1 lg:flex">
           <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${view === "board" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"}`} onClick={() => setView("board")} type="button">
             Board
           </button>
@@ -60,42 +60,70 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
       {filteredJobs.length === 0 ? (
         <EmptyState title="No jobs here" message="This filter is clear. Switch back to All Jobs or add a new lead." actionHref="/jobs/new" actionLabel="+ Add Job" />
-      ) : view === "list" || activeFilter === "attention" ? (
-        <div className="grid gap-3">
-          {filteredJobs.map((job) => (
-            <JobCard job={job} key={job.id} list />
-          ))}
-        </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2">
-          {visibleGroups.map((group) => {
-            const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
-            const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
-            const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--gold)";
-            return (
-              <section className="min-w-[260px] flex-1 rounded-[1.25rem] border bg-black/20" key={group.key} style={{ borderColor: color }}>
-                <div className="border-b border-[var(--border)] p-3" style={{ background: groupJobs[0] ? `${color}12` : "rgba(212,175,55,0.07)" }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-bold text-white">{group.label}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">{groupJobs.length} jobs{value > 0 ? ` | ${currency(value)}` : ""}</p>
-                    </div>
+        <>
+          <div className="grid gap-4 lg:hidden">
+            {visibleGroups.map((group) => {
+              const groupJobs = filteredJobs.filter((job) => group.statuses.includes(job.status));
+              if (groupJobs.length === 0) return null;
+              const color = getStatusColor(groupJobs[0].status).dot;
+              return (
+                <section key={group.key}>
+                  <div className="mb-2 flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+                    <p className="section-kicker text-[0.62rem]">{group.label} ({groupJobs.length})</p>
+                    <div className="h-px flex-1 bg-[var(--border)]" />
                   </div>
-                </div>
-                <div className="grid min-h-[220px] gap-3 p-3">
-                  {groupJobs.length ? (
-                    groupJobs.map((job) => <JobCard compact job={job} key={job.id} />)
-                  ) : (
-                    <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-[var(--border)] text-sm text-[var(--dim)]">
-                      No jobs here
+                  <div className="grid gap-3">
+                    {groupJobs.map((job) => (
+                      <JobCard job={job} key={job.id} list />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+
+          {view === "list" || activeFilter === "attention" ? (
+            <div className="hidden gap-3 lg:grid">
+              {filteredJobs.map((job) => (
+                <JobCard job={job} key={job.id} list />
+              ))}
+            </div>
+          ) : (
+            <div className="hidden gap-4 overflow-x-auto pb-2 lg:flex">
+              {visibleGroups.map((group) => {
+                const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
+                const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+                const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--gold)";
+                return (
+                  <section className="min-w-[220px] flex-1 rounded-[var(--card-radius-desktop)] border bg-black/20" key={group.key} style={{ borderColor: color }}>
+                    <div className="border-b border-[var(--border)] p-3" style={{ background: groupJobs[0] ? `${color}12` : "rgba(212,175,55,0.07)" }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.14em]" style={{ color }}>{group.label}</p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">{groupJobs.length} jobs{value > 0 ? ` | ${currency(value)}` : ""}</p>
+                        </div>
+                        <span className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-bold text-black" style={{ background: color }}>
+                          {groupJobs.length}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+                    <div className="grid min-h-[220px] gap-3 p-3">
+                      {groupJobs.length ? (
+                        groupJobs.map((job) => <JobCard compact job={job} key={job.id} />)
+                      ) : (
+                        <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-[var(--border)] text-sm text-[var(--dim)]">
+                          No jobs here
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

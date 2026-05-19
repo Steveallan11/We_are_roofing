@@ -37,12 +37,20 @@ const MOBILE_NAV = [
     label: "Comms",
     href: "/comms",
     icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+  },
+  {
+    id: "surveys",
+    label: "Surveys",
+    href: "/surveys",
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
   }
 ];
 
 export function MobileBottomNav() {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const hidden = pathname === "/login" || pathname.startsWith("/quote/");
 
   useEffect(() => {
     let active = true;
@@ -61,12 +69,10 @@ export function MobileBottomNav() {
     };
   }, []);
 
-  function openGauge() {
-    window.dispatchEvent(new CustomEvent("gauge:prompt", { detail: { prompt: "" } }));
-  }
+  if (hidden) return null;
 
   return (
-    <nav aria-label="Primary mobile navigation" className="mobile-bottom-nav no-print md:hidden">
+    <nav aria-label="Primary mobile navigation" className="mobile-bottom-nav no-print lg:hidden">
       <div className="mobile-bottom-nav__inner">
         {MOBILE_NAV.map((item) => {
           const active = item.href === "/dashboard" ? pathname === "/dashboard" || pathname === "/" : pathname.startsWith(item.href);
@@ -81,9 +87,6 @@ export function MobileBottomNav() {
             </Link>
           );
         })}
-        <button aria-label="Open Gauge assistant" className="mobile-bottom-nav__gauge" onClick={openGauge} type="button">
-          <NavIcon color="#000" path="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" size={20} />
-        </button>
       </div>
     </nav>
   );

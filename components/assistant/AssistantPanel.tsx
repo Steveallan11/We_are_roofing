@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { AssistantButton } from "@/components/assistant/AssistantButton";
 import { AssistantMessage } from "@/components/assistant/AssistantMessage";
 import { AssistantTyping } from "@/components/assistant/AssistantTyping";
 import { useAssistant } from "@/components/assistant/useAssistant";
@@ -16,12 +15,6 @@ export function AssistantPanel() {
 
   return (
     <>
-      {!assistant.open ? (
-        <div className="hidden md:block">
-          <AssistantButton onClick={() => assistant.setOpen(true)} overdueCount={assistant.overdueCount} tooltipVisible={assistant.tooltipVisible} />
-        </div>
-      ) : null}
-
       {assistant.open ? (
         <div className="fixed bottom-24 right-4 z-50 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-[1.25rem] border border-[var(--border2)] bg-[var(--dark)] shadow-2xl md:bottom-6 md:right-6 md:rounded-[1.5rem]">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
