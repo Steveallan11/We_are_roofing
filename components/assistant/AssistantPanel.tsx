@@ -17,11 +17,13 @@ export function AssistantPanel() {
   return (
     <>
       {!assistant.open ? (
-        <AssistantButton onClick={() => assistant.setOpen(true)} overdueCount={assistant.overdueCount} tooltipVisible={assistant.tooltipVisible} />
+        <div className="hidden md:block">
+          <AssistantButton onClick={() => assistant.setOpen(true)} overdueCount={assistant.overdueCount} tooltipVisible={assistant.tooltipVisible} />
+        </div>
       ) : null}
 
       {assistant.open ? (
-        <div className="fixed bottom-6 right-6 z-50 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-[1.5rem] border border-[var(--border2)] bg-[var(--dark)] shadow-2xl">
+        <div className="fixed bottom-24 right-4 z-50 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-[1.25rem] border border-[var(--border2)] bg-[var(--dark)] shadow-2xl md:bottom-6 md:right-6 md:rounded-[1.5rem]">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
             <div>
               <p className="font-display text-2xl text-[var(--gold-l)]">Gauge</p>
@@ -40,7 +42,7 @@ export function AssistantPanel() {
             </div>
           </div>
 
-          <div className="flex h-[520px] flex-col">
+          <div className="flex h-[min(520px,calc(100vh-9rem))] flex-col md:h-[520px]">
             <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4" ref={assistant.scrollRef}>
               {assistant.messages.length === 0 ? (
                 <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 text-sm text-[var(--text)]">

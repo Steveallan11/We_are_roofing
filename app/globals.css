@@ -271,6 +271,12 @@ tfoot td {
   padding: 18px 18px 48px;
 }
 
+.app-page-header {
+  background:
+    linear-gradient(135deg, rgba(212,175,55,0.10), transparent 30%),
+    linear-gradient(180deg, rgba(17,17,17,0.98), rgba(13,13,13,0.98));
+}
+
 .card {
   overflow: hidden;
   border: 1px solid var(--border);
@@ -513,6 +519,93 @@ tfoot td {
   animation: assistant-fab-pulse 2.4s ease-in-out infinite;
 }
 
+.mobile-bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 45;
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.mobile-bottom-nav__inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  max-width: 480px;
+  min-height: 66px;
+  margin-inline: auto;
+  border: 1px solid rgba(212,175,55,0.18);
+  border-radius: 16px;
+  background: rgba(10,10,10,0.94);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.58);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+.mobile-bottom-nav__item {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  border-radius: 12px;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mobile-bottom-nav__item.is-active {
+  color: var(--gold);
+}
+
+.mobile-bottom-nav__icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-bottom-nav__badge {
+  position: absolute;
+  top: -8px;
+  right: -13px;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--obsidian);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1;
+  padding-inline: 5px;
+}
+
+.mobile-bottom-nav__gauge {
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  display: inline-flex;
+  width: 58px;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(10,10,10,0.96);
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.48), 0 0 0 8px rgba(212,175,55,0.09);
+  transform: translateX(-50%);
+}
+
 .no-print {}
 
 @keyframes goldPulse {
@@ -564,7 +657,34 @@ tfoot td {
   }
 
   .app-shell {
-    padding: 12px 12px 88px;
+    padding: 10px 12px 104px;
+  }
+
+  .app-page-header {
+    margin-inline: -2px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    padding: 16px !important;
+  }
+
+  .app-page-title {
+    font-size: 2rem !important;
+    line-height: 0.98 !important;
+  }
+
+  .app-page-header .brand-logo-mark {
+    transform: scale(0.9);
+    transform-origin: left center;
+  }
+
+  .card {
+    border-radius: 8px;
+  }
+
+  .button-primary,
+  .button-secondary,
+  .button-ghost {
+    min-height: 44px;
   }
 }
 
