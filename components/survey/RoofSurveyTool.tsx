@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   AREA_COLORS,
   CONDITIONS,
@@ -633,17 +634,39 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
     setUploadingImage(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-      const response = await fetch(`/api/roof-surveys/${surveyId}/image`, {
+      const uploadRequest = await fetch(`/api/roof-surveys/${surveyId}/image`, {
         method: "POST",
-        body: formData
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "create-upload",
+          file_name: file.name,
+          content_type: file.type || "image/png"
+        })
       });
-      const result = (await response.json().catch(() => null)) as
+
+      const uploadPayload = (await uploadRequest.json().catch(() => null)) as
+        | { ok?: boolean; error?: string; storage_path?: string; token?: string }
+        | null;
+      if (!uploadRequest.ok || uploadPayload?.ok === false || !uploadPayload?.storage_path || !uploadPayload?.token) {
+        throw new Error(uploadPayload?.error || "Unable to prepare the survey image upload.");
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      const upload = await supabase.storage.from("survey-images").uploadToSignedUrl(uploadPayload.storage_path, uploadPayload.token, file);
+      if (upload.error) {
+        throw new Error(upload.error.message);
+      }
+
+      const attachResponse = await fetch(`/api/roof-surveys/${surveyId}/image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storage_path: uploadPayload.storage_path })
+      });
+      const result = (await attachResponse.json().catch(() => null)) as
         | { ok?: boolean; error?: string; storage_path?: string; signed_url?: string }
         | null;
-      if (!response.ok || result?.ok === false || !result?.storage_path || !result?.signed_url) {
-        throw new Error(result?.error || "Unable to upload the survey image.");
+      if (!attachResponse.ok || result?.ok === false || !result?.storage_path || !result?.signed_url) {
+        throw new Error(result?.error || "Unable to attach the survey image.");
       }
       updateSurvey({
         satellite_image_path: result.storage_path,
