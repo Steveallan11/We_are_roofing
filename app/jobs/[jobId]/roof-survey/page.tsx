@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { RoofSurveyTool } from "@/components/survey/RoofSurveyTool";
-import { SurveyProvider } from "@/components/survey/SurveyProvider";
+import { GoogleMapsTakeoff } from "@/components/survey/GoogleMapsTakeoff";
 import { getJobBundle } from "@/lib/data";
 import { getOrCreateRoofSurvey } from "@/lib/roof-surveys";
 
@@ -55,21 +54,15 @@ export default async function RoofSurveyPage({ params }: Props) {
       </div>
 
       <div className="mt-5">
-        <SurveyProvider jobId={bundle.job.id} surveyId={survey.id}>
-          <RoofSurveyTool
-            initialSurvey={survey}
-            job={{
-              job_ref: bundle.job.job_ref,
-              property_address: bundle.job.property_address,
-              customer: {
-                full_name: bundle.customer.full_name,
-                email: bundle.customer.email
-              }
-            }}
-            jobId={bundle.job.id}
-            surveyId={survey.id}
-          />
-        </SurveyProvider>
+        <GoogleMapsTakeoff
+          address={bundle.job.property_address}
+          customerEmail={bundle.customer.email}
+          customerName={bundle.customer.full_name}
+          initialSurvey={survey}
+          jobId={bundle.job.id}
+          jobRef={bundle.job.job_ref}
+          surveyId={survey.id}
+        />
       </div>
     </AppShell>
   );

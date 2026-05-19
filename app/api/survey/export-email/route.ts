@@ -125,8 +125,8 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, messageId: data?.id });
 }
 
-function getMaxDimension(sections: Array<{ points: Array<{ x: number; y: number }> }>, lines: Array<{ points: Array<{ x: number; y: number }> }>, key: "x" | "y") {
-  const values = [...sections.flatMap((section) => section.points), ...lines.flatMap((line) => line.points)].map((point) => point[key]);
+function getMaxDimension(sections: Array<{ points: Array<{ x?: number; y?: number; lat?: number; lng?: number }> }>, lines: Array<{ points: Array<{ x?: number; y?: number; lat?: number; lng?: number }> }>, key: "x" | "y") {
+  const values = [...sections.flatMap((section) => section.points), ...lines.flatMap((line) => line.points)].map((point) => point[key] ?? 0);
   return Math.max(1000, ...values);
 }
 
