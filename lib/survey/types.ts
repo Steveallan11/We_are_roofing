@@ -3,6 +3,13 @@ export interface SurveyPoint {
   y: number;
 }
 
+export interface RoofSurveyBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
 export interface RoofSurveySection {
   id?: string;
   label: string;
@@ -38,6 +45,7 @@ export interface RoofSurveyRecord {
   job_id: string;
   project_name: string;
   scale_px_per_m: number | null;
+  bounds?: RoofSurveyBounds | null;
   satellite_image_path: string | null;
   satellite_image_url?: string | null;
   notes: string;
@@ -45,6 +53,7 @@ export interface RoofSurveyRecord {
   sections: RoofSurveySection[];
   lines: RoofSurveyLine[];
   features: RoofSurveyFeature[];
+  created_at?: string | null;
 }
 
 export interface BOMItem {

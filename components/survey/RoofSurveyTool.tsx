@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import {
   AREA_COLORS,
   CONDITIONS,
@@ -18,6 +19,9 @@ import {
   type RoofSurveySelection,
   type SurveyPoint
 } from "@/lib/survey/types";
+import { buildKml, downloadKml } from "@/lib/survey/kmlExporter";
+import { generateTakeoffReportHtml, printToPdf } from "@/lib/survey/pdfExporter";
+import { exportZipPackage } from "@/lib/survey/zipExporter";
 import {
   buildRoofSurveyBom,
   centroid,
@@ -37,6 +41,14 @@ type Props = {
   jobId: string;
   surveyId: string;
   initialSurvey: RoofSurveyRecord;
+  job?: {
+    job_ref?: string | null;
+    property_address?: string | null;
+    customer?: {
+      full_name?: string | null;
+      email?: string | null;
+    } | null;
+  };
   onSave?: (survey: RoofSurveyRecord) => Promise<void>;
   onExportToQuote?: (items: BOMItem[]) => Promise<void>;
 };
@@ -53,13 +65,14 @@ type CalibrationLine = {
 function loadCanvasImage(url: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Unable to load the survey image."));
     image.src = url;
   });
 }
 
-export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExportToQuote }: Props) {
+export function RoofSurveyTool({ jobId, surveyId, initialSurvey, job, onSave, onExportToQuote }: Props) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -92,6 +105,11 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
   const [uploadingImage, setUploadingImage] = useState(false);
   const [importingKml, setImportingKml] = useState(false);
   const [kmlMessage, setKmlMessage] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [emailTo, setEmailTo] = useState(job?.customer?.email ?? "");
+  const [emailing, setEmailing] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const toCanvas = useCallback(
     (worldPoint: SurveyPoint) => ({
@@ -741,6 +759,128 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
     router.push(result.quote_url as Route);
   }
 
+  const exportSections = useMemo(
+    () => survey.sections.map((section) => ({ ...section, area_m2: section.area_m2 ?? getSectionArea(section, survey.scale_px_per_m) })),
+    [survey.scale_px_per_m, survey.sections]
+  );
+  const exportLines = useMemo(
+    () => survey.lines.map((line) => ({ ...line, length_lm: line.length_lm ?? getLineLength(line, survey.scale_px_per_m) })),
+    [survey.lines, survey.scale_px_per_m]
+  );
+
+  function exportBase() {
+    const canvas = canvasRef.current;
+    return {
+      projectName: survey.project_name,
+      jobRef: job?.job_ref || "WR-J-TBC",
+      address: job?.property_address || "",
+      customerName: job?.customer?.full_name || "",
+      sections: exportSections,
+      lines: exportLines,
+      surveyDate: new Date(survey.created_at || Date.now()).toLocaleDateString("en-GB"),
+      canvasWidth: bgImage?.width || canvas?.width || 1000,
+      canvasHeight: bgImage?.height || canvas?.height || 700
+    };
+  }
+
+  function getCanvasDataUrl() {
+    try {
+      return canvasRef.current?.toDataURL("image/jpeg", 0.85) || "";
+    } catch {
+      setError("The annotated image could not be captured. Try re-uploading the satellite image, then export again.");
+      return "";
+    }
+  }
+
+  function buildCurrentKml() {
+    const base = exportBase();
+    return buildKml({
+      ...base,
+      bounds: survey.bounds,
+      scalePxPerM: survey.scale_px_per_m
+    });
+  }
+
+  function buildCurrentCsv() {
+    const base = exportBase();
+    return buildCsv(base);
+  }
+
+  function handleKmlExport() {
+    if (!survey.bounds) {
+      const proceed = window.confirm(
+        "Geographic bounds are not set on this survey.\n\nThe KML will contain pixel coordinates instead of GPS coordinates, so it will not land in the correct location in Google Earth.\n\nExport anyway?"
+      );
+      if (!proceed) return;
+    }
+    downloadKml(buildCurrentKml(), `${exportBase().jobRef}-roof-survey`);
+    setExportOpen(false);
+  }
+
+  function handleCsvExport() {
+    downloadCsv(buildCurrentCsv(), `${exportBase().jobRef}-measurements`);
+    setExportOpen(false);
+  }
+
+  function handlePdfExport() {
+    const base = exportBase();
+    printToPdf(
+      generateTakeoffReportHtml({
+        ...base,
+        canvasDataUrl: getCanvasDataUrl(),
+        scalePxPerM: survey.scale_px_per_m
+      }),
+      `${base.jobRef}-roof-takeoff`
+    );
+    setExportOpen(false);
+  }
+
+  async function handleZipExport() {
+    const base = exportBase();
+    await exportZipPackage({
+      ...base,
+      kmlString: buildCurrentKml(),
+      csvString: buildCurrentCsv(),
+      canvasDataUrl: getCanvasDataUrl(),
+      satelliteImageUrl: survey.satellite_image_url
+    });
+    setExportOpen(false);
+  }
+
+  async function handleEmailExport() {
+    if (!emailTo) return;
+    setEmailing(true);
+    setError(null);
+    try {
+      await saveSurvey("auto");
+      const response = await fetch("/api/survey/export-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          surveyId,
+          toEmail: emailTo,
+          toName: job?.customer?.full_name,
+          includeKml: true,
+          includeCsv: true,
+          kmlString: buildCurrentKml(),
+          csvString: buildCurrentCsv(),
+          message: `Please find the roof takeoff survey for ${job?.property_address || "this job"} attached.`
+        })
+      });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || result?.ok === false) {
+        throw new Error(result?.error || "Email failed.");
+      }
+      setShowEmailForm(false);
+      setExportOpen(false);
+      setExportMessage(`Takeoff export sent to ${emailTo}.`);
+    } catch (emailError) {
+      setError(emailError instanceof Error ? emailError.message : "Email failed. Try again.");
+    } finally {
+      setEmailing(false);
+    }
+  }
+
   const saveLabel = saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : "Idle";
 
   return (
@@ -1129,6 +1269,51 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
                       : "Select a shape to edit it or use Pan mode to move around the image."}
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <div className="relative">
+                <button className="button-primary !py-2 text-xs" onClick={() => setExportOpen((current) => !current)} type="button">
+                  Export
+                </button>
+                {exportOpen ? (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
+                    <ExportOption label="PDF Report" sub="Annotated image and measurements" onClick={handlePdfExport} />
+                    <ExportOption label="KML File" sub={survey.bounds ? "Google Earth GPS overlay" : "Pixel fallback until bounds are set"} onClick={handleKmlExport} />
+                    <ExportOption label="CSV Measurements" sub="Open in Excel or Numbers" onClick={handleCsvExport} />
+                    <ExportOption label="Full Package (.zip)" sub="KML, CSV, images and README" onClick={() => void handleZipExport()} />
+                    <button
+                      className="block w-full border-t border-[var(--border)] px-4 py-3 text-left hover:bg-[var(--elevated)]"
+                      onClick={() => {
+                        setShowEmailForm(true);
+                        setExportOpen(false);
+                      }}
+                      type="button"
+                    >
+                      <span className="block text-xs font-semibold text-white">Email to...</span>
+                      <span className="mt-1 block text-[0.65rem] text-[var(--muted)]">Send KML and CSV direct</span>
+                    </button>
+                  </div>
+                ) : null}
+                {showEmailForm ? (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xl">
+                    <p className="text-sm font-semibold text-white">Email takeoff survey</p>
+                    <input
+                      className="field mt-3"
+                      onChange={(event) => setEmailTo(event.target.value)}
+                      placeholder="recipient@email.com"
+                      type="email"
+                      value={emailTo}
+                    />
+                    <p className="mt-2 text-xs text-[var(--muted)]">Attaches KML and CSV. PDF and ZIP stay as local downloads for now.</p>
+                    <div className="mt-3 flex gap-2">
+                      <button className="button-ghost flex-1 !py-2 text-xs" onClick={() => setShowEmailForm(false)} type="button">
+                        Cancel
+                      </button>
+                      <button className="button-primary flex-[2] !py-2 text-xs" disabled={!emailTo || emailing} onClick={() => void handleEmailExport()} type="button">
+                        {emailing ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <span className={`text-xs ${saveState === "error" ? "text-[#ff9b9b]" : "text-[var(--muted)]"}`}>{saveLabel}</span>
               <button className="button-secondary" onClick={() => void saveSurvey("manual")} type="button">
                 Save
@@ -1188,8 +1373,22 @@ export function RoofSurveyTool({ jobId, surveyId, initialSurvey, onSave, onExpor
               {error}
             </div>
           ) : null}
+          {exportMessage && !error ? (
+            <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-[#2c7a4b] bg-[#0f2217]/95 px-4 py-3 text-sm text-[#9df0bb] md:left-auto md:right-4 md:w-[420px]">
+              {exportMessage}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+function ExportOption({ label, sub, onClick }: { label: string; sub: string; onClick: () => void }) {
+  return (
+    <button className="block w-full border-b border-[var(--border)] px-4 py-3 text-left hover:bg-[var(--elevated)]" onClick={onClick} type="button">
+      <span className="block text-xs font-semibold text-white">{label}</span>
+      <span className="mt-1 block text-[0.65rem] text-[var(--muted)]">{sub}</span>
+    </button>
   );
 }

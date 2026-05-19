@@ -15,6 +15,7 @@ function createEmptySurvey(jobId: string, projectName?: string): RoofSurveyRecor
     job_id: jobId,
     project_name: projectName ?? "New Roof Survey",
     scale_px_per_m: null,
+    bounds: null,
     satellite_image_path: null,
     satellite_image_url: null,
     notes: "",
@@ -101,10 +102,12 @@ export async function hydrateRoofSurvey(surveyId: string): Promise<RoofSurveyRec
     job_id: surveyResult.data.job_id,
     project_name: surveyResult.data.project_name ?? "Roof Survey",
     scale_px_per_m: surveyResult.data.scale_px_per_m ?? null,
+    bounds: isRoofSurveyBounds(surveyResult.data.bounds) ? surveyResult.data.bounds : null,
     satellite_image_path: surveyResult.data.satellite_image_path ?? null,
     satellite_image_url: satelliteImageUrl,
     notes: surveyResult.data.notes ?? "",
     status: surveyResult.data.status === "complete" ? "complete" : "draft",
+    created_at: surveyResult.data.created_at ?? null,
     sections: (sectionsResult.data ?? []).map((section) => ({
       id: section.id,
       label: section.label ?? "Section",
@@ -133,4 +136,10 @@ export async function hydrateRoofSurvey(surveyId: string): Promise<RoofSurveyRec
       notes: feature.notes ?? ""
     }))
   };
+}
+
+function isRoofSurveyBounds(value: unknown): value is RoofSurveyRecord["bounds"] {
+  if (!value || typeof value !== "object") return false;
+  const bounds = value as Record<string, unknown>;
+  return ["north", "south", "east", "west"].every((key) => typeof bounds[key] === "number");
 }

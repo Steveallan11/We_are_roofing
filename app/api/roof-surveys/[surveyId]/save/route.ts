@@ -22,15 +22,24 @@ export async function POST(request: Request, { params }: Props) {
   const supabase = createSupabaseAdminClient();
   const survey = body.survey;
 
-  const { error: surveyError } = await supabase.from("roof_surveys").upsert({
+  const surveyRow = {
     id: surveyId,
     job_id: survey.job_id,
     project_name: survey.project_name,
     scale_px_per_m: survey.scale_px_per_m,
+    bounds: survey.bounds ?? null,
     satellite_image_path: survey.satellite_image_path,
     notes: survey.notes,
     status: survey.status
-  });
+  };
+
+  let { error: surveyError } = await supabase.from("roof_surveys").upsert(surveyRow);
+
+  if (surveyError && /bounds|schema cache/i.test(surveyError.message)) {
+    const { bounds: _bounds, ...fallbackRow } = surveyRow;
+    const retry = await supabase.from("roof_surveys").upsert(fallbackRow);
+    surveyError = retry.error;
+  }
 
   if (surveyError) {
     return NextResponse.json({ ok: false, error: surveyError.message }, { status: 500 });
