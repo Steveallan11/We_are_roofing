@@ -25,7 +25,8 @@ begin
     with check (auth.role() = 'authenticated');
 exception
   when duplicate_object then null;
-end $$;
+end;
+$$;
 
 do $$
 begin
@@ -34,7 +35,8 @@ begin
     with check (bucket_id = 'survey-videos');
 exception
   when duplicate_object then null;
-end $$;
+end;
+$$;
 
 do $$
 begin
@@ -43,4 +45,5 @@ begin
     using (bucket_id = 'survey-videos');
 exception
   when duplicate_object then null;
-end $$;
+end;
+$$;

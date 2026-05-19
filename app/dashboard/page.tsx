@@ -3,14 +3,16 @@ import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { MetricCard } from "@/components/layout/metric-card";
 import { JobCard } from "@/components/jobs/job-card";
+import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { WeatherStrip } from "@/components/weather/WeatherStrip";
-import { getBusiness, getCustomers, getJobs } from "@/lib/data";
+import { getBusiness, getCustomers, getJobs, getPricingRules } from "@/lib/data";
 import { PIPELINE_GROUPS } from "@/lib/jobs/pipelineGroups";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
 import { currency, formatDate } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [business, jobs, customers] = await Promise.all([getBusiness(), getJobs(), getCustomers()]);
+  const [business, jobs, customers, pricingRules] = await Promise.all([getBusiness(), getJobs(), getCustomers(), getPricingRules()]);
+  const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const activeJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
@@ -42,6 +44,8 @@ export default async function DashboardPage() {
         </>
       }
     >
+      {!hasRateCard ? <RateCardNudge /> : null}
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <MetricCard hint="Open work excluding completed, lost, and archived" label="Active Jobs" value={activeJobs.length} />
         <MetricCard hint="Estimated value across active jobs" label="Pipeline Value" value={currency(pipelineValue)} />

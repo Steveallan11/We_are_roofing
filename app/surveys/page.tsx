@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
+import { SurveyTypePicker } from "@/components/survey/SurveyTypePicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getJobs } from "@/lib/data";
@@ -15,7 +16,7 @@ export default async function SurveysPage() {
   return (
     <AppShell
       title="Surveys"
-      subtitle="Start video, import, manual, or takeoff surveys from one mobile-friendly queue."
+      subtitle="Start each site visit with one of two clear routes: AI video survey or manual survey."
       actions={
         <Link className="button-primary" href={"/jobs/new" as Route}>
           New Job
@@ -39,19 +40,8 @@ export default async function SurveysPage() {
                   <p className="mt-2 text-xs text-[var(--text-faint)]">Survey date: {formatDate(job.survey_date ?? null)}</p>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <Link className="button-primary !min-h-11 !px-3 !py-2 text-sm" href={`/jobs/${job.id}/survey/video` as Route}>
-                  Video
-                </Link>
-                <Link className="button-secondary !min-h-11 !px-3 !py-2 text-sm" href={`/jobs/${job.id}/survey/video?mode=import` as Route}>
-                  Import
-                </Link>
-                <Link className="button-ghost !min-h-11 !px-3 !py-2 text-sm" href={`/jobs/${job.id}/survey` as Route}>
-                  Manual
-                </Link>
-                <Link className="button-ghost !min-h-11 !px-3 !py-2 text-sm" href={`/jobs/${job.id}/survey/takeoff` as Route}>
-                  Takeoff
-                </Link>
+              <div className="mt-4">
+                <SurveyTypePicker jobId={job.id} />
               </div>
             </article>
           ))}

@@ -5,6 +5,7 @@ import { ConversationList } from "@/components/comms/ConversationList";
 import { ConversationThread } from "@/components/comms/ConversationThread";
 import { CustomerContext } from "@/components/comms/CustomerContext";
 import { MessageComposer } from "@/components/comms/MessageComposer";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useWindowSize } from "@/lib/hooks/useWindowSize";
 import type { ConversationRecord, MessageRecord, MessageTemplateRecord } from "@/lib/types";
 
@@ -24,6 +25,35 @@ export function UnifiedInbox({ initialConversations, initialConversation, initia
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const { width } = useWindowSize();
   const isMobile = width < 1024;
+
+  useEffect(() => {
+    let active = true;
+
+    async function fetchConversations() {
+      const result = (await fetch("/api/comms/conversations")
+        .then((response) => response.json())
+        .catch(() => null)) as { ok?: boolean; conversations?: ConversationRecord[] } | null;
+      if (!active || !result?.ok) return;
+      const nextConversations = result.conversations ?? [];
+      setConversations(nextConversations);
+      setSelectedConversation((current) => nextConversations.find((conversation) => conversation.id === (current?.id ?? selectedId)) ?? current ?? nextConversations[0] ?? null);
+      setSelectedId((current) => current ?? nextConversations[0]?.id ?? null);
+    }
+
+    void fetchConversations();
+
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("convos")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => void fetchConversations())
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => void fetchConversations())
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;

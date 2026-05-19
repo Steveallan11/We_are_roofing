@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { RateCardEditor } from "@/components/settings/rate-card-editor";
 import { AppShell } from "@/components/layout/app-shell";
 import { getPricingRules, getSuppliers } from "@/lib/data";
@@ -21,6 +22,7 @@ export default async function RateCardPage() {
         </Link>
       }
     >
+      {savedRateRules.length === 0 ? <RateCardNudge compact /> : null}
       <RateCardEditor hasSavedRates={savedRateRules.length > 0} initialRates={rates} suppliers={suppliers} />
     </AppShell>
   );

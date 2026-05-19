@@ -137,8 +137,8 @@ export function KnowledgeAdmin({
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button className="button-ghost" disabled={syncingKb || isPending} onClick={syncHistoricalQuotes} type="button">
-              {syncingKb ? "Syncing KB..." : `Sync ${historicalQuotesMissing} Historical Quotes To KB`}
+            <button className="button-primary" disabled={syncingKb || isPending || historicalQuotesMissing === 0} onClick={syncHistoricalQuotes} type="button">
+              {syncingKb ? "Syncing..." : historicalQuotesMissing > 0 ? `Sync ${historicalQuotesMissing} missing quotes` : "Knowledge synced"}
             </button>
             <select
               className="field min-w-[220px]"

@@ -66,7 +66,15 @@ export function ConversationList({ conversations, activeId, filter, onFilterChan
           );
         })}
 
-        {filtered.length === 0 ? <p className="rounded-2xl border border-[var(--border)] bg-black/20 p-4 text-sm text-[var(--muted)]">No conversations match this filter yet.</p> : null}
+        {filtered.length === 0 ? (
+          <div className="rounded-2xl border border-[var(--border)] bg-black/20 px-6 py-10 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--elevated)] text-xl text-[var(--text-faint)]">...</div>
+            <p className="mt-4 font-display text-xl text-white">No messages yet</p>
+            <p className="mx-auto mt-2 max-w-[260px] text-sm leading-6 text-[var(--muted)]">
+              Customer email, SMS, WhatsApp, and platform replies will appear here once channels start receiving messages.
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

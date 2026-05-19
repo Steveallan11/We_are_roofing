@@ -212,7 +212,9 @@ export async function getConversations(): Promise<ConversationRecord[]> {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    console.warn("Conversations could not be loaded:", error.message);
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Conversations could not be loaded:", error.message);
+    }
     return [];
   }
 
@@ -236,7 +238,9 @@ export async function getMessages(conversationId: string): Promise<MessageRecord
     .order("created_at", { ascending: true });
 
   if (error) {
-    console.warn("Messages could not be loaded:", error.message);
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Messages could not be loaded:", error.message);
+    }
     return [];
   }
 
@@ -255,7 +259,9 @@ export async function getMessageTemplates(): Promise<MessageTemplateRecord[]> {
     .order("name", { ascending: true });
 
   if (error) {
-    console.warn("Message templates could not be loaded:", error.message);
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Message templates could not be loaded:", error.message);
+    }
     return [];
   }
 
@@ -266,6 +272,10 @@ export async function getUnreadConversationCount(): Promise<number> {
   if (!canUseSupabase()) return 0;
   const conversations = await getConversations();
   return conversations.reduce((sum, conversation) => sum + Number(conversation.unread_count ?? 0), 0);
+}
+
+function isMissingRelationError(message: string) {
+  return /relation .* does not exist|schema cache|could not find the table/i.test(message);
 }
 
 export async function getHistoricalQuotes(limit = 100): Promise<HistoricalQuoteRecord[]> {

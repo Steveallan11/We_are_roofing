@@ -375,6 +375,9 @@ tfoot td {
   letter-spacing: 0.01em;
   padding: 0.55rem 1rem;
   transition: all 0.15s;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .button-primary:hover {
@@ -398,6 +401,9 @@ tfoot td {
   font-weight: 700;
   padding: 0.55rem 1rem;
   transition: all 0.15s;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .button-secondary:hover {
@@ -421,6 +427,9 @@ tfoot td {
   font-weight: 600;
   padding: 0.55rem 1rem;
   transition: all 0.15s;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .button-ghost:hover {
@@ -434,6 +443,21 @@ tfoot td {
 .button-ghost:disabled {
   cursor: not-allowed;
   opacity: 0.42;
+}
+
+button:active,
+a[role="button"]:active,
+.button-primary:active,
+.button-secondary:active,
+.button-ghost:active {
+  transform: scale(0.98) !important;
+  transition: transform 0.08s ease !important;
+}
+
+@media (hover: hover) {
+  button:hover {
+    opacity: 0.9;
+  }
 }
 
 .field {
