@@ -77,6 +77,12 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
     setCostBreakdown((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...updates } : item)));
   }
 
+  function deleteLine(index: number) {
+    setCostBreakdown((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setSuccess("Line item removed. Save changes to keep this cost breakdown.");
+    setError(null);
+  }
+
   function calculateOption(lines: CostLineItem[]) {
     const subtotal = Math.round(lines.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
     const vatAmount =
@@ -410,9 +416,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
           </div>
         ) : null}
         <div className="mt-4 space-y-4">
-          {costBreakdown.map((line, index) => (
+          {costBreakdown.length > 0 ? costBreakdown.map((line, index) => (
             <div className="rounded-2xl border border-[var(--border)] p-4" key={`${line.item}-${index}`}>
-              <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
+              <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr_0.8fr_104px]">
                 <div>
                   <label className="label" htmlFor={`line-item-${index}`}>
                     Item
@@ -445,6 +451,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                   />
                   VAT applies
                 </label>
+                <button className="button-ghost mt-6 !min-h-11 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteLine(index)} type="button">
+                  Delete
+                </button>
               </div>
               <div className="mt-4">
                 <label className="label" htmlFor={`line-notes-${index}`}>
@@ -458,7 +467,11 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                 />
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-black/10 p-4 text-sm text-[var(--muted)]">
+              No line items in this quote yet. Add one below before saving if the quote needs pricing.
+            </div>
+          )}
           <button
             className="button-ghost"
             onClick={() =>
