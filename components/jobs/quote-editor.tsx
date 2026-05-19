@@ -369,33 +369,33 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
             <label className="label" htmlFor="roof-report">
               Roof Report
             </label>
-            <textarea className="field min-h-40" id="roof-report" onChange={(event) => setRoofReport(event.target.value)} value={roofReport} />
+            <textarea className="field min-h-72 leading-7" id="roof-report" onChange={(event) => setRoofReport(event.target.value)} value={roofReport} />
           </div>
           <div>
             <label className="label" htmlFor="scope-of-works">
               Scope of Works
             </label>
-            <textarea className="field min-h-40" id="scope-of-works" onChange={(event) => setScopeOfWorks(event.target.value)} value={scopeOfWorks} />
+            <textarea className="field min-h-72 leading-7" id="scope-of-works" onChange={(event) => setScopeOfWorks(event.target.value)} value={scopeOfWorks} />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="label" htmlFor="guarantee-text">
                 Guarantee
               </label>
-              <textarea className="field min-h-28" id="guarantee-text" onChange={(event) => setGuaranteeText(event.target.value)} value={guaranteeText} />
+              <textarea className="field min-h-44 leading-7" id="guarantee-text" onChange={(event) => setGuaranteeText(event.target.value)} value={guaranteeText} />
             </div>
             <div>
               <label className="label" htmlFor="exclusions">
                 Exclusions
               </label>
-              <textarea className="field min-h-28" id="exclusions" onChange={(event) => setExclusions(event.target.value)} value={exclusions} />
+              <textarea className="field min-h-44 leading-7" id="exclusions" onChange={(event) => setExclusions(event.target.value)} value={exclusions} />
             </div>
           </div>
           <div>
             <label className="label" htmlFor="terms">
               Terms
             </label>
-            <textarea className="field min-h-28" id="terms" onChange={(event) => setTerms(event.target.value)} value={terms} />
+            <textarea className="field min-h-52 leading-7" id="terms" onChange={(event) => setTerms(event.target.value)} value={terms} />
           </div>
         </div>
       </div>
@@ -511,7 +511,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
             <label className="label" htmlFor="email-body">
               Customer Email Body
             </label>
-            <textarea className="field min-h-32" id="email-body" onChange={(event) => setEmailBody(event.target.value)} value={emailBody} />
+            <textarea className="field min-h-56 leading-7" id="email-body" onChange={(event) => setEmailBody(event.target.value)} value={emailBody} />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div>
@@ -528,14 +528,14 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
               <label className="label" htmlFor="pricing-notes">
                 Pricing Notes
               </label>
-              <textarea className="field min-h-24" id="pricing-notes" onChange={(event) => setPricingNotes(event.target.value)} value={pricingNotes} />
+              <textarea className="field min-h-36 leading-7" id="pricing-notes" onChange={(event) => setPricingNotes(event.target.value)} value={pricingNotes} />
             </div>
           </div>
           <div>
             <label className="label" htmlFor="missing-info">
               Missing Info
             </label>
-            <textarea className="field min-h-24" id="missing-info" onChange={(event) => setMissingInfo(event.target.value)} value={missingInfo} />
+            <textarea className="field min-h-36 leading-7" id="missing-info" onChange={(event) => setMissingInfo(event.target.value)} value={missingInfo} />
           </div>
         </div>
       </div>
