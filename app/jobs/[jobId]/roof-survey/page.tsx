@@ -20,7 +20,7 @@ export default async function RoofSurveyPage({ params }: Props) {
   return (
     <AppShell
       title="Roof Survey Tool"
-      subtitle="Trace the roof from a satellite screenshot, calibrate the scale, generate the live bill of quantities, and push the measured takeoff straight into the saved quote workflow."
+      subtitle="Draw directly on Google Maps satellite view, import KML/KMZ, and save real-world measurements without manual calibration."
       actions={
         <>
           <Link className="button-secondary" href={`/jobs/${bundle.job.id}/survey`}>
@@ -54,6 +54,12 @@ export default async function RoofSurveyPage({ params }: Props) {
       </div>
 
       <div className="mt-5">
+        <div className="mb-4 rounded-2xl border border-[rgba(212,175,55,0.35)] bg-[rgba(212,175,55,0.08)] p-4">
+          <p className="section-kicker text-[var(--gold)]">New Google Maps Takeoff</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            This version uses live satellite imagery and Google geometry measurements. No scale calibration or uploaded map screenshot is needed.
+          </p>
+        </div>
         <GoogleMapsTakeoff
           address={bundle.job.property_address}
           customerEmail={bundle.customer.email}
