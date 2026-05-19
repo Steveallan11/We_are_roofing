@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { SurveyAdaptiveSections, SurveyRecord } from "@/lib/types";
 
 type Props = {
@@ -17,6 +18,21 @@ type ProcessingResult = {
   survey: Partial<SurveyRecord>;
   analysis: Record<string, any>;
   transcript: string;
+  videosProcessed?: number;
+  totalFrames?: number;
+};
+
+type VideoSlotStatus = "empty" | "uploading" | "ready" | "failed";
+
+type VideoSlot = {
+  id: string;
+  label: string;
+  status: VideoSlotStatus;
+  progress: number;
+  file?: File;
+  storagePath?: string;
+  error?: string;
+  durationSec?: number;
 };
 
 type ReviewItem = {
@@ -47,12 +63,20 @@ type ReviewState = {
   adaptive_sections: SurveyAdaptiveSections;
 };
 
-const STEP_LABELS = ["Video uploaded", "Frames extracted", "Audio transcribed", "AI analysis complete", "Survey ready"];
+const MAX_VIDEO_SLOTS = 4;
+const STEP_LABELS = ["Videos uploaded", "Frames extracted", "Audio transcribed", "AI analysis complete", "Survey ready"];
+
+function createInitialVideoSlots(): VideoSlot[] {
+  return [
+    { id: "video-slot-1", label: "Video 1", status: "empty", progress: 0 },
+    { id: "video-slot-2", label: "Video 2", status: "empty", progress: 0 }
+  ];
+}
 
 export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAddress, initialMode = "record" }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<"record" | "import">(initialMode);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [slots, setSlots] = useState<VideoSlot[]>(createInitialVideoSlots);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -66,6 +90,9 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
+
+  const readySlots = useMemo(() => slots.filter((slot) => slot.status === "ready" && slot.storagePath), [slots]);
 
   useEffect(() => {
     if (mode !== "record") {
@@ -155,13 +182,75 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
     }
   }
 
-  function onSelectFile(file: File | null) {
+  function updateSlot(slotId: string, updates: Partial<VideoSlot>) {
+    setSlots((current) => current.map((slot) => (slot.id === slotId ? { ...slot, ...updates } : slot)));
+  }
+
+  function addVideoSlot() {
+    setSlots((current) => {
+      if (current.length >= MAX_VIDEO_SLOTS) return current;
+      return [
+        ...current,
+        {
+          id: `video-slot-${Date.now()}`,
+          label: `Video ${current.length + 1}`,
+          status: "empty",
+          progress: 0
+        }
+      ];
+    });
+  }
+
+  async function onSelectFile(file: File | null, slotId?: string, durationSec?: number) {
     setError(null);
     setResult(null);
     setReviewState(null);
-    setSelectedFile(file);
+
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(file ? URL.createObjectURL(file) : null);
+
+    if (!file) return;
+
+    const targetSlotId = slotId || slots.find((slot) => slot.status === "empty" || slot.status === "failed")?.id || slots[0]?.id;
+    if (!targetSlotId) {
+      setError("No video slot is available.");
+      return;
+    }
+
+    updateSlot(targetSlotId, {
+      file,
+      status: "uploading",
+      progress: 15,
+      error: undefined,
+      storagePath: undefined,
+      durationSec
+    });
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const safeName = safeFileName(file.name || "survey-video.webm");
+      const storagePath = `surveys/${jobId}/${Date.now()}-${targetSlotId}-${safeName}`;
+      const upload = await supabase.storage.from("survey-videos").upload(storagePath, file, {
+        contentType: file.type || "video/webm",
+        upsert: false
+      });
+
+      if (upload.error) {
+        throw new Error(upload.error.message);
+      }
+
+      updateSlot(targetSlotId, {
+        status: "ready",
+        progress: 100,
+        storagePath: upload.data.path
+      });
+    } catch (uploadError) {
+      updateSlot(targetSlotId, {
+        status: "failed",
+        progress: 0,
+        error: uploadError instanceof Error ? uploadError.message : "Upload failed."
+      });
+    }
   }
 
   function startRecording() {
@@ -173,6 +262,7 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
 
     setError(null);
     setRecordingSeconds(0);
+    recordingStartedAtRef.current = Date.now();
     chunksRef.current = [];
     const recorder = new MediaRecorder(stream, {
       mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
@@ -187,7 +277,9 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
       const file = new File([blob], `survey-${Date.now()}.webm`, { type: blob.type || "video/webm" });
-      onSelectFile(file);
+      const durationSec = recordingStartedAtRef.current ? Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000)) : undefined;
+      recordingStartedAtRef.current = null;
+      void onSelectFile(file, undefined, durationSec);
       setRecording(false);
     };
 
@@ -200,28 +292,32 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
     mediaRecorderRef.current?.stop();
   }
 
-  async function processVideo() {
-    if (!selectedFile) {
-      setError("Choose or record a video first.");
+  async function processVideos() {
+    if (readySlots.length === 0) {
+      setError("Upload at least one video first.");
       return;
     }
 
     setProcessing(true);
     setError(null);
-    const formData = new FormData();
-    formData.append("video", selectedFile);
-    formData.append("jobId", jobId);
-    if (recordingSeconds > 0) {
-      formData.append("durationSec", String(recordingSeconds));
-    }
 
     const response = await fetch("/api/survey/process-video", {
       method: "POST",
-      body: formData
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jobId,
+        videos: readySlots.map((slot) => ({
+          storagePath: slot.storagePath,
+          label: slot.label,
+          fileName: slot.file?.name,
+          fileSizeBytes: slot.file?.size,
+          durationSec: slot.durationSec
+        }))
+      })
     });
 
     const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; error?: string; surveyId?: string; survey?: Partial<SurveyRecord>; analysis?: Record<string, any>; transcript?: string }
+      | { ok?: boolean; error?: string; surveyId?: string; survey?: Partial<SurveyRecord>; analysis?: Record<string, any>; transcript?: string; videosProcessed?: number; totalFrames?: number }
       | null;
 
     setProcessing(false);
@@ -236,7 +332,9 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
       surveyId: payload.surveyId,
       survey: payload.survey,
       analysis: payload.analysis || {},
-      transcript: payload.transcript || ""
+      transcript: payload.transcript || "",
+      videosProcessed: payload.videosProcessed,
+      totalFrames: payload.totalFrames
     };
 
     setResult(nextResult);
@@ -336,28 +434,87 @@ export function VideoSurveyWorkspace({ jobId, customerName, jobTitle, propertyAd
             ) : null}
 
             <label className="button-secondary cursor-pointer">
-              {selectedFile ? "Replace Video" : mode === "record" ? "Import Instead" : "Choose Video"}
+              {mode === "record" ? "Import Instead" : "Choose Video"}
               <input
                 accept="video/*"
                 className="hidden"
-                onChange={(event) => onSelectFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => void onSelectFile(event.target.files?.[0] ?? null)}
                 type="file"
               />
             </label>
-
-            <button className="button-ghost" disabled={!selectedFile || processing} onClick={processVideo} type="button">
-              {processing ? "Processing..." : "Process Video"}
-            </button>
           </div>
 
-          {selectedFile ? (
-            <div className="mt-4 rounded-[8px] border border-[var(--border)] bg-[var(--card)] p-4 text-sm">
-              <p className="text-white">{selectedFile.name}</p>
-              <p className="mt-1 text-[var(--muted)]">
-                {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB {recordingSeconds > 0 ? `| ${formatDuration(recordingSeconds)}` : ""}
-              </p>
+          <div className="mt-5 space-y-3">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="section-kicker text-[0.65rem] uppercase">Survey Videos</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">Upload up to four labelled clips. Front and rear videos work better than one long file.</p>
+              </div>
+              <p className="text-xs text-[var(--muted)]">{readySlots.length} ready</p>
             </div>
-          ) : null}
+
+            {slots.map((slot, index) => (
+              <div
+                className={`rounded-[10px] border p-3 ${
+                  slot.status === "ready" ? "border-[var(--gold)] bg-[rgba(212,175,55,0.08)]" : "border-[var(--border)] bg-[var(--card)]"
+                }`}
+                key={slot.id}
+              >
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    aria-label={`Video ${index + 1} label`}
+                    className="min-h-11 flex-1 border-0 bg-transparent text-sm font-semibold text-white outline-none"
+                    onChange={(event) => updateSlot(slot.id, { label: event.target.value })}
+                    placeholder={`Video ${index + 1}`}
+                    value={slot.label}
+                  />
+
+                  <span className={`text-xs font-semibold ${slot.status === "ready" ? "text-[var(--gold)]" : slot.status === "failed" ? "text-[#ff9a91]" : "text-[var(--muted)]"}`}>
+                    {slot.status === "ready" ? "Ready" : slot.status === "uploading" ? "Uploading" : slot.status === "failed" ? "Failed" : "Empty"}
+                  </span>
+
+                  <label className="button-secondary min-h-11 cursor-pointer px-3 py-2 text-xs">
+                    {slot.status === "ready" ? "Replace" : "Select"}
+                    <input
+                      accept="video/*"
+                      className="hidden"
+                      onChange={(event) => void onSelectFile(event.target.files?.[0] ?? null, slot.id)}
+                      type="file"
+                    />
+                  </label>
+                </div>
+
+                {slot.file ? (
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    {slot.file.name} | {(slot.file.size / (1024 * 1024)).toFixed(1)} MB {slot.durationSec ? `| ${formatDuration(slot.durationSec)}` : ""}
+                  </p>
+                ) : null}
+
+                {slot.status === "uploading" ? (
+                  <div className="mt-3">
+                    <div className="h-1 overflow-hidden rounded-full bg-[var(--elevated)]">
+                      <div className="h-full rounded-full bg-[var(--gold)] transition-all" style={{ width: `${slot.progress}%` }} />
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--muted)]">Uploading direct to Supabase Storage...</p>
+                  </div>
+                ) : null}
+
+                {slot.error ? <p className="mt-2 text-xs text-[#ff9a91]">{slot.error}</p> : null}
+              </div>
+            ))}
+
+            <div className="flex flex-wrap gap-3">
+              {slots.length < MAX_VIDEO_SLOTS ? (
+                <button className="button-ghost min-h-11" onClick={addVideoSlot} type="button">
+                  Add another video
+                </button>
+              ) : null}
+
+              <button className="button-primary min-h-11" disabled={readySlots.length === 0 || processing} onClick={processVideos} type="button">
+                {processing ? "Processing videos..." : readySlots.length > 0 ? `Process ${readySlots.length} video${readySlots.length === 1 ? "" : "s"}` : "Upload videos first"}
+              </button>
+            </div>
+          </div>
 
           {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
         </div>
@@ -511,4 +668,9 @@ function normaliseField(value: unknown) {
 
 function humaniseField(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function safeFileName(value: string) {
+  const clean = value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return clean || "survey-video.webm";
 }

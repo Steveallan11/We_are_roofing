@@ -5,6 +5,8 @@ type SurveyContext = {
   jobTitle?: string | null;
   propertyAddress?: string | null;
   customerName?: string | null;
+  multiVideo?: boolean;
+  videoLabels?: string[];
 };
 
 const SURVEY_ANALYSIS_SCHEMA = `{
@@ -72,12 +74,18 @@ export async function analyseFramesWithOpenAI(frames: ExtractedFrame[], transcri
             type: "text",
             text: `Analyse these ${frames.length} roof survey frames plus the surveyor notes below.
 
+Video context:
+${context.multiVideo ? `These frames and voice notes come from ${context.videoLabels?.length || "multiple"} separate videos: ${(context.videoLabels || []).join(", ") || "labelled sections"}. Treat each label as a different roof/site area and organise findings by section where possible.` : "These frames and voice notes come from one roof walkthrough video."}
+
 Job context:
 - Job title: ${context.jobTitle || "Unknown"}
 - Property address: ${context.propertyAddress || "Unknown"}
 - Customer: ${context.customerName || "Unknown"}
 
 Voice notes: "${transcript || "No spoken transcript captured."}"
+
+Frame labels:
+${frames.map((frame, index) => `- Frame ${index + 1}: ${frame.label || "Unlabelled video"} at ${frame.timestamp}s`).join("\n")}
 
 Return this JSON structure exactly:
 ${SURVEY_ANALYSIS_SCHEMA}`

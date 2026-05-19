@@ -12,13 +12,14 @@ export type ExtractedFrame = {
   base64: string;
   timestamp: number;
   filename: string;
+  label?: string;
   width: number | null;
   height: number | null;
 };
 
 export async function extractFrames(
   videoBuffer: Buffer,
-  opts: { intervalSeconds: number; maxFrames: number; surveyId: string }
+  opts: { intervalSeconds: number; maxFrames: number; surveyId: string; label?: string }
 ): Promise<ExtractedFrame[]> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `survey-video-${opts.surveyId}-`));
   const inputPath = path.join(tmpDir, "input.webm");
@@ -54,6 +55,7 @@ export async function extractFrames(
         base64: buffer.toString("base64"),
         timestamp: indexFromFilename(file, index) * opts.intervalSeconds,
         filename: file,
+        label: opts.label,
         width: metadata.width ?? null,
         height: metadata.height ?? null
       });
