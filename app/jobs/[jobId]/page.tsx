@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
+import { JobTitleEditor } from "@/components/jobs/job-title-editor";
 import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
@@ -72,6 +73,9 @@ export default async function JobDetailPage({ params }: Props) {
                     <p className="section-kicker text-[0.65rem] uppercase">{bundle.job.job_ref ?? "WR-J-TBC"}</p>
                     <StatusBadge status={bundle.job.status} />
                     {bundle.quote ? <StatusPill status={bundle.quote.status} /> : null}
+                  </div>
+                  <div className="mt-4">
+                    <JobTitleEditor jobId={bundle.job.id} jobRef={bundle.job.job_ref} title={bundle.job.job_title} />
                   </div>
                   <h2 className="mt-3 font-condensed text-4xl leading-none text-white">{bundle.customer.full_name}</h2>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">{bundle.job.property_address}</p>
