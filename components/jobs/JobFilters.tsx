@@ -10,9 +10,9 @@ type Props = {
 
 export function JobFilters({ active, onSelect, attentionCount }: Props) {
   const items: Array<{ key: PipelineGroupKey | "all" | "attention"; label: string }> = [
-    { key: "all", label: "All Jobs" },
-    ...PIPELINE_GROUPS.map((group) => ({ key: group.key, label: group.shortLabel })),
-    { key: "attention", label: `Needs Attention (${attentionCount})` }
+    { key: "all", label: "All" },
+    ...PIPELINE_GROUPS.map((group) => ({ key: group.key, label: group.shortLabel === "Awaiting Reply" ? "Sent" : group.shortLabel === "Booked In" ? "Active" : group.shortLabel })),
+    { key: "attention", label: `Attention ${attentionCount}` }
   ];
 
   return (

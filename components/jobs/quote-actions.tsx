@@ -160,40 +160,40 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="fixed bottom-[calc(var(--bottomnav-height)+10px+env(safe-area-inset-bottom))] left-3 right-3 z-40 flex gap-2 overflow-x-auto rounded-2xl border border-[var(--border-mid)] bg-[rgba(10,10,10,0.94)] p-2 shadow-2xl backdrop-blur lg:static lg:flex-wrap lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
         {!quote ? (
-          <button className="button-primary" disabled={isPending} onClick={() => runAction("generate")} type="button">
+          <button className="button-primary shrink-0" disabled={isPending} onClick={() => runAction("generate")} type="button">
             {isPending ? "Creating Quote..." : "Create Quote"}
           </button>
         ) : null}
         {quote ? (
-          <button className="button-ghost" disabled={isPending} onClick={() => router.push(`/jobs/${jobId}/quote`)} type="button">
-            Open Quote Review
+          <button className="button-ghost shrink-0 hidden lg:inline-flex" disabled={isPending} onClick={() => router.push(`/jobs/${jobId}/quote`)} type="button">
+            Open Quote
           </button>
         ) : null}
         {quote ? (
-          <button className="button-primary" disabled={isPending} onClick={() => router.push(`/jobs/${jobId}/quote/preview`)} type="button">
-            Preview Before Send
+          <button className="button-primary shrink-0" disabled={isPending} onClick={() => router.push(`/jobs/${jobId}/quote/preview`)} type="button">
+            Preview
           </button>
         ) : null}
         {quote ? (
-          <button className="button-secondary" disabled={isPending} onClick={() => runAction("generate")} type="button">
-            {isPending ? "Refreshing..." : "Regenerate Draft"}
+          <button className="button-secondary shrink-0" disabled={isPending} onClick={() => runAction("generate")} type="button">
+            {isPending ? "Refreshing..." : "Regenerate"}
           </button>
         ) : null}
         {quote ? (
-          <button className="button-secondary" disabled={isPending} onClick={() => runAction("pdf")} type="button">
-            {isPending ? "Building PDF..." : "Generate PDF"}
+          <button className="button-secondary shrink-0" disabled={isPending} onClick={() => runAction("pdf")} type="button">
+            {isPending ? "Building PDF..." : "PDF"}
           </button>
         ) : null}
         {quote && quote.status !== "Approved" && quote.status !== "Sent" ? (
-          <button className="button-secondary" disabled={isPending} onClick={() => runAction("approve")} type="button">
-            {isPending ? "Approving..." : "Approve Quote"}
+          <button className="button-secondary shrink-0" disabled={isPending} onClick={() => runAction("approve")} type="button">
+            {isPending ? "Approving..." : "Approve"}
           </button>
         ) : null}
         {quote && (quote.status === "Approved" || quote.status === "Sent") ? (
-          <button className="button-secondary" disabled={isPending} onClick={() => setShowSendModal(true)} type="button">
-            {quote.status === "Sent" ? "Resend Quote" : "Send Quote"}
+          <button className="button-secondary shrink-0" disabled={isPending} onClick={() => setShowSendModal(true)} type="button">
+            {quote.status === "Sent" ? "Resend" : "Send"}
           </button>
         ) : null}
       </div>

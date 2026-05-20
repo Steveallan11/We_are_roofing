@@ -31,13 +31,13 @@ export default async function JobsPage({ searchParams }: Props) {
           <Link className="button-primary" href="/jobs/new">
             Add Job
           </Link>
-          <Link className="button-ghost" href="/dashboard">
+          <Link className="button-ghost hidden lg:inline-flex" href="/dashboard">
             Dashboard
           </Link>
         </>
       }
     >
-      <section className="mb-4 card p-4">
+      <section className="mb-4 hidden card p-4 lg:block">
         <WeatherStrip location={business.weather_location ?? "Yateley"} />
       </section>
       <JobsWorkspace initialFilter={initialFilter} jobs={jobs} />

@@ -34,6 +34,11 @@ export default async function QuotePage({ params, searchParams }: Props) {
       subtitle="Review the saved quote, approve it when the wording and totals are right, then send it to the customer."
       actions={<QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={quote} />}
     >
+      <div className="mb-4 lg:hidden">
+        <Link className="button-ghost w-full !justify-center" href={`/jobs/${bundle.job.id}`}>
+          Back to Job File
+        </Link>
+      </div>
       <section className="page-grid">
         <div className="stack">
           {query?.prefill === "roof-survey" ? (

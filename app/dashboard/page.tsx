@@ -44,9 +44,13 @@ export default async function DashboardPage() {
         </>
       }
     >
-      {!hasRateCard ? <RateCardNudge /> : null}
+      {!hasRateCard ? (
+        <div className="hidden lg:block">
+          <RateCardNudge />
+        </div>
+      ) : null}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <section className="hidden grid-cols-2 gap-3 lg:grid lg:grid-cols-4 lg:gap-4">
         <MetricCard hint="Open work excluding completed, lost, and archived" label="Active Jobs" value={activeJobs.length} />
         <MetricCard hint="Estimated value across active jobs" label="Pipeline Value" value={currency(pipelineValue)} />
         <MetricCard hint="Completed jobs this month" label="Revenue This Month" value={currency(revenueThisMonth)} />
@@ -95,7 +99,23 @@ export default async function DashboardPage() {
             ) : null}
           </div>
 
-          <div className="card p-5">
+          <div className="card p-5 xl:hidden">
+            <p className="section-kicker text-[0.65rem] uppercase">Work This Week</p>
+            <h2 className="mt-2 font-condensed text-3xl text-white">{nextSurvey ? "Next survey" : "No survey booked"}</h2>
+            {nextSurvey ? (
+              <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
+                <p className="font-semibold text-white">{nextSurvey.job_ref ?? "WR-J-TBC"} | {nextSurvey.customer?.full_name ?? nextSurvey.job_title}</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">{formatDate(nextSurvey.survey_date)}</p>
+                <Link className="button-secondary mt-4 !w-full !py-2 text-sm" href={`/jobs/${nextSurvey.id}/survey` as Route}>
+                  Open survey
+                </Link>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--muted)]">No future survey date found. Use Jobs to book the next site visit.</p>
+            )}
+          </div>
+
+          <div className="card hidden p-5 lg:block">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="section-kicker text-[0.65rem] uppercase">Pipeline</p>
@@ -131,14 +151,14 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <div className="mt-4 grid gap-3">
-              {recentJobs.map((job) => (
+              {recentJobs.slice(0, 3).map((job) => (
                 <JobCard compact job={job} key={job.id} list />
               ))}
             </div>
           </div>
         </div>
 
-        <aside className="stack">
+        <aside className="stack hidden xl:flex xl:flex-col">
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Quick Actions</p>
             <div className="mt-4 grid gap-3">
@@ -165,7 +185,7 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <div className="card border-[var(--gold)]/40 bg-[var(--gold)]/5 p-5">
+          <div className="card hidden border-[var(--gold)]/40 bg-[var(--gold)]/5 p-5 lg:block">
             <p className="section-kicker text-[0.65rem] uppercase">Gauge Suggestion</p>
             <p className="mt-3 text-sm leading-6 text-[var(--text)]">
               {attentionJobs.length

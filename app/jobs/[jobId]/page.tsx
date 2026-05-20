@@ -57,7 +57,7 @@ export default async function JobDetailPage({ params }: Props) {
       actions={
         <>
           <QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
-          <Link className="button-ghost" href="/dashboard">
+          <Link className="button-ghost hidden lg:inline-flex" href="/dashboard">
             Back
           </Link>
         </>
@@ -84,12 +84,20 @@ export default async function JobDetailPage({ params }: Props) {
                     <span className="rounded-full border border-[var(--border)] bg-black/20 px-3 py-1">{bundle.job.job_type ?? "Job type TBC"}</span>
                     <span className="rounded-full border border-[var(--border)] bg-black/20 px-3 py-1">{bundle.customer.town ?? bundle.job.postcode ?? "Town TBC"}</span>
                   </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
+                    <SmartActionLink className="button-secondary min-h-12 !rounded-xl !py-2 text-sm" href={bundle.customer.phone ? `tel:${bundle.customer.phone}` : `/customers/${bundle.customer.id}`}>
+                      Call Customer
+                    </SmartActionLink>
+                    <SmartActionLink className="button-secondary min-h-12 !rounded-xl !py-2 text-sm" href={`/comms?job=${bundle.job.id}&channel=sms`}>
+                      Message
+                    </SmartActionLink>
+                  </div>
                 </div>
                 <div className="rounded-[1.25rem] border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4 lg:min-w-[260px]">
                   <p className="section-kicker text-[0.58rem] uppercase">Next Action</p>
                   <p className="mt-2 text-lg font-semibold text-white">{nextAction.label}</p>
                   <p className="mt-1 text-sm text-[var(--muted)]">{getNextActionLabel(bundle.job)}</p>
-                  <SmartActionLink className="button-primary mt-4 min-h-11 w-full !rounded-xl !py-2 text-sm" href={nextAction.href}>
+                  <SmartActionLink className="button-primary mt-4 min-h-[52px] w-full !rounded-xl !py-3 text-sm lg:min-h-11 lg:!py-2" href={nextAction.href}>
                     {nextAction.label}
                   </SmartActionLink>
                 </div>

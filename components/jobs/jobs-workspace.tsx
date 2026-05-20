@@ -32,13 +32,13 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
   return (
     <div className="stack">
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="hidden gap-3 md:grid-cols-3 lg:grid">
         <SummaryTile label="Active jobs" value={activeJobs.length.toString()} hint="Open work excluding completed, lost, and archived" />
         <SummaryTile label="Pipeline value" value={currency(pipelineValue)} hint="Estimated value across active jobs" />
         <SummaryTile label="Urgent" value={attentionJobs.length.toString()} hint="Follow-ups, ready-to-send, or surveys due today" danger={attentionJobs.length > 0} />
       </section>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="hidden flex-col gap-3 md:flex-row md:items-center md:justify-between lg:flex">
         <div>
           <p className="section-kicker text-[0.65rem] uppercase">Roofing Pipeline</p>
           <p className="mt-1 text-sm text-[var(--muted)]">Board for the day-to-day flow. List view is for quick scanning.</p>
@@ -54,8 +54,12 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
       </div>
 
       <AttentionBanner jobs={attentionJobs} onViewAll={() => setActiveFilter("attention")} />
-      <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={jobs} onSelect={setActiveFilter} />
-      <PipelineTotalsBar jobs={activeJobs} />
+      <div className="hidden lg:block">
+        <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={jobs} onSelect={setActiveFilter} />
+      </div>
+      <div className="hidden lg:block">
+        <PipelineTotalsBar jobs={activeJobs} />
+      </div>
       <JobFilters active={activeFilter} attentionCount={attentionJobs.length} onSelect={setActiveFilter} />
 
       {filteredJobs.length === 0 ? (
