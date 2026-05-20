@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
@@ -54,6 +56,7 @@ const LINE_COLOURS: Record<string, string> = {
 };
 
 export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerName, customerEmail, initialSurvey }: Props) {
+  const router = useRouter();
   const mapElRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const drawingRef = useRef<google.maps.drawing.DrawingManager | null>(null);
@@ -68,6 +71,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const [searchAddr, setSearchAddr] = useState(address);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -360,10 +364,36 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
       const result = (await response.json().catch(() => null)) as { saved?: boolean; error?: string } | null;
       if (!response.ok || !result?.saved) throw new Error(result?.error || "Unable to save the map takeoff.");
       setMessage("Roof takeoff saved.");
+      return true;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save the map takeoff.");
+      return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleApplyToQuote() {
+    setApplying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await handleSave();
+      if (!saved) return;
+
+      const response = await fetch(`/api/roof-surveys/${surveyId}/apply-to-quote`, { method: "POST" });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; quote_url?: string; imported_items?: number; error?: string } | null;
+      if (!response.ok || !result?.ok || !result.quote_url) {
+        throw new Error(result?.error || "Unable to create a quote draft from this takeoff.");
+      }
+
+      setMessage(`Imported ${result.imported_items ?? 0} measured item${result.imported_items === 1 ? "" : "s"} into the quote draft.`);
+      router.push(result.quote_url as Route);
+      router.refresh();
+    } catch (applyError) {
+      setError(applyError instanceof Error ? applyError.message : "Unable to create a quote draft from this takeoff.");
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -441,6 +471,12 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
               <button className="button-primary mt-4 w-full" disabled={saving} onClick={() => void handleSave()} type="button">
                 {saving ? "Saving..." : "Save Survey"}
               </button>
+              <button className="button-secondary mt-2 w-full !border-[var(--success)]/40 !bg-[var(--success-bg)] !text-[#8df0b7]" disabled={saving || applying || (sections.length === 0 && lines.length === 0)} onClick={() => void handleApplyToQuote()} type="button">
+                {applying ? "Creating Quote..." : "Save + Create Quote Draft"}
+              </button>
+              {sections.length === 0 && lines.length === 0 ? (
+                <p className="mt-2 text-xs text-[var(--muted)]">Draw or import at least one measured section or line before creating the quote draft.</p>
+              ) : null}
               <ExportButtons
                 address={address}
                 customerName={customerName || ""}

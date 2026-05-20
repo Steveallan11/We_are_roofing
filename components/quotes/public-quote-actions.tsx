@@ -36,28 +36,32 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
   }
 
   return (
-    <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-      <p className="section-kicker text-[0.65rem] uppercase">Accept or Ask a Question</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <input className="field" onChange={(event) => setCustomerName(event.target.value)} placeholder="Your name" value={customerName} />
-        <input className="field" onChange={(event) => setCustomerEmail(event.target.value)} placeholder="Your email" type="email" value={customerEmail} />
+    <div className="mt-8 rounded-[1.5rem] border border-[var(--gold)]/35 bg-[var(--surface)] p-5 shadow-2xl md:p-7">
+      <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Next Step</p>
+      <h2 className="mt-3 font-display text-3xl text-white md:text-4xl">Accept the quote or ask Andy a question</h2>
+      <p className="mt-3 font-ui text-base leading-7 text-[var(--text-muted)]">
+        Add your details below so we can match your response to the quote and get straight back to you.
+      </p>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <input className="field min-h-12" onChange={(event) => setCustomerName(event.target.value)} placeholder="Your name" value={customerName} />
+        <input className="field min-h-12" onChange={(event) => setCustomerEmail(event.target.value)} placeholder="Your email" type="email" value={customerEmail} />
       </div>
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-5 grid gap-3 md:flex md:flex-wrap">
         {options.length ? (
           options.map((option) => (
-            <button className={option.recommended ? "button-primary" : "button-secondary"} key={option.id} onClick={() => accept(option.id)} type="button">
+            <button className={`${option.recommended ? "button-primary" : "button-secondary"} !min-h-12 !text-sm`} key={option.id} onClick={() => accept(option.id)} type="button">
               Accept {option.label}
             </button>
           ))
         ) : (
-          <button className="button-primary" onClick={() => accept()} type="button">
+          <button className="button-primary !min-h-12 !text-sm" onClick={() => accept()} type="button">
             Accept Quote
           </button>
         )}
       </div>
-      <textarea className="field mt-4 min-h-28" onChange={(event) => setMessage(event.target.value)} placeholder="Have a question? Type it here..." value={message} />
-      <button className="button-ghost mt-3" onClick={sendMessage} type="button">
-        Send Message
+      <textarea className="field mt-5 min-h-36" onChange={(event) => setMessage(event.target.value)} placeholder="Have a question? Type it here..." value={message} />
+      <button className="button-ghost mt-3 !min-h-12 !text-sm" onClick={sendMessage} type="button">
+        Send Question
       </button>
       {status ? <p className="mt-4 text-sm text-[var(--gold-l)]">{status}</p> : null}
     </div>
