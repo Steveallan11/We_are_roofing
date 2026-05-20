@@ -1,19 +1,24 @@
 import { Suspense } from "react";
-import { AppShell } from "@/components/layout/app-shell";
 import { LoginForm } from "@/components/auth/login-form";
+import { Starfield } from "@/components/ui/starfield";
 
 export default function LoginPage() {
   const authEnabled = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const defaultEmail = process.env.NEXT_PUBLIC_MVP_ADMIN_EMAIL ?? "werroofing@gmail.com";
 
   return (
-    <AppShell
-      title="Sign In"
-      subtitle="This is now the front door to the app. On a successful Supabase login the session should stay active, so you go straight back into the app until you sign out."
-    >
-      <div className="mx-auto max-w-xl">
+    <main className="relative min-h-screen overflow-hidden bg-[var(--obsidian)] px-4 py-10">
+      <Starfield />
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl items-center">
         <div className="card p-6 md:p-8">
           <div className="stack">
+            <div>
+              <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">We Are Roofing OS</p>
+              <h1 className="mt-3 font-display text-4xl text-white">Sign in</h1>
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                This is the secure front door to the admin app. Once signed in, your Supabase session stays active until you sign out.
+              </p>
+            </div>
             <Suspense fallback={<div className="text-sm text-[var(--muted)]">Loading sign-in...</div>}>
               <LoginForm authEnabled={authEnabled} defaultEmail={defaultEmail} />
             </Suspense>
@@ -25,6 +30,6 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-    </AppShell>
+    </main>
   );
 }

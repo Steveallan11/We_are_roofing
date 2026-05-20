@@ -55,6 +55,7 @@ function getRouteContext(pathname: string) {
 export function useAssistant() {
   const router = useRouter();
   const pathname = usePathname();
+  const disabled = pathname === "/login";
   const [open, setOpen] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [messages, setMessages] = useState<AssistantUiMessage[]>([]);
@@ -71,15 +72,19 @@ export function useAssistant() {
   const routeContext = useMemo(() => getRouteContext(pathname), [pathname]);
 
   useEffect(() => {
+    if (disabled) return;
+
     const tooltipTimer = window.setTimeout(() => setTooltipVisible(true), 3000);
     const hideTimer = window.setTimeout(() => setTooltipVisible(false), 9000);
     return () => {
       window.clearTimeout(tooltipTimer);
       window.clearTimeout(hideTimer);
     };
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
+    if (disabled) return;
+
     void (async () => {
       const [conversationResponse, statusResponse] = await Promise.all([
         fetch("/api/assistant/chat"),
@@ -97,23 +102,27 @@ export function useAssistant() {
       }
       setOverdueCount(Number(statusData?.overdueCount ?? 0));
     })();
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, toolState, status, open]);
 
   useEffect(() => {
+    if (disabled) return;
+
     const handler = (event: CustomEvent<{ prompt: string }>) => {
       setOpen(true);
       void sendMessage(event.detail.prompt);
     };
     window.addEventListener("gauge:prompt", handler as EventListener);
     return () => window.removeEventListener("gauge:prompt", handler as EventListener);
-  }, []);
+  }, [disabled]);
 
   const sendMessage = useCallback(
     async (text?: string) => {
+      if (disabled) return;
+
       const nextText = (text ?? draft).trim();
       if (!nextText) return;
 
@@ -199,7 +208,7 @@ export function useAssistant() {
         setError(sendError instanceof Error ? sendError.message : "Assistant request failed.");
       }
     },
-    [conversationId, draft, messages, routeContext, router]
+    [conversationId, disabled, draft, messages, routeContext, router]
   );
 
   const resetConversation = useCallback(() => {

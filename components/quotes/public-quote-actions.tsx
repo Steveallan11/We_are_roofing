@@ -6,16 +6,17 @@ import type { QuoteOption } from "@/lib/types";
 type Props = {
   quoteId: string;
   options: QuoteOption[];
+  token?: string | null;
 };
 
-export function PublicQuoteActions({ quoteId, options }: Props) {
+export function PublicQuoteActions({ quoteId, options, token }: Props) {
   const [message, setMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
   async function accept(optionId?: string) {
-    const response = await fetch(`/api/quotes/${quoteId}/accept`, {
+    const response = await fetch(`/api/quotes/${quoteId}/accept${token ? `?token=${encodeURIComponent(token)}` : ""}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ option_id: optionId, customer_name: customerName, customer_email: customerEmail })
@@ -25,7 +26,7 @@ export function PublicQuoteActions({ quoteId, options }: Props) {
 
   async function sendMessage() {
     if (!message.trim()) return;
-    const response = await fetch(`/api/quotes/${quoteId}/message`, {
+    const response = await fetch(`/api/quotes/${quoteId}/message${token ? `?token=${encodeURIComponent(token)}` : ""}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sender_type: "customer", sender_name: customerName, sender_email: customerEmail, message })

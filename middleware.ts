@@ -3,7 +3,15 @@ import type { NextRequest } from "next/server";
 import type { CookieOptions } from "@supabase/ssr";
 import { createServerClient } from "@supabase/ssr";
 
-const protectedPrefixes = ["/dashboard", "/crm", "/jobs"];
+const protectedPrefixes = ["/dashboard", "/crm", "/jobs", "/customers", "/comms", "/money", "/surveys", "/calendar", "/knowledge", "/settings"];
+const publicApiPrefixes = ["/api/auth/logout", "/api/weather", "/api/comms/webhooks"];
+
+function isPublicApi(pathname: string) {
+  if (pathname.startsWith("/api/quotes/")) {
+    return /\/api\/quotes\/[^/]+\/(accept|message)$/.test(pathname);
+  }
+  return publicApiPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({
@@ -14,6 +22,8 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isProtected = protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  const isApi = pathname.startsWith("/api/");
+  const isProtectedApi = isApi && !isPublicApi(pathname);
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     if (pathname === "/") {
@@ -56,6 +66,10 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
+    if (isProtectedApi) {
+      return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+    }
+
     if (isProtected) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("next", pathname);
@@ -74,6 +88,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  if (isProtectedApi && !session) {
+    return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+
   if (isProtected && !session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
@@ -84,5 +102,19 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/dashboard/:path*", "/crm/:path*", "/jobs/:path*"]
+  matcher: [
+    "/",
+    "/login",
+    "/api/:path*",
+    "/dashboard/:path*",
+    "/crm/:path*",
+    "/jobs/:path*",
+    "/customers/:path*",
+    "/comms/:path*",
+    "/money/:path*",
+    "/surveys/:path*",
+    "/calendar/:path*",
+    "/knowledge/:path*",
+    "/settings/:path*"
+  ]
 };

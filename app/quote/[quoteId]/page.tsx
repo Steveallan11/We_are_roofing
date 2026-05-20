@@ -1,20 +1,26 @@
 import { notFound } from "next/navigation";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { QuoteOption, QuoteRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type Props = {
   params: Promise<{ quoteId: string }>;
+  searchParams: Promise<{ token?: string }>;
 };
 
-export default async function PublicQuotePage({ params }: Props) {
+export default async function PublicQuotePage({ params, searchParams }: Props) {
   const { quoteId } = await params;
+  const { token } = await searchParams;
   const supabase = createSupabaseAdminClient();
   const { data: quote } = await supabase.from("quotes").select("*").eq("id", quoteId).single();
   if (!quote) notFound();
 
   const record = quote as QuoteRecord;
+  const access = validatePublicQuoteAccess(record, token);
+  if (!access.ok) notFound();
+
   const options = (record.options ?? []) as QuoteOption[];
 
   return (
@@ -45,7 +51,7 @@ export default async function PublicQuotePage({ params }: Props) {
           </div>
         )}
 
-        <PublicQuoteActions options={options} quoteId={record.id} />
+        <PublicQuoteActions options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
       </div>
     </main>
   );

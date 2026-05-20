@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { QuoteOption, QuoteRecord } from "@/lib/types";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -9,6 +10,7 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { quoteId } = await params;
+  const token = new URL(request.url).searchParams.get("token");
   const body = (await request.json().catch(() => ({}))) as { option_id?: string | null };
 
   if (!canPersistToSupabase()) {
@@ -22,6 +24,11 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const quoteRecord = quote as QuoteRecord;
+  const access = validatePublicQuoteAccess(quoteRecord, token);
+  if (!access.ok) {
+    return NextResponse.json({ ok: false, error: "Quote link is invalid or has expired." }, { status: 403 });
+  }
+
   const acceptedOption = ((quoteRecord.options ?? []) as QuoteOption[]).find((option) => option.id === body.option_id) ?? null;
   const quoteUpdates: Record<string, unknown> = {
     status: "Accepted",

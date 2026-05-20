@@ -415,6 +415,8 @@ export type QuoteRecord = {
   customer_email_subject?: string | null;
   customer_email_body?: string | null;
   status: QuoteStatus;
+  public_token?: string | null;
+  public_token_created_at?: string | null;
   pdf_url?: string | null;
   sent_at?: string | null;
   missing_info: string[];

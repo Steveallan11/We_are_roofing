@@ -6,6 +6,7 @@ import { persistQuoteArtifacts } from "@/lib/quote-engine";
 import { sendSMS, SMS_TEMPLATES } from "@/lib/sms/sendSMS";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
+import { createQuotePublicToken } from "@/lib/public-quote";
 
 type Props = {
   params: Promise<{ quoteId: string }>;
@@ -55,7 +56,26 @@ export async function POST(request: Request, { params }: Props) {
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
-  const quoteUrl = `${appUrl}/quote/${quoteId}`;
+  const publicToken = quote.public_token || createQuotePublicToken();
+  let quoteUrl = `${appUrl}/quote/${quoteId}?token=${encodeURIComponent(publicToken)}`;
+
+  if (!quote.public_token) {
+    const { error: tokenError } = await supabase
+      .from("quotes")
+      .update({
+        public_token: publicToken,
+        public_token_created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", quoteId);
+
+    if (tokenError && /public_token|schema cache/i.test(tokenError.message)) {
+      console.warn("Quote public token columns are not available yet. Falling back to legacy quote link until migration runs.");
+      quoteUrl = `${appUrl}/quote/${quoteId}`;
+    } else if (tokenError) {
+      return NextResponse.json({ ok: false, error: tokenError.message }, { status: 500 });
+    }
+  }
   const emailResult = await sendEmail({
     to: toEmail,
     subject,

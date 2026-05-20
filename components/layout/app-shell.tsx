@@ -3,6 +3,7 @@ import { GaugeFAB } from "@/components/layout/GaugeFAB";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Starfield } from "@/components/ui/starfield";
+import { requireAdminSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,7 +14,9 @@ type Props = {
   wide?: boolean;
 };
 
-export function AppShell({ title, subtitle, actions, children, wide = false }: Props) {
+export async function AppShell({ title, subtitle, actions, children, wide = false }: Props) {
+  await requireAdminSession();
+
   return (
     <div className="relative min-h-screen">
       <Starfield />
