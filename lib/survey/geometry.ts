@@ -137,7 +137,11 @@ export function toQuoteCostBreakdown(items: BOMItem[]) {
     item: item.label,
     cost: 0,
     vat_applicable: true,
-    notes: `${item.qty.toFixed(item.unit === "no." ? 0 : 2)} ${item.unit} imported from roof survey`
+    notes: "Imported from roof survey takeoff",
+    quantity: Number(item.qty.toFixed(item.unit === "no." ? 0 : 2)),
+    unit: item.unit,
+    unit_rate: 0,
+    pricing_source: "roof_survey_takeoff"
   }));
 }
 

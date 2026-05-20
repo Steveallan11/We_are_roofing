@@ -14,6 +14,10 @@ type QuoteUpdateBody = {
     cost: number;
     vat_applicable: boolean;
     notes: string;
+    quantity?: number;
+    unit?: string;
+    unit_rate?: number;
+    pricing_source?: string;
   }>;
   guarantee_text?: string | null;
   exclusions?: string | null;

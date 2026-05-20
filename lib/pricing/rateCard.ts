@@ -113,6 +113,9 @@ export function findRateForItem(itemName: string, rates: RateCardEntry[]) {
 
 export function parseQuantityFromLine(line: CostLineItem, unit?: string) {
   if (unit === "item") return 1;
+  if (typeof line.quantity === "number" && Number.isFinite(line.quantity) && line.quantity > 0 && (!unit || !line.unit || normaliseRateName(line.unit) === normaliseRateName(unit))) {
+    return line.quantity;
+  }
   const search = `${line.item} ${line.notes}`.replace(/,/g, "");
   const units = unit ? [unit] : ["m²", "m2", "sqm", "lm", "m", "item", "no."];
   for (const candidate of units) {

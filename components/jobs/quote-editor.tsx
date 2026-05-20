@@ -74,7 +74,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
   const quoteId = quote.id;
 
   function updateLine(index: number, updates: Partial<CostLineItem>) {
-    setCostBreakdown((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...updates } : item)));
+    setCostBreakdown((current) => current.map((item, itemIndex) => (itemIndex === index ? normaliseCostLine({ ...item, ...updates }, updates) : item)));
   }
 
   function deleteLine(index: number) {
@@ -127,7 +127,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
     setOptions((current) =>
       current.map((option) => {
         if (option.id !== optionId) return option;
-        const cost_breakdown = option.cost_breakdown.map((line, lineIndex) => (lineIndex === index ? { ...line, ...updates } : line));
+        const cost_breakdown = option.cost_breakdown.map((line, lineIndex) => (lineIndex === index ? normaliseCostLine({ ...line, ...updates }, updates) : line));
         return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
       })
     );
@@ -185,7 +185,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
       body: JSON.stringify({
         roof_report: roofReport,
         scope_of_works: scopeOfWorks,
-        cost_breakdown: costBreakdown.map((item) => ({ ...item, cost: Number(item.cost || 0) })),
+        cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
         guarantee_text: guaranteeText,
         exclusions,
         terms,
@@ -418,7 +418,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
         <div className="mt-4 space-y-4">
           {costBreakdown.length > 0 ? costBreakdown.map((line, index) => (
             <div className="rounded-2xl border border-[var(--border)] p-4" key={`${line.item}-${index}`}>
-              <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr_0.8fr_104px]">
+              <div className="grid gap-4 md:grid-cols-[1.4fr_96px_90px_110px_120px_104px]">
                 <div>
                   <label className="label" htmlFor={`line-item-${index}`}>
                     Item
@@ -431,8 +431,48 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                   />
                 </div>
                 <div>
+                  <label className="label" htmlFor={`line-quantity-${index}`}>
+                    Quantity
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-quantity-${index}`}
+                    inputMode="decimal"
+                    onChange={(event) => updateLine(index, { quantity: Number(event.target.value || 0) })}
+                    step="0.01"
+                    type="number"
+                    value={line.quantity ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor={`line-unit-${index}`}>
+                    Unit
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-unit-${index}`}
+                    onChange={(event) => updateLine(index, { unit: event.target.value })}
+                    placeholder="lm"
+                    value={line.unit ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor={`line-unit-rate-${index}`}>
+                    Unit Rate
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-unit-rate-${index}`}
+                    inputMode="decimal"
+                    onChange={(event) => updateLine(index, { unit_rate: Number(event.target.value || 0) })}
+                    step="0.01"
+                    type="number"
+                    value={line.unit_rate ?? ""}
+                  />
+                </div>
+                <div>
                   <label className="label" htmlFor={`line-cost-${index}`}>
-                    Cost
+                    Total
                   </label>
                   <input
                     className="field"
@@ -566,4 +606,17 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
     </div>
   );
+}
+
+function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = {}) {
+  const quantity = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : undefined;
+  const unitRate = typeof line.unit_rate === "number" && Number.isFinite(line.unit_rate) ? line.unit_rate : undefined;
+  const shouldRecalculate = ("quantity" in updates || "unit_rate" in updates) && quantity != null && unitRate != null;
+
+  return {
+    ...line,
+    quantity,
+    unit_rate: unitRate,
+    cost: shouldRecalculate ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0)
+  };
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hydrateRoofSurvey } from "@/lib/roof-surveys";
 import { buildRoofSurveyBom, toMaterialRows, toQuoteCostBreakdown } from "@/lib/survey/geometry";
+import { applyRateCardToCostBreakdown, calculateQuoteTotals, pricingRulesToRateCard } from "@/lib/pricing/rateCard";
 import { canPersistToSupabase, getNextQuoteVersionAndRef } from "@/lib/workflows";
 
 type Props = {
@@ -24,7 +25,7 @@ export async function POST(_: Request, { params }: Props) {
   }
 
   const supabase = createSupabaseAdminClient();
-  const [jobResult, customerResult, existingQuoteResult] = await Promise.all([
+  const [jobResult, customerResult, existingQuoteResult, pricingRulesResult] = await Promise.all([
     supabase.from("jobs").select("id, customer_id, property_address, job_title, job_ref, status").eq("id", survey.job_id).single(),
     supabase
       .from("jobs")
@@ -35,14 +36,20 @@ export async function POST(_: Request, { params }: Props) {
         if (!jobLookup.data?.customer_id) return { data: null, error: jobLookup.error };
         return supabase.from("customers").select("full_name").eq("id", jobLookup.data.customer_id).maybeSingle();
       }),
-    supabase.from("quotes").select("*").eq("job_id", survey.job_id).order("version_number", { ascending: false }).limit(1).maybeSingle()
+    supabase.from("quotes").select("*").eq("job_id", survey.job_id).order("version_number", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("pricing_rules").select("*").order("rule_type")
   ]);
 
   if (jobResult.error || !jobResult.data) {
     return NextResponse.json({ ok: false, error: jobResult.error?.message ?? "Job not found." }, { status: 404 });
   }
 
-  const costBreakdown = toQuoteCostBreakdown(bom);
+  const importedCostBreakdown = toQuoteCostBreakdown(bom);
+  const hasSavedRates = Boolean(pricingRulesResult.data?.length);
+  const rateCard = hasSavedRates ? pricingRulesToRateCard(pricingRulesResult.data ?? []) : [];
+  const priced = hasSavedRates ? applyRateCardToCostBreakdown(importedCostBreakdown, rateCard) : { updated: importedCostBreakdown, pricingNotes: [] };
+  const costBreakdown = priced.updated;
+  const totals = calculateQuoteTotals(costBreakdown);
   const basePayload = {
     roof_report:
       existingQuoteResult.data?.roof_report ??
@@ -51,9 +58,9 @@ export async function POST(_: Request, { params }: Props) {
       existingQuoteResult.data?.scope_of_works ??
       "Measured roof quantities have been imported from the roof survey tool. Add rates, check waste factors, and finalise the wording before approval.",
     cost_breakdown: costBreakdown,
-    subtotal: 0,
-    vat_amount: 0,
-    total: 0,
+    subtotal: totals.subtotal,
+    vat_amount: totals.vat_amount,
+    total: totals.total,
     guarantee_text: existingQuoteResult.data?.guarantee_text ?? "Guarantee wording to be confirmed during quote review.",
     exclusions: existingQuoteResult.data?.exclusions ?? "Final exclusions to be confirmed during quote review.",
     terms: existingQuoteResult.data?.terms ?? "Standard terms to be confirmed during quote review.",
@@ -63,6 +70,7 @@ export async function POST(_: Request, { params }: Props) {
     missing_info: existingQuoteResult.data?.missing_info ?? [],
     pricing_notes: [
       `Imported ${bom.length} measured BOM item${bom.length === 1 ? "" : "s"} from roof survey ${survey.project_name}.`,
+      ...priced.pricingNotes,
       ...(existingQuoteResult.data?.pricing_notes ?? [])
     ],
     confidence: existingQuoteResult.data?.confidence ?? "Medium",
