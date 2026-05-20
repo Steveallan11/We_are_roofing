@@ -125,7 +125,7 @@ export default async function DashboardPage() {
                 Full board
               </Link>
             </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-5">
+            <div className="mt-5 grid gap-3 md:grid-cols-4 xl:grid-cols-8">
               {PIPELINE_GROUPS.map((group) => {
                 const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
                 const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);

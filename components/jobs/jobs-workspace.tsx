@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AttentionBanner } from "@/components/jobs/AttentionBanner";
 import { JobCard } from "@/components/jobs/job-card";
 import { JobFilters } from "@/components/jobs/JobFilters";
@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getPipelineGroup, PIPELINE_GROUPS, type PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
 import { needsAttention, type JobForAction } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
+import type { JobStatus } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -17,18 +18,43 @@ type Props = {
 };
 
 export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
+  const [optimisticJobs, setOptimisticJobs] = useState(jobs);
   const [activeFilter, setActiveFilter] = useState<PipelineGroupKey | "all" | "attention">(initialFilter);
   const [view, setView] = useState<"board" | "list">("board");
-  const attentionJobs = useMemo(() => jobs.filter(needsAttention), [jobs]);
-  const activeJobs = useMemo(() => jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)), [jobs]);
+  const [draggingJobId, setDraggingJobId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOptimisticJobs(jobs);
+  }, [jobs]);
+
+  const attentionJobs = useMemo(() => optimisticJobs.filter(needsAttention), [optimisticJobs]);
+  const activeJobs = useMemo(() => optimisticJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)), [optimisticJobs]);
   const pipelineValue = useMemo(() => activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0), [activeJobs]);
   const filteredJobs = useMemo(() => {
     if (activeFilter === "attention") return attentionJobs;
     const group = getPipelineGroup(activeFilter);
-    if (!group) return jobs;
-    return jobs.filter((job) => group.statuses.includes(job.status));
-  }, [activeFilter, attentionJobs, jobs]);
+    if (!group) return optimisticJobs;
+    return optimisticJobs.filter((job) => group.statuses.includes(job.status));
+  }, [activeFilter, attentionJobs, optimisticJobs]);
   const visibleGroups = activeFilter === "all" || activeFilter === "attention" ? PIPELINE_GROUPS : PIPELINE_GROUPS.filter((group) => group.key === activeFilter);
+
+  const moveJobToStatus = async (jobId: string, status: JobStatus) => {
+    const previousJobs = optimisticJobs;
+    setOptimisticJobs((current) => current.map((job) => (job.id === jobId ? { ...job, status } : job)));
+    setDraggingJobId(null);
+
+    const response = await fetch("/api/jobs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId, status })
+    });
+
+    if (!response.ok) {
+      setOptimisticJobs(previousJobs);
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      window.alert(result?.error || "Could not move that job. Please try again.");
+    }
+  };
 
   return (
     <div className="stack">
@@ -55,7 +81,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
       <AttentionBanner jobs={attentionJobs} onViewAll={() => setActiveFilter("attention")} />
       <div className="hidden lg:block">
-        <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={jobs} onSelect={setActiveFilter} />
+        <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={optimisticJobs} onSelect={setActiveFilter} />
       </div>
       <div className="hidden lg:block">
         <PipelineTotalsBar jobs={activeJobs} />
@@ -97,11 +123,20 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
           ) : (
             <div className="hidden gap-4 overflow-x-auto pb-2 lg:flex">
               {visibleGroups.map((group) => {
-                const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
+                const groupJobs = optimisticJobs.filter((job) => group.statuses.includes(job.status));
                 const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
                 const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--gold)";
                 return (
-                  <section className="min-w-[220px] flex-1 rounded-[var(--card-radius-desktop)] border bg-black/20" key={group.key} style={{ borderColor: color }}>
+                  <section
+                    className={`w-[260px] shrink-0 rounded-[var(--card-radius-desktop)] border bg-black/20 transition ${draggingJobId ? "border-dashed" : ""}`}
+                    key={group.key}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggingJobId) void moveJobToStatus(draggingJobId, group.dropStatus);
+                    }}
+                    style={{ borderColor: color }}
+                  >
                     <div className="border-b border-[var(--border)] p-3" style={{ background: groupJobs[0] ? `${color}12` : "rgba(212,175,55,0.07)" }}>
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -115,7 +150,17 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
                     </div>
                     <div className="grid min-h-[220px] gap-3 p-3">
                       {groupJobs.length ? (
-                        groupJobs.map((job) => <JobCard compact job={job} key={job.id} />)
+                        groupJobs.map((job) => (
+                          <div
+                            draggable
+                            key={job.id}
+                            onDragEnd={() => setDraggingJobId(null)}
+                            onDragStart={() => setDraggingJobId(job.id)}
+                            className={draggingJobId === job.id ? "opacity-50" : ""}
+                          >
+                            <JobCard compact job={job} />
+                          </div>
+                        ))
                       ) : (
                         <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-[var(--border)] text-sm text-[var(--dim)]">
                           No jobs here

@@ -11,7 +11,7 @@ type Props = {
   searchParams?: Promise<{ filter?: string }>;
 };
 
-const validFilters = new Set(["all", "attention", "new", "survey", "quoting", "sent", "booked"]);
+const validFilters = new Set(["all", "attention", "new", "survey", "quoting", "sent", "booked", "materials", "in_progress", "completed"]);
 
 export default async function JobsPage({ searchParams }: Props) {
   const query = searchParams ? await searchParams : undefined;
