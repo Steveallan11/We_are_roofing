@@ -50,13 +50,24 @@ export async function POST(_: Request, { params }: Props) {
   const priced = hasSavedRates ? applyRateCardToCostBreakdown(importedCostBreakdown, rateCard) : { updated: importedCostBreakdown, pricingNotes: [] };
   const costBreakdown = priced.updated;
   const totals = calculateQuoteTotals(costBreakdown);
+  const contextNote = survey.notes?.trim();
   const basePayload = {
     roof_report:
       existingQuoteResult.data?.roof_report ??
-      `Measured roof takeoff completed for ${customerResult.data?.full_name ?? jobResult.data.job_title}. Review the traced sections, measured runs, and roof features before final pricing.`,
+      [
+        `Measured roof takeoff completed for ${customerResult.data?.full_name ?? jobResult.data.job_title}. Review the traced sections, measured runs, and roof features before final pricing.`,
+        contextNote ? `Survey context from Andy: ${contextNote}` : null
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     scope_of_works:
       existingQuoteResult.data?.scope_of_works ??
-      "Measured roof quantities have been imported from the roof survey tool. Add rates, check waste factors, and finalise the wording before approval.",
+      [
+        "Measured roof quantities have been imported from the roof survey tool. Add rates, check waste factors, and finalise the wording before approval.",
+        contextNote ? `Use this site context when writing the customer-facing scope: ${contextNote}` : null
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     cost_breakdown: costBreakdown,
     subtotal: totals.subtotal,
     vat_amount: totals.vat_amount,
@@ -70,6 +81,7 @@ export async function POST(_: Request, { params }: Props) {
     missing_info: existingQuoteResult.data?.missing_info ?? [],
     pricing_notes: [
       `Imported ${bom.length} measured BOM item${bom.length === 1 ? "" : "s"} from roof survey ${survey.project_name}.`,
+      ...(contextNote ? [`Takeoff context notes: ${contextNote}`] : []),
       ...priced.pricingNotes,
       ...(existingQuoteResult.data?.pricing_notes ?? [])
     ],

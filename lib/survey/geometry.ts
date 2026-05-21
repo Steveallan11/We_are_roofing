@@ -88,12 +88,13 @@ export function buildRoofSurveyBom(survey: RoofSurveyRecord): BOMItem[] {
   survey.sections.forEach((section) => {
     const qty = section.area_m2 ?? getSectionArea(section, survey.scale_px_per_m);
     if (!qty) return;
-    add(`section:${section.type}`, {
-      label: section.type || section.label || "Roof Section",
+    add(`section:${section.id ?? section.label}:${section.type}`, {
+      label: measurementLabel(section.label, section.type || "Roof Section"),
       qty,
       unit: "m²",
       color: section.color,
-      source_type: "section"
+      source_type: "section",
+      source_notes: section.notes
     });
   });
 
@@ -101,23 +102,25 @@ export function buildRoofSurveyBom(survey: RoofSurveyRecord): BOMItem[] {
     const qty = line.length_lm ?? getLineLength(line, survey.scale_px_per_m);
     if (!qty) return;
     const lineDef = LINE_DEFS.find((item) => item.name === line.type);
-    add(`line:${line.type}`, {
-      label: line.type || line.label || "Measured Run",
+    add(`line:${line.id ?? line.label}:${line.type}`, {
+      label: measurementLabel(line.label, line.type || "Measured Run"),
       qty,
       unit: "lm",
       color: line.color || lineDef?.color || "#D4AF37",
-      source_type: "line"
+      source_type: "line",
+      source_notes: line.notes
     });
   });
 
   survey.features.forEach((feature) => {
     const featureDef = FEATURE_DEFS.find((item) => item.name === feature.type);
-    add(`feature:${feature.type}`, {
-      label: feature.type || feature.label || "Feature",
+    add(`feature:${feature.id ?? feature.label}:${feature.type}`, {
+      label: measurementLabel(feature.label, feature.type || "Feature"),
       qty: 1,
       unit: "no.",
       color: feature.color || featureDef?.color || "#D4AF37",
-      source_type: "feature"
+      source_type: "feature",
+      source_notes: feature.notes
     });
   });
 
@@ -137,7 +140,7 @@ export function toQuoteCostBreakdown(items: BOMItem[]) {
     item: item.label,
     cost: 0,
     vat_applicable: true,
-    notes: "Imported from roof survey takeoff",
+    notes: ["Imported from roof survey takeoff", item.source_notes].filter(Boolean).join(" - "),
     quantity: Number(item.qty.toFixed(item.unit === "no." ? 0 : 2)),
     unit: item.unit,
     unit_rate: 0,
@@ -156,6 +159,14 @@ export function toMaterialRows(jobId: string, quoteId: string | null, items: BOM
     required_status: "Check On Site" as const,
     notes: "Imported from roof survey BOM"
   }));
+}
+
+function measurementLabel(label: string | null | undefined, type: string) {
+  const cleanLabel = (label || "").trim();
+  const cleanType = (type || "").trim();
+  if (!cleanLabel) return cleanType;
+  if (!cleanType || cleanLabel.toLowerCase().includes(cleanType.toLowerCase())) return cleanLabel;
+  return `${cleanLabel} - ${cleanType}`;
 }
 
 export function getFeatureIcon(feature: RoofSurveyFeature) {

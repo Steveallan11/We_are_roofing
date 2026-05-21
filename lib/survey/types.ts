@@ -64,6 +64,7 @@ export interface BOMItem {
   unit: "m²" | "lm" | "no.";
   color: string;
   source_type: "section" | "line" | "feature";
+  source_notes?: string | null;
 }
 
 export type RoofSurveySelection =

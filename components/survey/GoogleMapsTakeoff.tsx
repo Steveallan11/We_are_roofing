@@ -29,6 +29,16 @@ type DrawnLine = {
   notes: string;
 };
 
+type DrawnFeature = {
+  id: string;
+  label: string;
+  type: string;
+  marker: google.maps.Marker;
+  point: { lat: number; lng: number };
+  color: string;
+  notes: string;
+};
+
 type Props = {
   surveyId: string;
   jobId: string;
@@ -39,8 +49,22 @@ type Props = {
   initialSurvey: RoofSurveyRecord;
 };
 
-const LINE_TYPES = ["Ridge", "Hip", "Valley", "Eaves", "Verge", "Abutment", "Flashing", "Gutter", "Parapet"];
-const SECTION_TYPES = ["Pitched Tile", "Pitched Slate", "Flat EPDM", "Flat GRP", "Flat Felt", "Lead", "Other"];
+const LINE_TYPES = ["Ridge", "Hip", "Valley", "Eaves", "Verge", "Abutment", "Flashing", "Gutter", "Fascia", "Soaker", "Parapet", "Other"];
+const SECTION_TYPES = ["Pitched - Tile", "Pitched - Slate", "Pitched - Metal", "Flat - EPDM", "Flat - GRP", "Flat - Felt", "Flat - Lead", "Hip Roof", "Mansard", "Other"];
+const ROOF_FEATURES = [
+  { type: "Chimney", color: "#f87171" },
+  { type: "Skylight", color: "#60a5fa" },
+  { type: "Rooflight", color: "#60a5fa" },
+  { type: "Soil Pipe", color: "#a78bfa" },
+  { type: "Stack Pipe", color: "#a78bfa" },
+  { type: "Vent / Cowl", color: "#4ade80" },
+  { type: "Dormer", color: "#fb923c" },
+  { type: "Solar Panel", color: "#fbbf24" },
+  { type: "Satellite Dish", color: "#94a3b8" },
+  { type: "Extract Fan", color: "#2dd4bf" },
+  { type: "Access Hatch", color: "#D4AF37" },
+  { type: "Other", color: "#888888" }
+];
 const SECTION_COLOURS = ["#D4AF37", "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444"];
 const LINE_COLOURS: Record<string, string> = {
   Ridge: "#3b82f6",
@@ -51,6 +75,8 @@ const LINE_COLOURS: Record<string, string> = {
   Abutment: "#ef4444",
   Flashing: "#D4AF37",
   Gutter: "#64748b",
+  Fascia: "#94a3b8",
+  Soaker: "#c084fc",
   Parapet: "#ec4899",
   default: "#888888"
 };
@@ -60,15 +86,20 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const mapElRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const drawingRef = useRef<google.maps.drawing.DrawingManager | null>(null);
+  const featureClickRef = useRef<google.maps.MapsEventListener | null>(null);
   const loadedExistingRef = useRef(false);
 
   const [sections, setSections] = useState<DrawnSection[]>([]);
   const [lines, setLines] = useState<DrawnLine[]>([]);
-  const [drawMode, setDrawMode] = useState<"none" | "section" | "line">("none");
-  const [sectionType, setSectionType] = useState("Pitched Tile");
+  const [features, setFeatures] = useState<DrawnFeature[]>([]);
+  const [drawMode, setDrawMode] = useState<"none" | "section" | "line" | "feature">("none");
+  const [sectionType, setSectionType] = useState("Pitched - Tile");
   const [lineType, setLineType] = useState("Ridge");
+  const [featureType, setFeatureType] = useState("Chimney");
   const [sectionColor, setSectionColor] = useState("#D4AF37");
   const [searchAddr, setSearchAddr] = useState(address);
+  const [surveyNotes, setSurveyNotes] = useState(initialSurvey.notes ?? "");
+  const [selectedShape, setSelectedShape] = useState<{ kind: "section" | "line" | "feature"; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -162,6 +193,29 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
     [attachPolylineListeners]
   );
 
+  const addFeatureOverlay = useCallback((opts: { id?: string; label: string; type: string; color: string; point: { lat: number; lng: number }; notes?: string }) => {
+    if (!mapRef.current) return null;
+    const id = opts.id || crypto.randomUUID();
+    const marker = new google.maps.Marker({
+      position: opts.point,
+      map: mapRef.current,
+      title: opts.label,
+      label: { text: featureMarkerLabel(opts.type), color: "#000", fontSize: "10px", fontWeight: "700" },
+      icon: featureMarkerIcon(opts.color, false),
+      draggable: true,
+      zIndex: 10
+    });
+    const feature = { id, label: opts.label, type: opts.type, marker, point: opts.point, color: opts.color, notes: opts.notes || "" };
+    marker.addListener("dragend", () => {
+      const position = marker.getPosition();
+      if (!position) return;
+      setFeatures((current) => current.map((item) => (item.id === id ? { ...item, point: { lat: position.lat(), lng: position.lng() } } : item)));
+    });
+    marker.addListener("click", () => setSelectedShape({ kind: "feature", id }));
+    setFeatures((current) => [...current, feature]);
+    return feature;
+  }, []);
+
   const loadExistingShapes = useCallback(() => {
     if (loadedExistingRef.current || !mapRef.current) return;
     loadedExistingRef.current = true;
@@ -197,8 +251,22 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
       coordinates.forEach((point) => bounds.extend(point));
     });
 
+    initialSurvey.features.forEach((feature) => {
+      if (typeof feature.point.lat !== "number" || typeof feature.point.lng !== "number") return;
+      const point = { lat: feature.point.lat, lng: feature.point.lng };
+      addFeatureOverlay({
+        id: feature.id,
+        label: feature.label,
+        type: feature.type,
+        color: feature.color,
+        notes: feature.notes,
+        point
+      });
+      bounds.extend(point);
+    });
+
     if (!bounds.isEmpty()) mapRef.current.fitBounds(bounds);
-  }, [addLineOverlay, addSectionOverlay, initialSurvey.lines, initialSurvey.sections]);
+  }, [addFeatureOverlay, addLineOverlay, addSectionOverlay, initialSurvey.features, initialSurvey.lines, initialSurvey.sections]);
 
   useEffect(() => {
     if (!apiKey || !mapElRef.current) {
@@ -292,6 +360,8 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
   function startDrawSection() {
     if (!drawingRef.current) return;
+    featureClickRef.current?.remove();
+    featureClickRef.current = null;
     drawingRef.current.setOptions({ polygonOptions: sectionOptions(sectionColor) });
     drawingRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
     setDrawMode("section");
@@ -299,13 +369,37 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
   function startDrawLine() {
     if (!drawingRef.current) return;
+    featureClickRef.current?.remove();
+    featureClickRef.current = null;
     drawingRef.current.setOptions({ polylineOptions: lineOptions(lineType) });
     drawingRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYLINE);
     setDrawMode("line");
   }
 
+  function startAddFeature() {
+    if (!mapRef.current) return;
+    drawingRef.current?.setDrawingMode(null);
+    featureClickRef.current?.remove();
+    setDrawMode("feature");
+    featureClickRef.current = google.maps.event.addListenerOnce(mapRef.current, "click", (event: google.maps.MapMouseEvent) => {
+      if (!event.latLng) return;
+      const featureDef = ROOF_FEATURES.find((item) => item.type === featureType) ?? ROOF_FEATURES[0];
+      addFeatureOverlay({
+        label: `${featureType} ${features.length + 1}`,
+        type: featureType,
+        color: featureDef.color,
+        point: { lat: event.latLng.lat(), lng: event.latLng.lng() },
+        notes: ""
+      });
+      featureClickRef.current = null;
+      setDrawMode("none");
+    });
+  }
+
   function cancelDraw() {
     drawingRef.current?.setDrawingMode(null);
+    featureClickRef.current?.remove();
+    featureClickRef.current = null;
     setDrawMode("none");
   }
 
@@ -314,6 +408,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
       current.find((section) => section.id === id)?.polygon.setMap(null);
       return current.filter((section) => section.id !== id);
     });
+    if (selectedShape?.kind === "section" && selectedShape.id === id) setSelectedShape(null);
   }
 
   function deleteLine(id: string) {
@@ -321,6 +416,77 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
       current.find((line) => line.id === id)?.polyline.setMap(null);
       return current.filter((line) => line.id !== id);
     });
+    if (selectedShape?.kind === "line" && selectedShape.id === id) setSelectedShape(null);
+  }
+
+  function deleteFeature(id: string) {
+    setFeatures((current) => {
+      current.find((feature) => feature.id === id)?.marker.setMap(null);
+      return current.filter((feature) => feature.id !== id);
+    });
+    if (selectedShape?.kind === "feature" && selectedShape.id === id) setSelectedShape(null);
+  }
+
+  function updateSection(id: string, updates: Partial<Pick<DrawnSection, "label" | "type" | "notes">>) {
+    setSections((current) => current.map((section) => (section.id === id ? { ...section, ...updates } : section)));
+  }
+
+  function updateLine(id: string, updates: Partial<Pick<DrawnLine, "label" | "type" | "notes">>) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.id !== id) return line;
+        const nextColor = updates.type ? LINE_COLOURS[updates.type] || LINE_COLOURS.default : line.color;
+        line.polyline.setOptions({ strokeColor: nextColor });
+        return { ...line, ...updates, color: nextColor };
+      })
+    );
+  }
+
+  function updateFeature(id: string, updates: Partial<Pick<DrawnFeature, "label" | "type" | "notes">>) {
+    setFeatures((current) =>
+      current.map((feature) => {
+        if (feature.id !== id) return feature;
+        const nextType = updates.type ?? feature.type;
+        const nextColor = updates.type ? ROOF_FEATURES.find((item) => item.type === updates.type)?.color ?? feature.color : feature.color;
+        const nextLabel = updates.label ?? feature.label;
+        feature.marker.setTitle(nextLabel);
+        feature.marker.setLabel({ text: featureMarkerLabel(nextType), color: "#000", fontSize: "10px", fontWeight: "700" });
+        feature.marker.setIcon(featureMarkerIcon(nextColor, selectedShape?.kind === "feature" && selectedShape.id === id));
+        return { ...feature, ...updates, type: nextType, color: nextColor, label: nextLabel };
+      })
+    );
+  }
+
+  function focusSection(id: string) {
+    const section = sections.find((item) => item.id === id);
+    if (!section || !mapRef.current) return;
+    const bounds = new google.maps.LatLngBounds();
+    section.polygon
+      .getPath()
+      .getArray()
+      .forEach((point) => bounds.extend(point));
+    mapRef.current.fitBounds(bounds);
+    setSelectedShape({ kind: "section", id });
+  }
+
+  function focusLine(id: string) {
+    const line = lines.find((item) => item.id === id);
+    if (!line || !mapRef.current) return;
+    const bounds = new google.maps.LatLngBounds();
+    line.polyline
+      .getPath()
+      .getArray()
+      .forEach((point) => bounds.extend(point));
+    mapRef.current.fitBounds(bounds);
+    setSelectedShape({ kind: "line", id });
+  }
+
+  function focusFeature(id: string) {
+    const feature = features.find((item) => item.id === id);
+    if (!feature || !mapRef.current) return;
+    mapRef.current.panTo(feature.point);
+    mapRef.current.setZoom(Math.max(mapRef.current.getZoom() ?? 20, 20));
+    setSelectedShape({ kind: "feature", id });
   }
 
   function handleKmlShapes(shapes: ParsedKmlShape[]) {
@@ -359,7 +525,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
       const response = await fetch("/api/survey/roof-survey/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ surveyId, jobId, sections: serialiseSections(sections), lines: serialiseLines(lines) })
+        body: JSON.stringify({ surveyId, jobId, notes: surveyNotes, sections: serialiseSections(sections), lines: serialiseLines(lines), features: serialiseFeatures(features) })
       });
       const result = (await response.json().catch(() => null)) as { saved?: boolean; error?: string } | null;
       if (!response.ok || !result?.saved) throw new Error(result?.error || "Unable to save the map takeoff.");
@@ -399,7 +565,22 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
   const totalArea = sections.reduce((sum, section) => sum + section.area_m2, 0);
   const totalLength = lines.reduce((sum, line) => sum + line.length_lm, 0);
-  const exportRows = useMemo(() => ({ sections: serialiseSections(sections), lines: serialiseLines(lines) }), [lines, sections]);
+  const exportRows = useMemo(() => ({ sections: serialiseSections(sections), lines: serialiseLines(lines), features: serialiseFeatures(features) }), [features, lines, sections]);
+  useEffect(() => {
+    sections.forEach((section) => {
+      const selected = selectedShape?.kind === "section" && selectedShape.id === section.id;
+      section.polygon.setOptions({ strokeWeight: selected ? 5 : 2, fillOpacity: selected ? 0.42 : 0.3, zIndex: selected ? 20 : 1 });
+    });
+    lines.forEach((line) => {
+      const selected = selectedShape?.kind === "line" && selectedShape.id === line.id;
+      line.polyline.setOptions({ strokeWeight: selected ? 6 : 3, zIndex: selected ? 20 : 1 });
+    });
+    features.forEach((feature) => {
+      const selected = selectedShape?.kind === "feature" && selectedShape.id === feature.id;
+      feature.marker.setIcon(featureMarkerIcon(feature.color, selected));
+      feature.marker.setZIndex(selected ? 30 : 10);
+    });
+  }, [features, lines, sections, selectedShape]);
 
   if (!apiKey) {
     return (
@@ -424,6 +605,17 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
                   Go
                 </button>
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4">
+              <p className="label text-[var(--gold)]">Quote Context Notes</p>
+              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Write what the quote needs to understand: access, customer priorities, repair vs replacement, material preference, awkward details, and anything not obvious from the drawing.</p>
+              <textarea
+                className="field mt-3 min-h-32 leading-6"
+                onChange={(event) => setSurveyNotes(event.target.value)}
+                placeholder="Example: Customer wants best-value repair if possible. Rear extension flat roof is leaking around left abutment. Include scaffold allowance for rear access..."
+                value={surveyNotes}
+              />
             </section>
 
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
@@ -462,20 +654,35 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
               </button>
             </section>
 
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+              <p className="label">Add Roof Item</p>
+              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Mark features that affect the quote: chimneys, skylights, soil pipes, vents, dormers, solar panels and similar roof details.</p>
+              <select className="field mt-3" onChange={(event) => setFeatureType(event.target.value)} value={featureType}>
+                {ROOF_FEATURES.map((feature) => (
+                  <option key={feature.type}>{feature.type}</option>
+                ))}
+              </select>
+              <button className={`mt-3 w-full ${drawMode === "feature" ? "button-secondary" : "button-primary"}`} onClick={drawMode === "feature" ? cancelDraw : startAddFeature} type="button">
+                {drawMode === "feature" ? "Cancel item marker" : "Add Item Marker"}
+              </button>
+              {drawMode === "feature" ? <p className="mt-2 text-xs text-[var(--gold)]">Click the roof where this item sits.</p> : null}
+            </section>
+
             <section className="rounded-2xl border border-[var(--border)] bg-black/20 p-4">
               <p className="label">Totals</p>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <Metric label="Area" value={`${totalArea.toFixed(1)} m2`} />
                 <Metric label="Linear" value={`${totalLength.toFixed(1)} lm`} />
+                <Metric label="Items" value={`${features.length} no.`} />
               </div>
               <button className="button-primary mt-4 w-full" disabled={saving} onClick={() => void handleSave()} type="button">
                 {saving ? "Saving..." : "Save Survey"}
               </button>
-              <button className="button-secondary mt-2 w-full !border-[var(--success)]/40 !bg-[var(--success-bg)] !text-[#8df0b7]" disabled={saving || applying || (sections.length === 0 && lines.length === 0)} onClick={() => void handleApplyToQuote()} type="button">
+              <button className="button-secondary mt-2 w-full !border-[var(--success)]/40 !bg-[var(--success-bg)] !text-[#8df0b7]" disabled={saving || applying || (sections.length === 0 && lines.length === 0 && features.length === 0)} onClick={() => void handleApplyToQuote()} type="button">
                 {applying ? "Creating Quote..." : "Save + Create Quote Draft"}
               </button>
-              {sections.length === 0 && lines.length === 0 ? (
-                <p className="mt-2 text-xs text-[var(--muted)]">Draw or import at least one measured section or line before creating the quote draft.</p>
+              {sections.length === 0 && lines.length === 0 && features.length === 0 ? (
+                <p className="mt-2 text-xs text-[var(--muted)]">Draw or import at least one measured section, line, or item before creating the quote draft.</p>
               ) : null}
               <ExportButtons
                 address={address}
@@ -488,7 +695,24 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
               />
             </section>
 
-            <ShapeList sections={sections} lines={lines} onDeleteSection={deleteSection} onDeleteLine={deleteLine} />
+            <ShapeList
+              lineTypes={LINE_TYPES}
+              onDeleteLine={deleteLine}
+              onDeleteSection={deleteSection}
+              onDeleteFeature={deleteFeature}
+              onFocusFeature={focusFeature}
+              onFocusLine={focusLine}
+              onFocusSection={focusSection}
+              onUpdateFeature={updateFeature}
+              onUpdateLine={updateLine}
+              onUpdateSection={updateSection}
+              featureTypes={ROOF_FEATURES.map((feature) => feature.type)}
+              sectionTypes={SECTION_TYPES}
+              selectedShape={selectedShape}
+              sections={sections}
+              lines={lines}
+              features={features}
+            />
           </div>
         </aside>
 
@@ -498,7 +722,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
           <KmzUploadButton mapRef={mapRef} onShapesLoaded={handleKmlShapes} />
           {drawMode !== "none" ? (
             <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-[rgba(212,175,55,0.45)] bg-black/80 px-5 py-2 text-xs font-bold text-[var(--gold)]">
-              {drawMode === "section" ? "Click around the roof - double-click to finish polygon" : "Click along the run - double-click to finish line"}
+              {drawMode === "section" ? "Click around the roof - double-click to finish polygon" : drawMode === "line" ? "Click along the run - double-click to finish line" : "Click the roof to place this item"}
             </div>
           ) : null}
           {message ? <Toast tone="success">{message}</Toast> : null}
@@ -515,6 +739,27 @@ function sectionOptions(color: string): google.maps.PolygonOptions {
 
 function lineOptions(type: string): google.maps.PolylineOptions {
   return { strokeColor: LINE_COLOURS[type] || LINE_COLOURS.default, strokeWeight: 3, editable: true, clickable: true };
+}
+
+function featureMarkerIcon(color: string, selected: boolean): google.maps.Symbol {
+  return {
+    path: google.maps.SymbolPath.CIRCLE,
+    scale: selected ? 13 : 10,
+    fillColor: color,
+    fillOpacity: 1,
+    strokeColor: selected ? "#ffffff" : "#111111",
+    strokeWeight: selected ? 3 : 2
+  };
+}
+
+function featureMarkerLabel(type: string) {
+  return type
+    .split(/\s+|\/+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function round2(value: number) {
@@ -556,7 +801,18 @@ function serialiseLines(lines: DrawnLine[]) {
   }));
 }
 
-function buildMapKml(opts: { projectName: string; jobRef: string; address: string; sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines> }) {
+function serialiseFeatures(features: DrawnFeature[]) {
+  return features.map((feature) => ({
+    id: feature.id,
+    label: feature.label,
+    type: feature.type,
+    color: feature.color,
+    notes: feature.notes,
+    point: { x: feature.point.lng, y: feature.point.lat, lat: feature.point.lat, lng: feature.point.lng }
+  }));
+}
+
+function buildMapKml(opts: { projectName: string; jobRef: string; address: string; sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> }) {
   const polygonPlacemarks = opts.sections
     .map(
       (section) => `<Placemark><name>${escapeXml(section.label)}</name><description>${escapeXml(`${section.type} - ${section.area_m2.toFixed(1)} m2`)}</description><ExtendedData><Data name="area_m2"><value>${section.area_m2.toFixed(2)}</value></Data></ExtendedData><Polygon><outerBoundaryIs><LinearRing><coordinates>${section.points.map((point) => `${point.lng},${point.lat},0`).join(" ")}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`
@@ -567,7 +823,12 @@ function buildMapKml(opts: { projectName: string; jobRef: string; address: strin
       (line) => `<Placemark><name>${escapeXml(line.label)}</name><description>${escapeXml(`${line.type} - ${line.length_lm.toFixed(1)} lm`)}</description><ExtendedData><Data name="length_lm"><value>${line.length_lm.toFixed(2)}</value></Data></ExtendedData><LineString><tessellate>1</tessellate><coordinates>${line.points.map((point) => `${point.lng},${point.lat},0`).join(" ")}</coordinates></LineString></Placemark>`
     )
     .join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(opts.projectName)}</name><description>${escapeXml(`${opts.jobRef} - ${opts.address}`)}</description>${polygonPlacemarks}${linePlacemarks}</Document></kml>`;
+  const featurePlacemarks = opts.features
+    .map(
+      (feature) => `<Placemark><name>${escapeXml(feature.label)}</name><description>${escapeXml(`${feature.type}${feature.notes ? ` - ${feature.notes}` : ""}`)}</description><ExtendedData><Data name="type"><value>${escapeXml(feature.type)}</value></Data></ExtendedData><Point><coordinates>${feature.point.lng},${feature.point.lat},0</coordinates></Point></Placemark>`
+    )
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(opts.projectName)}</name><description>${escapeXml(`${opts.jobRef} - ${opts.address}`)}</description>${polygonPlacemarks}${linePlacemarks}${featurePlacemarks}</Document></kml>`;
 }
 
 function escapeXml(value: string) {
@@ -591,10 +852,10 @@ function ExportButtons(props: {
   customerName: string;
   surveyDate: string;
   surveyId: string;
-  rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines> };
+  rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
   function makeKml() {
-    return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines });
+    return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features });
   }
 
   function makeCsv() {
@@ -661,34 +922,159 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ShapeList({ sections, lines, onDeleteSection, onDeleteLine }: { sections: DrawnSection[]; lines: DrawnLine[]; onDeleteSection: (id: string) => void; onDeleteLine: (id: string) => void }) {
+function ShapeList({
+  sections,
+  lines,
+  features,
+  sectionTypes,
+  lineTypes,
+  featureTypes,
+  selectedShape,
+  onDeleteSection,
+  onDeleteLine,
+  onDeleteFeature,
+  onFocusSection,
+  onFocusLine,
+  onFocusFeature,
+  onUpdateSection,
+  onUpdateLine,
+  onUpdateFeature
+}: {
+  sections: DrawnSection[];
+  lines: DrawnLine[];
+  features: DrawnFeature[];
+  sectionTypes: string[];
+  lineTypes: string[];
+  featureTypes: string[];
+  selectedShape: { kind: "section" | "line" | "feature"; id: string } | null;
+  onDeleteSection: (id: string) => void;
+  onDeleteLine: (id: string) => void;
+  onDeleteFeature: (id: string) => void;
+  onFocusSection: (id: string) => void;
+  onFocusLine: (id: string) => void;
+  onFocusFeature: (id: string) => void;
+  onUpdateSection: (id: string, updates: Partial<Pick<DrawnSection, "label" | "type" | "notes">>) => void;
+  onUpdateLine: (id: string, updates: Partial<Pick<DrawnLine, "label" | "type" | "notes">>) => void;
+  onUpdateFeature: (id: string, updates: Partial<Pick<DrawnFeature, "label" | "type" | "notes">>) => void;
+}) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <p className="label">Measurements</p>
-      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+      <p className="label">Individual Measurements</p>
+      <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Name each area or run clearly. Click Focus to jump the map to that exact measurement before pricing.</p>
+      <div className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
         {sections.map((section) => (
-          <ShapeRow color={section.color} key={section.id} label={section.label} metric={`${section.area_m2.toFixed(1)} m2`} onDelete={() => onDeleteSection(section.id)} />
+          <ShapeRow
+            color={section.color}
+            key={section.id}
+            label={section.label}
+            metric={`${section.area_m2.toFixed(1)} m2`}
+            notes={section.notes}
+            onDelete={() => onDeleteSection(section.id)}
+            onFocus={() => onFocusSection(section.id)}
+            onLabelChange={(label) => onUpdateSection(section.id, { label })}
+            onNotesChange={(notes) => onUpdateSection(section.id, { notes })}
+            onTypeChange={(type) => onUpdateSection(section.id, { type })}
+            selected={selectedShape?.kind === "section" && selectedShape.id === section.id}
+            type={section.type}
+            typeOptions={sectionTypes}
+          />
         ))}
         {lines.map((line) => (
-          <ShapeRow color={line.color} key={line.id} label={line.label} metric={`${line.length_lm.toFixed(1)} lm`} onDelete={() => onDeleteLine(line.id)} />
+          <ShapeRow
+            color={line.color}
+            key={line.id}
+            label={line.label}
+            metric={`${line.length_lm.toFixed(1)} lm`}
+            notes={line.notes}
+            onDelete={() => onDeleteLine(line.id)}
+            onFocus={() => onFocusLine(line.id)}
+            onLabelChange={(label) => onUpdateLine(line.id, { label })}
+            onNotesChange={(notes) => onUpdateLine(line.id, { notes })}
+            onTypeChange={(type) => onUpdateLine(line.id, { type })}
+            selected={selectedShape?.kind === "line" && selectedShape.id === line.id}
+            type={line.type}
+            typeOptions={lineTypes}
+          />
         ))}
-        {sections.length === 0 && lines.length === 0 ? <p className="text-sm text-[var(--muted)]">Draw a section or line to start measuring.</p> : null}
+        {features.map((feature) => (
+          <ShapeRow
+            color={feature.color}
+            key={feature.id}
+            label={feature.label}
+            metric="1 no."
+            notes={feature.notes}
+            onDelete={() => onDeleteFeature(feature.id)}
+            onFocus={() => onFocusFeature(feature.id)}
+            onLabelChange={(label) => onUpdateFeature(feature.id, { label })}
+            onNotesChange={(notes) => onUpdateFeature(feature.id, { notes })}
+            onTypeChange={(type) => onUpdateFeature(feature.id, { type })}
+            selected={selectedShape?.kind === "feature" && selectedShape.id === feature.id}
+            type={feature.type}
+            typeOptions={featureTypes}
+          />
+        ))}
+        {sections.length === 0 && lines.length === 0 && features.length === 0 ? <p className="text-sm text-[var(--muted)]">Draw a section, line, or roof item to start measuring.</p> : null}
       </div>
     </section>
   );
 }
 
-function ShapeRow({ color, label, metric, onDelete }: { color: string; label: string; metric: string; onDelete: () => void }) {
+function ShapeRow({
+  color,
+  label,
+  type,
+  metric,
+  notes,
+  selected,
+  typeOptions,
+  onDelete,
+  onFocus,
+  onLabelChange,
+  onTypeChange,
+  onNotesChange
+}: {
+  color: string;
+  label: string;
+  type: string;
+  metric: string;
+  notes: string;
+  selected: boolean;
+  typeOptions: string[];
+  onDelete: () => void;
+  onFocus: () => void;
+  onLabelChange: (label: string) => void;
+  onTypeChange: (type: string) => void;
+  onNotesChange: (notes: string) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-black/20 p-2">
-      <span className="h-3 w-3 rounded-sm" style={{ background: color }} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-semibold text-white">{label}</p>
-        <p className="text-xs text-[var(--gold)]">{metric}</p>
+    <div className={`rounded-xl border bg-black/20 p-3 ${selected ? "border-[var(--gold)] shadow-[0_0_0_1px_rgba(212,175,55,0.28)]" : "border-[var(--border)]"}`}>
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 rounded-sm" style={{ background: color }} />
+        <p className="flex-1 text-xs font-bold text-[var(--gold)]">{metric}</p>
+        <button className="rounded-lg border border-[var(--gold)]/30 px-2 py-1 text-xs font-semibold text-[var(--gold)]" onClick={onFocus} type="button">
+          Focus
+        </button>
+        <button className="rounded-lg border border-[#ff9b9b]/30 px-2 py-1 text-xs text-[#ff9b9b]" onClick={onDelete} type="button">
+          Delete
+        </button>
       </div>
-      <button className="text-xs text-[#ff9b9b]" onClick={onDelete} type="button">
-        Delete
-      </button>
+      <label className="mt-3 block">
+        <span className="label">Name</span>
+        <input className="field" onChange={(event) => onLabelChange(event.target.value)} value={label} />
+      </label>
+      <label className="mt-2 block">
+        <span className="label">Type / Rate Match</span>
+        <select className="field" onChange={(event) => onTypeChange(event.target.value)} value={type}>
+          {typeOptions.includes(type) ? null : <option>{type}</option>}
+          {typeOptions.map((option) => (
+            <option key={option}>{option}</option>
+          ))}
+        </select>
+      </label>
+      <label className="mt-2 block">
+        <span className="label">Measurement Notes</span>
+        <textarea className="field min-h-20" onChange={(event) => onNotesChange(event.target.value)} placeholder="Waste, access, repair detail, material note..." value={notes} />
+      </label>
     </div>
   );
 }
