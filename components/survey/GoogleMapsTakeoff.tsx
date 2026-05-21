@@ -285,6 +285,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
           zoom: 19,
           center: { lat: 51.279, lng: -0.833 },
           mapTypeId: "satellite",
+          gestureHandling: "greedy",
           tilt: 0,
           heading: 0,
           streetViewControl: false,
@@ -593,10 +594,10 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   }
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex min-h-[78vh] flex-col lg:flex-row">
-        <aside className="w-full shrink-0 border-b border-[var(--border)] bg-card2 lg:w-[320px] lg:border-b-0 lg:border-r">
-          <div className="space-y-4 p-4">
+    <div className="h-[calc(100dvh-286px)] min-h-[460px] overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] max-lg:h-[calc(100dvh-220px-var(--bottomnav-height))] max-lg:min-h-[520px]">
+      <div className="flex h-full min-h-0 flex-col lg:flex-row">
+        <aside className="max-h-[42dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-b border-[var(--border)] bg-card2 lg:h-full lg:max-h-none lg:w-[320px] lg:border-b-0 lg:border-r">
+          <div className="space-y-4 p-4 pb-6">
             <GoogleEarthGuide />
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
               <p className="label">Property</p>
@@ -718,9 +719,9 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
           </div>
         </aside>
 
-        <div className="relative min-h-[70vh] flex-1">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           {loading ? <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--surface)] text-sm text-[var(--muted)]">Loading satellite map...</div> : null}
-          <div className="h-full min-h-[70vh] w-full" ref={mapElRef} />
+          <div className="h-full min-h-[360px] w-full overscroll-contain lg:min-h-0" ref={mapElRef} style={{ touchAction: "none" }} />
           <KmzUploadButton mapRef={mapRef} onShapesLoaded={handleKmlShapes} />
           {drawMode !== "none" ? (
             <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-[rgba(212,175,55,0.45)] bg-black/80 px-5 py-2 text-xs font-bold text-[var(--gold)]">
