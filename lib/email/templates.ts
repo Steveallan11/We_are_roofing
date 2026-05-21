@@ -54,19 +54,42 @@ export function surveyConfirmationEmail(props: {
 export function quoteSentEmail(props: { customerName: string; quote: QuoteRecord; quoteUrl: string }) {
   const options = (props.quote.options ?? []) as QuoteOption[];
   const totals = options.length
-    ? options.map((option) => `<li>${option.label}: <strong>${currency(option.total)}</strong>${option.recommended ? " (recommended)" : ""}</li>`).join("")
-    : `<li>Total: <strong>${currency(props.quote.total)}</strong></li>`;
+    ? options
+        .map(
+          (option) => `
+            <div style="display:flex;justify-content:space-between;gap:14px;border-bottom:1px solid #eee3bd;padding:10px 0">
+              <span style="font-size:14px;color:#555">${option.label}${option.recommended ? " (recommended)" : ""}</span>
+              <strong style="font-size:16px;color:#1a1a1a">${currency(option.total)}</strong>
+            </div>`
+        )
+        .join("")
+    : `
+      <div style="display:flex;justify-content:space-between;gap:14px">
+        <span style="font-size:14px;color:#555">Total</span>
+        <strong style="font-size:22px;color:#1a1a1a">${currency(props.quote.total)}</strong>
+      </div>`;
 
   return shell(
     "Your Roofing Quote Is Ready",
     `
-      <p style="font-size:16px;margin-top:0">Hi ${props.customerName.split(" ")[0] || props.customerName},</p>
-      <p style="font-size:14px;line-height:1.6;color:#555">Your roofing quotation is ready to review. We have kept the wording clear so you can see exactly what is included.</p>
-      <ul style="font-size:14px;color:#333;line-height:1.7">${totals}</ul>
-      <p style="text-align:center;margin:26px 0">
-        <a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:12px 22px;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none">View and Accept Quote</a>
+      <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${props.customerName.split(" ")[0] || props.customerName},</p>
+      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
+        Your roofing quotation is ready to review. The quote page is laid out in clear sections so you can see the roof report, the proposed works, and the price breakdown without having to dig through small print.
       </p>
-      <p style="font-size:13px;color:#555;line-height:1.6">If you have any questions, just reply to this email and Andy will talk you through it.</p>
+      <div style="background:#faf6e8;border:1px solid #e8d7a1;border-left:4px solid #D4AF37;border-radius:8px;padding:18px 20px;margin:22px 0">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00;margin-bottom:8px">Quote Summary</div>
+        ${totals}
+      </div>
+      <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:18px 20px;margin:22px 0">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00;margin-bottom:10px">What is inside</div>
+        <p style="font-size:15px;line-height:1.75;color:#555;margin:0 0 8px">1. Roof report - what we found and what it means.</p>
+        <p style="font-size:15px;line-height:1.75;color:#555;margin:0 0 8px">2. Scope of works - what is included in the job.</p>
+        <p style="font-size:15px;line-height:1.75;color:#555;margin:0">3. Price breakdown - options, measurements, totals, and the next step.</p>
+      </div>
+      <p style="text-align:center;margin:30px 0">
+        <a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:15px 28px;border-radius:8px;font-size:15px;font-weight:700;text-decoration:none;display:inline-block">View and Accept Quote</a>
+      </p>
+      <p style="font-size:15px;color:#555;line-height:1.75;margin-bottom:0">If anything is unclear, just reply to this email or use the question box on the quote page and Andy will talk you through it.</p>
     `
   );
 }

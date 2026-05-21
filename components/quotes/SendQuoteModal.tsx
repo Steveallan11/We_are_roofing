@@ -61,13 +61,13 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(6,6,6,0.84)] px-4 py-6" role="dialog" aria-modal="true">
-      <div className="card w-full max-w-xl p-6">
+      <div className="card w-full max-w-2xl p-6 md:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="section-kicker text-[0.65rem] uppercase">Send Quote</p>
             <h3 className="mt-2 font-condensed text-3xl text-white">{quoteRef}</h3>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              {jobTitle} for {customerName}
+            <p className="mt-2 max-w-xl text-base leading-7 text-[var(--muted)]">
+              Send a secure customer link with a clearer paragraph quote, bigger text, online accept button, and question box.
             </p>
           </div>
           <button className="button-ghost !px-3 !py-2 text-sm" onClick={onClose} type="button">
@@ -111,13 +111,23 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
           />
         </div>
 
-        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
-          <p className="label">What gets sent</p>
-          <ul className="mt-3 space-y-2 text-sm text-[var(--text)]">
-            <li>- Customer-ready quote email in We Are Roofing branding</li>
-            <li>- Link to review and accept the quote online</li>
-            <li>- Job and quote status updated in the file</li>
-          </ul>
+        <div className="mt-5 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-5">
+          <p className="label text-[var(--gold)]">Customer will receive</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {[
+              ["Readable quote", "Bigger paragraphs with report, scope, and price split clearly."],
+              ["Secure link", "They can view, accept, or ask a question from one page."],
+              ["Clean email", "Professional branded email with the total and next step."]
+            ].map(([title, body]) => (
+              <div className="rounded-xl border border-[var(--border)] bg-black/20 p-3" key={title}>
+                <p className="text-sm font-bold text-white">{title}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{body}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-sm leading-6 text-[var(--text)]">
+            This updates the job file and records the quote as sent. If the customer replies with a question, it will stay linked to this quote.
+          </p>
         </div>
 
         {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
@@ -128,7 +138,7 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
             Cancel
           </button>
           <button className="button-primary" disabled={isSending} onClick={sendQuote} type="button">
-            {isSending ? "Sending..." : "Send Quote"}
+            {isSending ? "Sending..." : "Send secure quote link"}
           </button>
         </div>
       </div>

@@ -59,8 +59,8 @@ const td: React.CSSProperties = {
   borderBottom: `1px solid ${DOC.lightRule}`,
   color: DOC.muted,
   fontFamily: DOC.fontSerif,
-  fontSize: 14,
-  lineHeight: 1.45,
+  fontSize: 15,
+  lineHeight: 1.6,
   padding: 12,
   verticalAlign: "top"
 };

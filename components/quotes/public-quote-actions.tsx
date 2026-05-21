@@ -51,8 +51,8 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
   return (
     <div className="mt-8 rounded-[1.5rem] border border-[var(--gold)]/35 bg-[var(--surface)] p-5 shadow-2xl md:p-7">
       <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Next Step</p>
-      <h2 className="mt-3 font-display text-3xl text-white md:text-4xl">Accept the quote or ask Andy a question</h2>
-      <p className="mt-3 font-ui text-base leading-7 text-[var(--text-muted)]">
+      <h2 className="mt-3 font-display text-4xl leading-tight text-white md:text-5xl">Accept the quote or ask Andy a question</h2>
+      <p className="mt-4 font-ui text-lg leading-8 text-[var(--text-muted)]">
         Add your details below so we can match your response to the quote and get straight back to you.
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -62,18 +62,18 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
       <div className="mt-5 grid gap-3 md:flex md:flex-wrap">
         {options.length ? (
           options.map((option) => (
-            <button className={`${option.recommended ? "button-primary" : "button-secondary"} !min-h-12 !text-sm`} key={option.id} onClick={() => accept(option.id)} type="button">
+            <button className={`${option.recommended ? "button-primary" : "button-secondary"} !min-h-14 !text-base`} key={option.id} onClick={() => accept(option.id)} type="button">
               Accept {option.label}
             </button>
           ))
         ) : (
-          <button className="button-primary !min-h-12 !text-sm" onClick={() => accept()} type="button">
+          <button className="button-primary !min-h-14 !text-base" onClick={() => accept()} type="button">
             Accept Quote
           </button>
         )}
       </div>
-      <textarea className="field mt-5 min-h-36" onChange={(event) => setMessage(event.target.value)} placeholder="Have a question? Type it here..." value={message} />
-      <button className="button-ghost mt-3 !min-h-12 !text-sm" onClick={sendMessage} type="button">
+      <textarea className="field mt-5 min-h-40 text-base leading-7" onChange={(event) => setMessage(event.target.value)} placeholder="Have a question? Type it here..." value={message} />
+      <button className="button-ghost mt-3 !min-h-12 !text-base" onClick={sendMessage} type="button">
         Send Question
       </button>
       {status ? <p className="mt-4 text-sm text-[var(--gold-l)]">{status}</p> : null}

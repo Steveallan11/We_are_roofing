@@ -85,9 +85,9 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
             <strong>${escapeHtml(line.quote_section || line.item)}</strong>
             ${line.quote_section ? `<br/><span style="font-size:12px;color:#75663b;">${escapeHtml(line.item)}</span>` : ""}
           </td>
-          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">
+          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;line-height:1.55;">
             ${line.measurement_label ? `<strong>${escapeHtml(line.measurement_label)}</strong><br/>` : ""}
-            ${escapeHtml(line.notes)}
+            ${escapeHtml(formatLineNotes(line))}
           </td>
           <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${formatCurrency(line.cost)}</td>
         </tr>`
@@ -101,22 +101,26 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
     <title>${escapeHtml(quote.quote_ref)}</title>
     <style>
       body { font-family: Arial, Helvetica, sans-serif; background:#f3f0e4; color:#101010; padding:40px; }
-      .sheet { max-width: 820px; margin: 0 auto; background:#ffffff; border:1px solid #d8c58a; border-radius:18px; overflow:hidden; }
-      .hero { background:#101417; color:#f5e7b2; padding:28px 32px; }
+      .sheet { max-width: 900px; margin: 0 auto; background:#ffffff; border:1px solid #d8c58a; border-radius:22px; overflow:hidden; }
+      .hero { background:#101417; color:#f5e7b2; padding:34px 38px; }
       .hero img { max-width:180px; display:block; margin-bottom:18px; }
-      .hero h1 { margin:0; font-size:34px; line-height:1; }
-      .hero p { margin:8px 0 0; color:#d7c483; }
-      .body { padding:28px 32px; }
-      h2 { font-size:18px; margin:24px 0 10px; color:#101417; text-transform:uppercase; letter-spacing:0.08em; }
-      p { line-height:1.7; white-space:pre-line; }
+      .hero h1 { margin:0; font-size:38px; line-height:1; }
+      .hero p { margin:10px 0 0; color:#d7c483; font-size:16px; line-height:1.6; }
+      .body { padding:34px 38px; }
+      h2 { font-size:19px; margin:28px 0 12px; color:#101417; text-transform:uppercase; letter-spacing:0.08em; }
+      p { line-height:1.75; font-size:16px; }
+      .readable p { margin:0 0 14px; }
       table { width:100%; border-collapse:collapse; margin-top:12px; }
       th { text-align:left; padding:12px; border-bottom:2px solid #101417; text-transform:uppercase; font-size:12px; letter-spacing:0.08em; }
+      td { font-size:15px; }
       .totals { margin-top:22px; margin-left:auto; width:min(320px,100%); }
       .totals div { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #e5ddbf; }
       .totals div:last-child { border-bottom:none; font-size:20px; font-weight:700; color:#8d6a00; }
       .meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:18px; }
       .meta-card { background:#f7f3e3; padding:12px 14px; border-radius:14px; }
       .meta-label { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#75663b; margin-bottom:6px; }
+      .guide { background:#fbf6e8; border:1px solid #e5ddbf; border-left:4px solid #d4af37; border-radius:14px; padding:18px 20px; margin:24px 0 4px; }
+      .guide-title { margin:0 0 8px; color:#8d6a00; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; }
     </style>
   </head>
   <body>
@@ -133,10 +137,14 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
           <div class="meta-card"><div class="meta-label">Property</div><div>${escapeHtml(bundle.job.property_address)}</div></div>
           <div class="meta-card"><div class="meta-label">Roof Type</div><div>${escapeHtml(bundle.job.roof_type || "Roofing")}</div></div>
         </div>
+        <div class="guide">
+          <div class="guide-title">How to read this quote</div>
+          <p style="margin:0;">This quotation is split into the roof report, the proposed works, and the priced sections. Measurements from the takeoff are shown next to the relevant price lines where available.</p>
+        </div>
         <h2>Roof Report</h2>
-        <p>${escapeHtml(quote.roof_report)}</p>
+        <div class="readable">${renderReadableHtml(quote.roof_report)}</div>
         <h2>Scope of Works</h2>
-        <p>${escapeHtml(quote.scope_of_works)}</p>
+        <div class="readable">${renderReadableHtml(quote.scope_of_works)}</div>
         <h2>Cost Breakdown</h2>
         <table>
           <thead>
@@ -157,11 +165,11 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
           <div><span>Total</span><span>${formatCurrency(quote.total)}</span></div>
         </div>
         <h2>Guarantee</h2>
-        <p>${escapeHtml(quote.guarantee_text || "")}</p>
+        <div class="readable">${renderReadableHtml(quote.guarantee_text || "")}</div>
         <h2>Exclusions</h2>
-        <p>${escapeHtml(quote.exclusions || "")}</p>
+        <div class="readable">${renderReadableHtml(quote.exclusions || "")}</div>
         <h2>Terms</h2>
-        <p>${escapeHtml(quote.terms || "")}</p>
+        <div class="readable">${renderReadableHtml(quote.terms || "")}</div>
       </div>
     </div>
   </body>
@@ -382,6 +390,43 @@ function wrapText(text: string, maxLength = 92) {
     lines.push(current);
   }
   return lines;
+}
+
+function renderReadableHtml(value: string) {
+  const text = value.replace(/\r\n/g, "\n").trim();
+  if (!text) return "<p>To be confirmed.</p>";
+
+  return text
+    .split(/\n{2,}/)
+    .map((block) => block.trim().replace(/\n/g, " "))
+    .filter(Boolean)
+    .flatMap(splitLongHtmlParagraph)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join("");
+}
+
+function splitLongHtmlParagraph(text: string) {
+  if (text.length < 340) return [text];
+  const sentences = text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [text];
+  const paragraphs: string[] = [];
+  let current = "";
+
+  for (const sentence of sentences) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length > 280 && current) {
+      paragraphs.push(current);
+      current = sentence;
+      continue;
+    }
+    current = next;
+  }
+
+  if (current) paragraphs.push(current);
+  return paragraphs;
+}
+
+function formatLineNotes(line: QuoteRecord["cost_breakdown"][number]) {
+  return [line.quote_section ? line.item : null, line.notes].filter(Boolean).join(" - ");
 }
 
 function escapeHtml(value: string) {
