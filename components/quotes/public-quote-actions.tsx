@@ -15,8 +15,21 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
   const [customerEmail, setCustomerEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
+  if (!token) {
+    return (
+      <div className="mt-8 rounded-[1.5rem] border border-[var(--gold)]/35 bg-[var(--surface)] p-5 shadow-2xl md:p-7">
+        <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Read-only quote link</p>
+        <h2 className="mt-3 font-display text-3xl text-white md:text-4xl">Ask Andy for the secure quote link</h2>
+        <p className="mt-3 font-ui text-base leading-7 text-[var(--text-muted)]">
+          This older quote link is available for viewing only. To accept the quote or send a question through the portal, use the latest secure link from your email.
+        </p>
+      </div>
+    );
+  }
+  const secureToken = token;
+
   async function accept(optionId?: string) {
-    const response = await fetch(`/api/quotes/${quoteId}/accept${token ? `?token=${encodeURIComponent(token)}` : ""}`, {
+    const response = await fetch(`/api/quotes/${quoteId}/accept?token=${encodeURIComponent(secureToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ option_id: optionId, customer_name: customerName, customer_email: customerEmail })
@@ -26,7 +39,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
 
   async function sendMessage() {
     if (!message.trim()) return;
-    const response = await fetch(`/api/quotes/${quoteId}/message${token ? `?token=${encodeURIComponent(token)}` : ""}`, {
+    const response = await fetch(`/api/quotes/${quoteId}/message?token=${encodeURIComponent(secureToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sender_type: "customer", sender_name: customerName, sender_email: customerEmail, message })
