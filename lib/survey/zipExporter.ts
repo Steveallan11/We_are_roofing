@@ -18,7 +18,12 @@ export async function exportZipPackage(opts: {
   zip.file(`${safeName}_measurements.csv`, `\uFEFF${opts.csvString}`);
 
   if (opts.canvasDataUrl) {
-    zip.file(`${safeName}_survey_annotated.jpg`, opts.canvasDataUrl.replace(/^data:image\/\w+;base64,/, ""), { base64: true });
+    const [, mime = "", payload = ""] = opts.canvasDataUrl.match(/^data:([^;]+);base64,(.*)$/) ?? [];
+    if (mime === "image/svg+xml") {
+      zip.file(`${safeName}_cad_drawing.svg`, payload, { base64: true });
+    } else {
+      zip.file(`${safeName}_survey_annotated.jpg`, payload || opts.canvasDataUrl.replace(/^data:image\/\w+;base64,/, ""), { base64: true });
+    }
   }
 
   if (opts.satelliteImageUrl) {
@@ -47,8 +52,8 @@ ${safeName}_survey.kml
 ${safeName}_measurements.csv
   Measurements spreadsheet for Excel, Numbers, or Google Sheets.
 
-${safeName}_survey_annotated.jpg
-  Satellite image with drawn roof sections and lines overlaid.
+${safeName}_cad_drawing.svg / ${safeName}_survey_annotated.jpg
+  Generated drawing or annotated image with roof sections, lines, and items overlaid.
 
 ${safeName}_satellite.jpg
   Original satellite image, when available.

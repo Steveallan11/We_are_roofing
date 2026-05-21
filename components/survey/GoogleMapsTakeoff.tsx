@@ -5,6 +5,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
+import { buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
 import type { RoofSurveyRecord, SurveyPoint } from "@/lib/survey/types";
@@ -691,6 +692,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
                 projectName={initialSurvey.project_name}
                 surveyDate={new Date(initialSurvey.created_at || Date.now()).toLocaleDateString("en-GB")}
                 surveyId={surveyId}
+                notes={surveyNotes}
                 rows={exportRows}
               />
             </section>
@@ -852,35 +854,73 @@ function ExportButtons(props: {
   customerName: string;
   surveyDate: string;
   surveyId: string;
+  notes: string;
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
+  const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("technical");
+
   function makeKml() {
     return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features });
   }
 
   function makeCsv() {
-    return buildCsv({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, surveyDate: props.surveyDate });
+    return buildCsv({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features, surveyDate: props.surveyDate });
+  }
+
+  function makeDrawingSvg() {
+    return buildTakeoffDrawingSvg({
+      projectName: props.projectName,
+      jobRef: props.jobRef,
+      address: props.address,
+      customerName: props.customerName,
+      surveyDate: props.surveyDate,
+      notes: props.notes,
+      sections: props.rows.sections,
+      lines: props.rows.lines,
+      features: props.rows.features,
+      style: drawingStyle
+    });
   }
 
   return (
-    <div className="mt-3 grid grid-cols-2 gap-2">
+    <div className="mt-3 space-y-2">
+      <label className="block">
+        <span className="label">Drawing Style</span>
+        <select className="field mt-1" onChange={(event) => setDrawingStyle(event.target.value as TakeoffDrawingStyle)} value={drawingStyle}>
+          <option value="technical">Technical Takeoff</option>
+          <option value="customer">Customer Friendly</option>
+          <option value="quote">Quote Sketch</option>
+        </select>
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <button className="button-secondary !py-2 text-xs" onClick={() => downloadSvg(makeDrawingSvg(), `${props.jobRef}-cad-drawing`)} type="button">
+          CAD SVG
+        </button>
+        <button className="button-secondary !py-2 text-xs" onClick={() => void downloadPng(makeDrawingSvg(), `${props.jobRef}-cad-drawing`)} type="button">
+          CAD PNG
+        </button>
+        <button className="button-secondary !py-2 text-xs" onClick={() => printDrawing(makeDrawingSvg(), `${props.jobRef}-cad-drawing`)} type="button">
+          CAD PDF
+        </button>
+        <button
+          className="button-ghost !py-2 text-xs"
+          onClick={() =>
+            printHtml(
+              `<h1>Roof Takeoff - ${escapeXml(props.jobRef)}</h1><p>${escapeXml(props.address)}</p><p>Total sections: ${props.rows.sections.length}</p><p>Total lines: ${props.rows.lines.length}</p><p>Total items: ${props.rows.features.length}</p><pre>${escapeXml(makeCsv())}</pre>`,
+              `${props.jobRef}-roof-takeoff`
+            )
+          }
+          type="button"
+        >
+          Table PDF
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
       <button className="button-ghost !py-2 text-xs" onClick={() => downloadText(makeKml(), `${props.jobRef}-roof-survey.kml`, "application/vnd.google-earth.kml+xml")} type="button">
         KML
       </button>
       <button className="button-ghost !py-2 text-xs" onClick={() => downloadCsv(makeCsv(), `${props.jobRef}-measurements`)} type="button">
         CSV
-      </button>
-      <button
-        className="button-ghost !py-2 text-xs"
-        onClick={() =>
-          printHtml(
-            `<h1>Roof Takeoff - ${escapeXml(props.jobRef)}</h1><p>${escapeXml(props.address)}</p><p>Total sections: ${props.rows.sections.length}</p><p>Total lines: ${props.rows.lines.length}</p><pre>${escapeXml(makeCsv())}</pre>`,
-            `${props.jobRef}-roof-takeoff`
-          )
-        }
-        type="button"
-      >
-        PDF
       </button>
       <button
         className="button-ghost !py-2 text-xs"
@@ -893,15 +933,20 @@ function ExportButtons(props: {
             surveyDate: props.surveyDate,
             kmlString: makeKml(),
             csvString: makeCsv(),
-            canvasDataUrl: ""
+            canvasDataUrl: svgToDataUrl(makeDrawingSvg())
           })
         }
         type="button"
       >
         ZIP
       </button>
+      </div>
     </div>
   );
+}
+
+function svgToDataUrl(svg: string) {
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
 }
 
 function printHtml(body: string, title: string) {
