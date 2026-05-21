@@ -42,6 +42,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
   const [messages, setMessages] = useState<Array<{ id: string; sender_type: string; sender_name?: string | null; message: string; created_at?: string }>>([]);
   const [reply, setReply] = useState("");
   const [selectedTakeoffSourceId, setSelectedTakeoffSourceId] = useState<string | null>(null);
+  const [polishing, setPolishing] = useState(false);
 
   useEffect(() => {
     if (!quote?.id) return;
@@ -232,6 +233,71 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     startTransition(() => router.refresh());
   }
 
+  async function polishQuoteWording() {
+    setError(null);
+    setSuccess(null);
+    setPolishing(true);
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/polish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roof_report: roofReport,
+          scope_of_works: scopeOfWorks,
+          guarantee_text: guaranteeText,
+          exclusions,
+          terms,
+          customer_email_subject: emailSubject,
+          customer_email_body: emailBody,
+          cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
+          missing_info: missingInfo
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          pricing_notes: pricingNotes
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        })
+      });
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        wording?: {
+          roof_report: string;
+          scope_of_works: string;
+          guarantee_text: string;
+          exclusions: string;
+          terms: string;
+          customer_email_subject: string;
+          customer_email_body: string;
+          missing_info: string[];
+          pricing_notes: string[];
+        };
+      } | null;
+
+      if (!response.ok || !result?.ok || !result.wording) {
+        throw new Error(result?.error || "Unable to polish quote wording.");
+      }
+
+      setRoofReport(result.wording.roof_report);
+      setScopeOfWorks(result.wording.scope_of_works);
+      setGuaranteeText(result.wording.guarantee_text);
+      setExclusions(result.wording.exclusions);
+      setTerms(result.wording.terms);
+      setEmailSubject(result.wording.customer_email_subject);
+      setEmailBody(result.wording.customer_email_body);
+      setMissingInfo(result.wording.missing_info.join("\n"));
+      setPricingNotes(result.wording.pricing_notes.join("\n"));
+      setSuccess("Customer quote wording polished and saved. Prices were not changed.");
+      startTransition(() => router.refresh());
+    } catch (polishError) {
+      setError(polishError instanceof Error ? polishError.message : "Unable to polish quote wording.");
+    } finally {
+      setPolishing(false);
+    }
+  }
+
   async function sendReply() {
     if (!reply.trim()) return;
     const response = await fetch(`/api/quotes/${quoteId}/message`, {
@@ -257,6 +323,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             <p className="mt-2 text-sm text-[var(--muted)]">Adjust wording, totals, and customer email content before approval.</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button className="button-secondary" disabled={polishing || isPending} onClick={polishQuoteWording} type="button">
+              {polishing ? "Polishing..." : "Polish Customer Quote"}
+            </button>
             {rateCard.length ? (
               <button className="button-ghost" disabled={isPending} onClick={applyRates} type="button">
                 Apply Rate Card
