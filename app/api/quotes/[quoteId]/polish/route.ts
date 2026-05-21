@@ -12,6 +12,9 @@ type Props = {
 };
 
 type PolishBody = {
+  mode?: "polish" | "build_from_context";
+  pasted_context?: string;
+  style_instructions?: string;
   roof_report?: string;
   scope_of_works?: string;
   guarantee_text?: string;
@@ -32,6 +35,7 @@ type PolishedQuoteWording = {
   terms: string;
   customer_email_subject: string;
   customer_email_body: string;
+  cost_breakdown?: CostLineItem[];
   missing_info: string[];
   pricing_notes: string[];
 };
@@ -60,6 +64,9 @@ export async function POST(request: Request, { params }: Props) {
 
   const roofSurvey = await getLatestRoofSurvey(quote.job_id);
   const draft = {
+    mode: body.mode ?? "polish",
+    pasted_context: body.pasted_context ?? "",
+    style_instructions: body.style_instructions ?? "",
     roof_report: body.roof_report ?? quote.roof_report ?? "",
     scope_of_works: body.scope_of_works ?? quote.scope_of_works ?? "",
     guarantee_text: body.guarantee_text ?? quote.guarantee_text ?? "",
@@ -73,12 +80,18 @@ export async function POST(request: Request, { params }: Props) {
   };
 
   const wording = process.env.OPENAI_API_KEY ? await polishWithOpenAI({ bundle, draft, roofSurvey }) : buildFallbackWording(draft);
+  const canUpdateCostBreakdown = draft.mode === "build_from_context" && Boolean(wording.cost_breakdown?.length);
+  const nextTotals = canUpdateCostBreakdown ? calculateTotals(wording.cost_breakdown ?? []) : null;
 
   const { data: updatedQuote, error: updateError } = await supabase
     .from("quotes")
     .update({
       roof_report: wording.roof_report,
       scope_of_works: wording.scope_of_works,
+      cost_breakdown: canUpdateCostBreakdown ? wording.cost_breakdown : draft.cost_breakdown,
+      subtotal: nextTotals ? nextTotals.subtotal : quote.subtotal,
+      vat_amount: nextTotals ? nextTotals.vat_amount : quote.vat_amount,
+      total: nextTotals ? nextTotals.total : quote.total,
       guarantee_text: wording.guarantee_text,
       exclusions: wording.exclusions,
       terms: wording.terms,
@@ -112,17 +125,28 @@ async function polishWithOpenAI(opts: { bundle: NonNullable<Awaited<ReturnType<t
     takeoff_notes: line.takeoff_notes || line.notes
   }));
 
+  const isBuildMode = opts.draft.mode === "build_from_context";
   const prompt = `You are Andrew Bailey's quote-writing assistant for We Are Roofing UK Ltd.
-Rewrite the saved quote wording into clear, customer-friendly British English.
+${isBuildMode ? "Build a complete customer-ready roofing quote from Andy's pasted notes, measurements, and pricing context." : "Rewrite the saved quote wording into clear, customer-friendly British English."}
 
 Rules:
-- Do not change prices, quantities, VAT, totals, or the cost breakdown.
+- Sound like Andy: practical, direct, plain-spoken, diagnostic, calm, and professional.
+- Use British English and write in proper paragraphs, not one dense block.
+- Do not use generic AI sales language, hype, or vague claims.
+- Explain what was found, what is recommended, what is included, and what is excluded.
+- Do not overclaim anything not evidenced.
+- If a detail is uncertain, put it in missing_info rather than pretending.
+- Pricing rule: never invent prices. Only use prices already in the existing cost breakdown or prices explicitly present in Andy's pasted context.
+- ${isBuildMode ? "If the pasted context clearly contains priced line items, return an updated cost_breakdown using those explicit prices and measurements." : "Do not change prices, quantities, VAT, totals, or the cost breakdown."}
 - Use the measured takeoff rows as the structure for the scope.
 - Use Andy's takeoff notes as context, but do not overclaim anything not evidenced.
-- Write in proper paragraphs, not one dense block.
-- Keep it practical, calm, direct, and professional.
-- If a detail is uncertain, put it in missing_info rather than pretending.
 - Return JSON only.
+
+Style instructions from Andy:
+${opts.draft.style_instructions || "Use We Are Roofing's usual style: clear diagnosis first, then practical recommended works, then a reassuring but not pushy close."}
+
+Andy's pasted context for this quote:
+${opts.draft.pasted_context || "No extra pasted context supplied."}
 
 Customer:
 ${JSON.stringify(opts.bundle.customer, null, 2)}
@@ -171,6 +195,49 @@ ${JSON.stringify(
             terms: { type: "string" },
             customer_email_subject: { type: "string" },
             customer_email_body: { type: "string" },
+            cost_breakdown: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  item: { type: "string" },
+                  cost: { type: "number" },
+                  vat_applicable: { type: "boolean" },
+                  notes: { type: "string" },
+                  quantity: { type: ["number", "null"] },
+                  unit: { type: ["string", "null"] },
+                  unit_rate: { type: ["number", "null"] },
+                  pricing_source: { type: ["string", "null"] },
+                  pricing_category: { type: ["string", "null"] },
+                  quote_section: { type: ["string", "null"] },
+                  measurement_label: { type: ["string", "null"] },
+                  source_id: { type: ["string", "null"] },
+                  source_type: { type: ["string", "null"] },
+                  source_label: { type: ["string", "null"] },
+                  source_color: { type: ["string", "null"] },
+                  takeoff_notes: { type: ["string", "null"] }
+                },
+                required: [
+                  "item",
+                  "cost",
+                  "vat_applicable",
+                  "notes",
+                  "quantity",
+                  "unit",
+                  "unit_rate",
+                  "pricing_source",
+                  "pricing_category",
+                  "quote_section",
+                  "measurement_label",
+                  "source_id",
+                  "source_type",
+                  "source_label",
+                  "source_color",
+                  "takeoff_notes"
+                ]
+              }
+            },
             missing_info: { type: "array", items: { type: "string" } },
             pricing_notes: { type: "array", items: { type: "string" } }
           },
@@ -182,6 +249,7 @@ ${JSON.stringify(
             "terms",
             "customer_email_subject",
             "customer_email_body",
+            "cost_breakdown",
             "missing_info",
             "pricing_notes"
           ]
@@ -202,7 +270,14 @@ function buildFallbackWording(draft: Partial<PolishedQuoteWording>): PolishedQuo
     terms: draft.terms || "Standard We Are Roofing payment terms apply.",
     customer_email_subject: draft.customer_email_subject || "Your roofing quotation from We Are Roofing",
     customer_email_body: draft.customer_email_body || "Please find your roofing quotation ready for review. If you have any questions, reply here and we will be happy to help.",
+    cost_breakdown: draft.cost_breakdown,
     missing_info: draft.missing_info ?? [],
     pricing_notes: [...(draft.pricing_notes ?? []), "Wording polish fallback used because OPENAI_API_KEY is not configured."]
   };
+}
+
+function calculateTotals(lines: CostLineItem[]) {
+  const subtotal = Math.round(lines.reduce((sum, line) => sum + Number(line.cost || 0), 0) * 100) / 100;
+  const vat_amount = Math.round(lines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0) * 100) / 100;
+  return { subtotal, vat_amount, total: subtotal + vat_amount };
 }

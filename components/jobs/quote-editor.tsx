@@ -43,6 +43,11 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
   const [reply, setReply] = useState("");
   const [selectedTakeoffSourceId, setSelectedTakeoffSourceId] = useState<string | null>(null);
   const [polishing, setPolishing] = useState(false);
+  const [buildingWithChatGpt, setBuildingWithChatGpt] = useState(false);
+  const [chatGptContext, setChatGptContext] = useState("");
+  const [chatGptStyle, setChatGptStyle] = useState(
+    "Write in Andy's We Are Roofing style: practical, direct, customer-friendly British English. Start with what was found, explain what needs doing, keep paragraphs clear, avoid hype, and make the quote feel professional and easy to understand."
+  );
 
   useEffect(() => {
     if (!quote?.id) return;
@@ -271,6 +276,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
           terms: string;
           customer_email_subject: string;
           customer_email_body: string;
+          cost_breakdown?: CostLineItem[];
           missing_info: string[];
           pricing_notes: string[];
         };
@@ -295,6 +301,85 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       setError(polishError instanceof Error ? polishError.message : "Unable to polish quote wording.");
     } finally {
       setPolishing(false);
+    }
+  }
+
+  async function buildQuoteWithChatGpt() {
+    const context = chatGptContext.trim();
+    if (!context) {
+      setError("Paste the job context, prices, notes, or supplier costs before asking ChatGPT to build the quote.");
+      setSuccess(null);
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setBuildingWithChatGpt(true);
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/polish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "build_from_context",
+          pasted_context: context,
+          style_instructions: chatGptStyle,
+          roof_report: roofReport,
+          scope_of_works: scopeOfWorks,
+          guarantee_text: guaranteeText,
+          exclusions,
+          terms,
+          customer_email_subject: emailSubject,
+          customer_email_body: emailBody,
+          cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
+          missing_info: missingInfo
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          pricing_notes: pricingNotes
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        })
+      });
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        wording?: {
+          roof_report: string;
+          scope_of_works: string;
+          guarantee_text: string;
+          exclusions: string;
+          terms: string;
+          customer_email_subject: string;
+          customer_email_body: string;
+          cost_breakdown?: CostLineItem[];
+          missing_info: string[];
+          pricing_notes: string[];
+        };
+      } | null;
+
+      if (!response.ok || !result?.ok || !result.wording) {
+        throw new Error(result?.error || "Unable to build quote from pasted context.");
+      }
+
+      setRoofReport(result.wording.roof_report);
+      setScopeOfWorks(result.wording.scope_of_works);
+      setGuaranteeText(result.wording.guarantee_text);
+      setExclusions(result.wording.exclusions);
+      setTerms(result.wording.terms);
+      setEmailSubject(result.wording.customer_email_subject);
+      setEmailBody(result.wording.customer_email_body);
+      if (result.wording.cost_breakdown?.length) {
+        setCostBreakdown(result.wording.cost_breakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })));
+      }
+      setMissingInfo(result.wording.missing_info.join("\n"));
+      setPricingNotes(result.wording.pricing_notes.join("\n"));
+      setSuccess("ChatGPT built the quote in We Are Roofing style. Review the wording and prices, then save/approve when happy.");
+      startTransition(() => router.refresh());
+    } catch (buildError) {
+      setError(buildError instanceof Error ? buildError.message : "Unable to build quote from pasted context.");
+    } finally {
+      setBuildingWithChatGpt(false);
     }
   }
 
@@ -337,6 +422,42 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             <button className="button-primary" disabled={isPending} onClick={saveQuote} type="button">
               {isPending ? "Saving..." : "Save Changes"}
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card border-[var(--gold)]/30 bg-[rgba(212,175,55,0.05)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">ChatGPT Quote Builder</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+              Paste the full job context here: site notes, customer priorities, takeoff measurements, supplier prices, scaffold/access details, WhatsApp notes, or rough bullet points. ChatGPT will turn it into our quote structure and We Are Roofing wording.
+            </p>
+          </div>
+          <button className="button-primary" disabled={buildingWithChatGpt || isPending} onClick={buildQuoteWithChatGpt} type="button">
+            {buildingWithChatGpt ? "Building quote..." : "Build quote with ChatGPT"}
+          </button>
+        </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <label className="block">
+            <span className="label">Paste all quote context and prices</span>
+            <textarea
+              className="field min-h-72 leading-7"
+              onChange={(event) => setChatGptContext(event.target.value)}
+              placeholder={`Example:\nCustomer wants rear flat roof sorted before winter.\nMeasured takeoff: rear flat 18.4m2, parapet 7.2lm, outlet detail needs attention.\nPrice EPDM system £1,850 + VAT, trims £220, waste/removal £180, scaffold tower £300.\nUse reassuring wording but mention hidden deck repairs are excluded unless opened up.`}
+              value={chatGptContext}
+            />
+          </label>
+          <div className="space-y-4">
+            <label className="block">
+              <span className="label">Style instructions</span>
+              <textarea className="field min-h-40 leading-6" onChange={(event) => setChatGptStyle(event.target.value)} value={chatGptStyle} />
+            </label>
+            <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-4 text-sm leading-6 text-[var(--muted)]">
+              <p className="font-semibold text-white">Price safety rules</p>
+              <p className="mt-2">The AI is told not to invent prices. It can only use prices already in this quote or prices you explicitly paste in the context box.</p>
+              <p className="mt-2 text-[var(--gold-l)]">Always review totals before approving or sending.</p>
+            </div>
           </div>
         </div>
       </div>
