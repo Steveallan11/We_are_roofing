@@ -81,8 +81,14 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
     .map(
       (line) => `
         <tr>
-          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">${escapeHtml(line.item)}</td>
-          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">${escapeHtml(line.notes)}</td>
+          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">
+            <strong>${escapeHtml(line.quote_section || line.item)}</strong>
+            ${line.quote_section ? `<br/><span style="font-size:12px;color:#75663b;">${escapeHtml(line.item)}</span>` : ""}
+          </td>
+          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">
+            ${line.measurement_label ? `<strong>${escapeHtml(line.measurement_label)}</strong><br/>` : ""}
+            ${escapeHtml(line.notes)}
+          </td>
           <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${formatCurrency(line.cost)}</td>
         </tr>`
     )
@@ -181,7 +187,10 @@ export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
   ];
 
   for (const item of quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0)) {
-    lines.push(`${item.item} - ${formatCurrency(item.cost)}`);
+    lines.push(`${item.quote_section || item.item} - ${item.measurement_label ? `${item.measurement_label} - ` : ""}${formatCurrency(item.cost)}`);
+    if (item.quote_section) {
+      lines.push(...wrapText(`  ${item.item}`));
+    }
     if (item.notes) {
       lines.push(...wrapText(`  ${item.notes}`));
     }

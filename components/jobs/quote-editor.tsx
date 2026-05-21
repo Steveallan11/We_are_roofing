@@ -59,9 +59,10 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
     return { subtotal, vat, total: subtotal + vat };
   }, [costBreakdown]);
   const unpricedLines = useMemo(
-    () => costBreakdown.filter((line) => Number(line.cost || 0) === 0 && !findRateForItem(line.item, rateCard)),
+    () => costBreakdown.filter((line) => Number(line.cost || 0) === 0 && !findRateForItem(line.item, rateCard, line.pricing_category)),
     [costBreakdown, rateCard]
   );
+  const quoteSections = useMemo(() => groupQuoteSections(costBreakdown), [costBreakdown]);
 
   if (!quote) {
     return (
@@ -415,9 +416,51 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
             {unpricedLines.length} line{unpricedLines.length === 1 ? "" : "s"} still need pricing. Add matching item names in the Rate Card, or enter the total manually.
           </div>
         ) : null}
+        {quoteSections.length ? (
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="section-kicker text-[0.65rem] uppercase">Takeoff Linked Quote Sections</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">Each block comes from a marked-up area, line, or roof item in the takeoff drawing.</p>
+              </div>
+              <span className="rounded-full border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-3 py-1 text-xs font-semibold text-[var(--gold-l)]">
+                {quoteSections.length} section{quoteSections.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {quoteSections.map((section) => (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" key={section.name}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white">{section.name}</p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">{section.measurements.join(" · ") || "Manual quote section"}</p>
+                    </div>
+                    <p className="font-semibold text-[var(--gold-l)]">{currency(section.total)}</p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {section.colors.map((color) => (
+                      <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" key={`${section.name}-${color}`} style={{ background: color }} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4 space-y-4">
           {costBreakdown.length > 0 ? costBreakdown.map((line, index) => (
             <div className="rounded-2xl border border-[var(--border)] p-4" key={`${line.item}-${index}`}>
+              {line.source_type || line.measurement_label || line.quote_section ? (
+                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-black/15 p-3 text-xs text-[var(--muted)]">
+                  {line.source_color ? <span aria-hidden="true" className="h-3 w-3 rounded-full" style={{ background: line.source_color }} /> : null}
+                  <span className="font-semibold uppercase tracking-[0.16em] text-[var(--gold-l)]">
+                    {line.source_type ? `Takeoff ${line.source_type}` : "Takeoff item"}
+                  </span>
+                  {line.source_label ? <span>{line.source_label}</span> : null}
+                  {line.measurement_label ? <span className="rounded-full border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-2 py-1 font-semibold text-[var(--gold-l)]">{line.measurement_label}</span> : null}
+                  {line.pricing_category ? <span className="rounded-full border border-[var(--border)] px-2 py-1">Rate: {line.pricing_category}</span> : null}
+                </div>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-[1.4fr_96px_90px_110px_120px_104px]">
                 <div>
                   <label className="label" htmlFor={`line-item-${index}`}>
@@ -494,6 +537,32 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                 <button className="button-ghost mt-6 !min-h-11 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteLine(index)} type="button">
                   Delete
                 </button>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor={`line-quote-section-${index}`}>
+                    Quote Section / Drawing Area
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-quote-section-${index}`}
+                    onChange={(event) => updateLine(index, { quote_section: event.target.value })}
+                    placeholder="Front slope, rear flat roof, chimney stack..."
+                    value={line.quote_section ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor={`line-pricing-category-${index}`}>
+                    Pricing Category
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-pricing-category-${index}`}
+                    onChange={(event) => updateLine(index, { pricing_category: event.target.value })}
+                    placeholder="Pitched - Tile, Ridge, Chimney..."
+                    value={line.pricing_category ?? ""}
+                  />
+                </div>
               </div>
               <div className="mt-4">
                 <label className="label" htmlFor={`line-notes-${index}`}>
@@ -619,4 +688,23 @@ function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = 
     unit_rate: unitRate,
     cost: shouldRecalculate ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0)
   };
+}
+
+function groupQuoteSections(lines: CostLineItem[]) {
+  const groups = new Map<string, { name: string; total: number; measurements: string[]; colors: string[] }>();
+
+  lines.forEach((line) => {
+    const name = line.quote_section?.trim() || line.source_label?.trim() || "General Works";
+    const existing = groups.get(name) ?? { name, total: 0, measurements: [], colors: [] };
+    existing.total += Number(line.cost || 0);
+    if (line.measurement_label && !existing.measurements.includes(line.measurement_label)) {
+      existing.measurements.push(line.measurement_label);
+    }
+    if (line.source_color && !existing.colors.includes(line.source_color)) {
+      existing.colors.push(line.source_color);
+    }
+    groups.set(name, existing);
+  });
+
+  return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
 }

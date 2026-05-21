@@ -26,6 +26,14 @@ export type CostLineItem = {
   unit?: string;
   unit_rate?: number;
   pricing_source?: string;
+  pricing_category?: string;
+  quote_section?: string;
+  measurement_label?: string;
+  source_id?: string;
+  source_type?: "section" | "line" | "feature" | string;
+  source_label?: string;
+  source_color?: string;
+  takeoff_notes?: string;
 };
 
 export type QuoteOption = {

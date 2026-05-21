@@ -88,8 +88,14 @@ export function buildRoofSurveyBom(survey: RoofSurveyRecord): BOMItem[] {
   survey.sections.forEach((section) => {
     const qty = section.area_m2 ?? getSectionArea(section, survey.scale_px_per_m);
     if (!qty) return;
+    const sourceLabel = section.label || section.type || "Roof Section";
     add(`section:${section.id ?? section.label}:${section.type}`, {
+      source_id: section.id,
       label: measurementLabel(section.label, section.type || "Roof Section"),
+      source_label: sourceLabel,
+      measurement_label: formatMeasurement(qty, "m²"),
+      quote_section: sourceLabel,
+      pricing_category: section.type || "Roof Section",
       qty,
       unit: "m²",
       color: section.color,
@@ -102,8 +108,14 @@ export function buildRoofSurveyBom(survey: RoofSurveyRecord): BOMItem[] {
     const qty = line.length_lm ?? getLineLength(line, survey.scale_px_per_m);
     if (!qty) return;
     const lineDef = LINE_DEFS.find((item) => item.name === line.type);
+    const sourceLabel = line.label || line.type || "Measured Run";
     add(`line:${line.id ?? line.label}:${line.type}`, {
+      source_id: line.id,
       label: measurementLabel(line.label, line.type || "Measured Run"),
+      source_label: sourceLabel,
+      measurement_label: formatMeasurement(qty, "lm"),
+      quote_section: sourceLabel,
+      pricing_category: line.type || "Measured Run",
       qty,
       unit: "lm",
       color: line.color || lineDef?.color || "#D4AF37",
@@ -114,8 +126,14 @@ export function buildRoofSurveyBom(survey: RoofSurveyRecord): BOMItem[] {
 
   survey.features.forEach((feature) => {
     const featureDef = FEATURE_DEFS.find((item) => item.name === feature.type);
+    const sourceLabel = feature.label || feature.type || "Feature";
     add(`feature:${feature.id ?? feature.label}:${feature.type}`, {
+      source_id: feature.id,
       label: measurementLabel(feature.label, feature.type || "Feature"),
+      source_label: sourceLabel,
+      measurement_label: "1 no.",
+      quote_section: sourceLabel,
+      pricing_category: feature.type || "Feature",
       qty: 1,
       unit: "no.",
       color: feature.color || featureDef?.color || "#D4AF37",
@@ -140,11 +158,25 @@ export function toQuoteCostBreakdown(items: BOMItem[]) {
     item: item.label,
     cost: 0,
     vat_applicable: true,
-    notes: ["Imported from roof survey takeoff", item.source_notes].filter(Boolean).join(" - "),
+    notes: [
+      `Takeoff measurement: ${item.measurement_label}`,
+      `Drawing item: ${item.source_label}`,
+      item.source_notes ? `Andy notes: ${item.source_notes}` : null
+    ]
+      .filter(Boolean)
+      .join("\n"),
     quantity: Number(item.qty.toFixed(item.unit === "no." ? 0 : 2)),
     unit: item.unit,
     unit_rate: 0,
-    pricing_source: "roof_survey_takeoff"
+    pricing_source: "roof_survey_takeoff",
+    pricing_category: item.pricing_category,
+    quote_section: item.quote_section,
+    measurement_label: item.measurement_label,
+    source_id: item.source_id,
+    source_type: item.source_type,
+    source_label: item.source_label,
+    source_color: item.color,
+    takeoff_notes: item.source_notes ?? ""
   }));
 }
 
@@ -157,7 +189,7 @@ export function toMaterialRows(jobId: string, quoteId: string | null, items: BOM
     quantity: Number(item.qty.toFixed(2)),
     unit: item.unit,
     required_status: "Check On Site" as const,
-    notes: "Imported from roof survey BOM"
+    notes: ["Imported from roof survey BOM", item.measurement_label, item.source_notes].filter(Boolean).join(" - ")
   }));
 }
 
@@ -169,9 +201,14 @@ function measurementLabel(label: string | null | undefined, type: string) {
   return `${cleanLabel} - ${cleanType}`;
 }
 
-export function getFeatureIcon(feature: RoofSurveyFeature) {
-  return FEATURE_DEFS.find((item) => item.name === feature.type)?.icon ?? "•";
+function formatMeasurement(qty: number, unit: BOMItem["unit"]) {
+  return `${qty.toFixed(unit === "no." ? 0 : 2)} ${unit}`;
 }
+
+export function getFeatureIcon(feature: RoofSurveyFeature) {
+  return FEATURE_DEFS.find((item) => item.name === feature.type)?.icon ?? "*";
+}
+
 function isGeoPoint(point: SurveyPoint) {
   return typeof point.lat === "number" && typeof point.lng === "number";
 }

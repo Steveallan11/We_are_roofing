@@ -59,7 +59,12 @@ export interface RoofSurveyRecord {
 }
 
 export interface BOMItem {
+  source_id?: string;
   label: string;
+  source_label: string;
+  measurement_label: string;
+  quote_section: string;
+  pricing_category: string;
   qty: number;
   unit: "m²" | "lm" | "no.";
   color: string;

@@ -51,12 +51,16 @@ export async function POST(_: Request, { params }: Props) {
   const costBreakdown = priced.updated;
   const totals = calculateQuoteTotals(costBreakdown);
   const contextNote = survey.notes?.trim();
+  const measurementSummary = bom
+    .map((item) => `- ${item.quote_section}: ${item.measurement_label} (${item.pricing_category})${item.source_notes ? ` - ${item.source_notes}` : ""}`)
+    .join("\n");
   const basePayload = {
     roof_report:
       existingQuoteResult.data?.roof_report ??
       [
         `Measured roof takeoff completed for ${customerResult.data?.full_name ?? jobResult.data.job_title}. Review the traced sections, measured runs, and roof features before final pricing.`,
-        contextNote ? `Survey context from Andy: ${contextNote}` : null
+        contextNote ? `Survey context from Andy: ${contextNote}` : null,
+        measurementSummary ? `Measured takeoff schedule:\n${measurementSummary}` : null
       ]
         .filter(Boolean)
         .join("\n\n"),
@@ -64,7 +68,8 @@ export async function POST(_: Request, { params }: Props) {
       existingQuoteResult.data?.scope_of_works ??
       [
         "Measured roof quantities have been imported from the roof survey tool. Add rates, check waste factors, and finalise the wording before approval.",
-        contextNote ? `Use this site context when writing the customer-facing scope: ${contextNote}` : null
+        contextNote ? `Use this site context when writing the customer-facing scope: ${contextNote}` : null,
+        measurementSummary ? `Quote sections linked to the drawing:\n${measurementSummary}` : null
       ]
         .filter(Boolean)
         .join("\n\n"),

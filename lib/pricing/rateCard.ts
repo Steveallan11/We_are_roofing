@@ -99,7 +99,18 @@ export function normaliseRateName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export function findRateForItem(itemName: string, rates: RateCardEntry[]) {
+export function findRateForItem(itemName: string, rates: RateCardEntry[], pricingCategory?: string | null) {
+  const categoryName = pricingCategory ? normaliseRateName(pricingCategory) : "";
+  if (categoryName) {
+    const categoryMatch =
+      rates.find((rate) => normaliseRateName(rate.item) === categoryName) ??
+      rates.find((rate) => {
+        const rateName = normaliseRateName(rate.item);
+        return categoryName.includes(rateName) || rateName.includes(categoryName);
+      });
+    if (categoryMatch) return categoryMatch;
+  }
+
   const name = normaliseRateName(itemName);
   return (
     rates.find((rate) => normaliseRateName(rate.item) === name) ??
@@ -132,7 +143,7 @@ export function applyRateCardToCostBreakdown(lines: CostLineItem[], rates: RateC
   const updated = lines.map((line) => {
     if (Number(line.cost || 0) > 0) return line as PricedLineItem;
 
-    const rate = findRateForItem(line.item, rates);
+    const rate = findRateForItem(line.item, rates, line.pricing_category);
     if (!rate) return line as PricedLineItem;
 
     const quantity = parseQuantityFromLine(line, rate.unit);
