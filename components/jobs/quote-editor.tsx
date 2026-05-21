@@ -6,15 +6,18 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
+import type { RoofSurveyRecord } from "@/lib/survey/types";
 import { currency } from "@/lib/utils";
+import { TakeoffQuotePreview } from "@/components/jobs/takeoff-quote-preview";
 
 type Props = {
   jobId: string;
   quote: QuoteRecord | null;
   rateCard?: RateCardEntry[];
+  roofSurvey?: RoofSurveyRecord | null;
 };
 
-export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
+export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +41,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
   const [options, setOptions] = useState<QuoteOption[]>(() => quote?.options ?? []);
   const [messages, setMessages] = useState<Array<{ id: string; sender_type: string; sender_name?: string | null; message: string; created_at?: string }>>([]);
   const [reply, setReply] = useState("");
+  const [selectedTakeoffSourceId, setSelectedTakeoffSourceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!quote?.id) return;
@@ -448,6 +452,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
           </div>
         ) : null}
         <div className="mt-4 space-y-4">
+          <TakeoffQuotePreview selectedSourceId={selectedTakeoffSourceId} survey={roofSurvey} />
           {costBreakdown.length > 0 ? costBreakdown.map((line, index) => (
             <div className="rounded-2xl border border-[var(--border)] p-4" key={`${line.item}-${index}`}>
               {line.source_type || line.measurement_label || line.quote_section ? (
@@ -459,6 +464,15 @@ export function QuoteEditor({ jobId, quote, rateCard = [] }: Props) {
                   {line.source_label ? <span>{line.source_label}</span> : null}
                   {line.measurement_label ? <span className="rounded-full border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-2 py-1 font-semibold text-[var(--gold-l)]">{line.measurement_label}</span> : null}
                   {line.pricing_category ? <span className="rounded-full border border-[var(--border)] px-2 py-1">Rate: {line.pricing_category}</span> : null}
+                  {line.source_id ? (
+                    <button
+                      className="ml-auto rounded-full border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-3 py-1 font-semibold text-[var(--gold-l)] transition hover:border-[var(--gold)]"
+                      onClick={() => setSelectedTakeoffSourceId(line.source_id ?? null)}
+                      type="button"
+                    >
+                      View on drawing
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
               <div className="grid gap-4 md:grid-cols-[1.4fr_96px_90px_110px_120px_104px]">
