@@ -1,7 +1,9 @@
 import type {
+  CostLineItem,
   HistoricalQuoteRecord,
   JobBundle,
   PricingRuleRecord,
+  QuoteOption,
   QuoteRecord
 } from "@/lib/types";
 import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
@@ -77,6 +79,7 @@ export function getComparableHistoricalQuotes(
 export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
   const logoUrl = resolveAssetUrl(bundle.business.logo_url || "/we-are-roofing-logo.png");
   const visibleLineItems = quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
+  const options = ((quote.options ?? []) as QuoteOption[]).filter((option) => Number(option.total ?? 0) > 0 || option.cost_breakdown?.length);
   const rows = visibleLineItems
     .map(
       (line) => `
@@ -145,25 +148,29 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
         <div class="readable">${renderReadableHtml(quote.roof_report)}</div>
         <h2>Scope of Works</h2>
         <div class="readable">${renderReadableHtml(quote.scope_of_works)}</div>
-        <h2>Cost Breakdown</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Notes</th>
-              <th style="text-align:right;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>${
-            rows ||
-            `<tr><td colspan="3" style="padding:12px;border-bottom:1px solid #d8c58a;color:#75663b;text-align:center;">No priced line items are ready to show yet.</td></tr>`
-          }</tbody>
-        </table>
-        <div class="totals">
-          <div><span>Subtotal</span><span>${formatCurrency(quote.subtotal)}</span></div>
-          <div><span>VAT</span><span>${formatCurrency(quote.vat_amount)}</span></div>
-          <div><span>Total</span><span>${formatCurrency(quote.total)}</span></div>
-        </div>
+        ${
+          options.length
+            ? `<h2>Quote Options</h2>${options.map(renderOptionHtml).join("")}`
+            : `<h2>Cost Breakdown</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Notes</th>
+                    <th style="text-align:right;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>${
+                  rows ||
+                  `<tr><td colspan="3" style="padding:12px;border-bottom:1px solid #d8c58a;color:#75663b;text-align:center;">No priced line items are ready to show yet.</td></tr>`
+                }</tbody>
+              </table>
+              <div class="totals">
+                <div><span>Subtotal</span><span>${formatCurrency(quote.subtotal)}</span></div>
+                <div><span>VAT</span><span>${formatCurrency(quote.vat_amount)}</span></div>
+                <div><span>Total</span><span>${formatCurrency(quote.total)}</span></div>
+              </div>`
+        }
         <h2>Guarantee</h2>
         <div class="readable">${renderReadableHtml(quote.guarantee_text || "")}</div>
         <h2>Exclusions</h2>
@@ -174,6 +181,49 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
     </div>
   </body>
 </html>`;
+}
+
+function renderOptionHtml(option: QuoteOption) {
+  const lines = (option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) > 0);
+  const lineRows = lines.map(renderCostLineRow).join("");
+
+  return `<section style="border:2px solid ${option.recommended ? "#d4af37" : "#e5ddbf"};border-radius:16px;margin:16px 0;padding:18px 20px;">
+    ${option.recommended ? `<div style="color:#8d6a00;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">Recommended</div>` : ""}
+    <h3 style="font-size:24px;margin:6px 0 6px;">${escapeHtml(option.label)}</h3>
+    <div class="readable">${renderReadableHtml(option.description || "")}</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Option item</th>
+          <th>Notes</th>
+          <th style="text-align:right;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${
+        lineRows ||
+        `<tr><td colspan="3" style="padding:12px;border-bottom:1px solid #d8c58a;color:#75663b;text-align:center;">No priced line items are ready to show for this option.</td></tr>`
+      }</tbody>
+    </table>
+    <div class="totals">
+      <div><span>Subtotal</span><span>${formatCurrency(option.subtotal)}</span></div>
+      <div><span>VAT</span><span>${formatCurrency(option.vat_amount)}</span></div>
+      <div><span>Total</span><span>${formatCurrency(option.total)}</span></div>
+    </div>
+  </section>`;
+}
+
+function renderCostLineRow(line: CostLineItem) {
+  return `<tr>
+    <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">
+      <strong>${escapeHtml(line.quote_section || line.item)}</strong>
+      ${line.quote_section ? `<br/><span style="font-size:12px;color:#75663b;">${escapeHtml(line.item)}</span>` : ""}
+    </td>
+    <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;line-height:1.55;">
+      ${line.measurement_label ? `<strong>${escapeHtml(line.measurement_label)}</strong><br/>` : ""}
+      ${escapeHtml(formatLineNotes(line))}
+    </td>
+    <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${formatCurrency(line.cost)}</td>
+  </tr>`;
 }
 
 export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {

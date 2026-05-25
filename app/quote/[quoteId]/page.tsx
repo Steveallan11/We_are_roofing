@@ -105,7 +105,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
                 <div className="mt-3 text-base leading-7 text-[var(--text-second)]">
                   <ReadableText value={option.description} compact />
                 </div>
-                <p className="mt-5 font-display text-4xl text-[var(--gold-l)]">{currency(option.total)}</p>
+                <OptionBreakdown option={option} />
               </div>
             ))}
           </div>
@@ -118,6 +118,47 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
         <PublicQuoteActions options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
       </div>
     </main>
+  );
+}
+
+function OptionBreakdown({ option }: { option: QuoteOption }) {
+  const lines = (option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) > 0);
+
+  return (
+    <div className="mt-5">
+      {lines.length ? (
+        <div className="space-y-2">
+          {lines.map((line, index) => (
+            <div className="rounded-xl border border-[var(--border)] bg-black/15 p-3" key={`${option.id}-${line.item}-${index}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-ui text-sm font-bold leading-6 text-white">{line.quote_section || line.item}</p>
+                  {line.quote_section ? <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{line.item}</p> : null}
+                  {line.measurement_label ? <p className="mt-1 text-xs font-semibold text-[var(--gold-l)]">{line.measurement_label}</p> : null}
+                </div>
+                <p className="shrink-0 font-ui text-sm font-bold text-[var(--gold-l)]">{currency(line.cost)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-4 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
+        <div className="space-y-2 font-ui text-sm text-[var(--text-second)]">
+          <div className="flex justify-between gap-4">
+            <span>Subtotal</span>
+            <strong>{currency(option.subtotal)}</strong>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span>VAT</span>
+            <strong>{currency(option.vat_amount)}</strong>
+          </div>
+          <div className="flex justify-between gap-4 border-t border-[var(--gold)]/25 pt-2 text-lg text-[var(--gold-l)]">
+            <span>Total</span>
+            <strong>{currency(option.total)}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

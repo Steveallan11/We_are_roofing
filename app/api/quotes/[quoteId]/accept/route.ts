@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
-import type { QuoteOption, QuoteRecord } from "@/lib/types";
+import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 type Props = {
@@ -37,10 +37,12 @@ export async function POST(request: Request, { params }: Props) {
   };
 
   if (acceptedOption) {
-    quoteUpdates.cost_breakdown = acceptedOption.cost_breakdown;
-    quoteUpdates.subtotal = acceptedOption.subtotal;
-    quoteUpdates.vat_amount = acceptedOption.vat_amount;
-    quoteUpdates.total = acceptedOption.total;
+    const selectedLines = (acceptedOption.cost_breakdown ?? []).map(normaliseCostLine);
+    const selectedTotals = calculateTotals(selectedLines);
+    quoteUpdates.cost_breakdown = selectedLines;
+    quoteUpdates.subtotal = selectedTotals.subtotal;
+    quoteUpdates.vat_amount = selectedTotals.vat_amount;
+    quoteUpdates.total = selectedTotals.total;
   }
 
   const { error: updateError } = await supabase.from("quotes").update(quoteUpdates).eq("id", quoteId);
@@ -54,4 +56,26 @@ export async function POST(request: Request, { params }: Props) {
     .eq("id", quoteRecord.job_id);
 
   return NextResponse.json({ ok: true, accepted_option_id: acceptedOption?.id ?? null });
+}
+
+function normaliseCostLine(line: CostLineItem): CostLineItem {
+  const quantity = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : undefined;
+  const unitRate = typeof line.unit_rate === "number" && Number.isFinite(line.unit_rate) ? line.unit_rate : undefined;
+  const cost = quantity != null && unitRate != null ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0);
+
+  return {
+    ...line,
+    item: line.item || "Quote item",
+    cost,
+    vat_applicable: line.vat_applicable !== false,
+    notes: line.notes || "",
+    quantity,
+    unit_rate: unitRate
+  };
+}
+
+function calculateTotals(lines: CostLineItem[]) {
+  const subtotal = Math.round(lines.reduce((sum, line) => sum + Number(line.cost || 0), 0) * 100) / 100;
+  const vat_amount = Math.round(lines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0) * 100) / 100;
+  return { subtotal, vat_amount, total: subtotal + vat_amount };
 }

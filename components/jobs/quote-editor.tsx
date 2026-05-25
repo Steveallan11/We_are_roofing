@@ -211,7 +211,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
           .split("\n")
           .map((item) => item.trim())
           .filter(Boolean),
-        options
+        options: options.map(normaliseOption)
       })
     });
 
@@ -879,6 +879,19 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
     </div>
   );
+}
+
+function normaliseOption(option: QuoteOption): QuoteOption {
+  const cost_breakdown = option.cost_breakdown.map((line) => normaliseCostLine({ ...line, cost: Number(line.cost || 0) }));
+  const subtotal = Math.round(cost_breakdown.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
+  const vat_amount = Math.round(cost_breakdown.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
+  return {
+    ...option,
+    cost_breakdown,
+    subtotal,
+    vat_amount,
+    total: subtotal + vat_amount
+  };
 }
 
 function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = {}) {

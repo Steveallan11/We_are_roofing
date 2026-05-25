@@ -42,7 +42,7 @@ export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: Quo
                 {option.recommended ? <p style={{ margin: 0, color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>Recommended</p> : null}
                 <h3 style={{ margin: "8px 0 4px", color: DOC.body, fontFamily: DOC.fontSerif, fontSize: 22 }}>{option.label}</h3>
                 {renderParagraphs(option.description)}
-                <p style={{ margin: 0, color: DOC.gold, fontFamily: DOC.fontSerif, fontSize: 26, fontWeight: 700 }}>{currency(option.total)}</p>
+                <OptionLineSummary option={option} />
               </div>
             ))}
           </div>
@@ -129,4 +129,40 @@ function splitLongParagraph(text: string) {
 
 function buildLineNotes(line: QuoteRecord["cost_breakdown"][number]) {
   return [line.measurement_label, line.quote_section ? line.item : null, line.notes].filter(Boolean).join(" - ");
+}
+
+function OptionLineSummary({ option }: { option: NonNullable<QuoteRecord["options"]>[number] }) {
+  const lines = (option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) > 0);
+
+  return (
+    <div style={{ marginTop: 12, fontFamily: DOC.fontSans }}>
+      {lines.map((line, index) => (
+        <div key={`${option.id}-${line.item}-${index}`} style={{ borderTop: `1px solid ${DOC.lightRule}`, padding: "8px 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ color: DOC.body, fontSize: 12, fontWeight: 800 }}>{line.quote_section || line.item}</div>
+              <div style={{ color: DOC.muted, fontFamily: DOC.fontSerif, fontSize: 12, lineHeight: 1.5 }}>
+                {[line.quote_section ? line.item : null, line.measurement_label].filter(Boolean).join(" - ")}
+              </div>
+            </div>
+            <strong style={{ color: DOC.gold, fontSize: 12, whiteSpace: "nowrap" }}>{currency(line.cost)}</strong>
+          </div>
+        </div>
+      ))}
+      <div style={{ background: "#fbf6e8", border: `1px solid ${DOC.lightRule}`, borderRadius: 10, marginTop: 10, padding: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingBottom: 4 }}>
+          <span>Subtotal</span>
+          <strong>{currency(option.subtotal)}</strong>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingBottom: 6 }}>
+          <span>VAT</span>
+          <strong>{currency(option.vat_amount)}</strong>
+        </div>
+        <div style={{ borderTop: `1px solid ${DOC.lightRule}`, color: DOC.gold, display: "flex", fontSize: 18, fontWeight: 800, justifyContent: "space-between", paddingTop: 8 }}>
+          <span>Total</span>
+          <span>{currency(option.total)}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
