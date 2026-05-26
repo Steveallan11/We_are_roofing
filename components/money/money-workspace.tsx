@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
 import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
+import { getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import type { Customer, InvoiceRecord, Job, JobDocumentRecord, QuoteRecord } from "@/lib/types";
 
@@ -35,7 +36,7 @@ export function MoneyWorkspace({ jobs }: Props) {
       ),
     [jobs]
   );
-  const pricingNeeded = quotes.some(({ quote }) => Number(quote.total ?? 0) === 0 || quote.cost_breakdown?.some((item) => Number(item.cost ?? 0) === 0));
+  const pricingNeeded = quotes.some(({ quote }) => !getQuotePipelineValue(quote));
   const draftCount = quotes.filter(({ quote }) => quote.status === "Draft" || quote.status === "Needs Review").length;
   const readyCount = quotes.filter(({ quote }) => quote.status === "Approved").length;
   const sentCount = quotes.filter(({ quote }) => quote.status === "Sent").length;
@@ -118,7 +119,10 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
       {message ? <p className="rounded-2xl border border-[#10b981]/30 bg-[#10b981]/10 px-4 py-3 text-sm text-[#7ce3a6]">{message}</p> : null}
       {error ? <p className="rounded-2xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ff9a91]">{error}</p> : null}
       {quotes.map(({ job, quote }) => {
-        const zeroLines = quote.cost_breakdown?.filter((line) => Number(line.cost ?? 0) === 0) ?? [];
+        const quoteValue = getQuotePipelineValue(quote) ?? 0;
+        const zeroLines = quote.options?.length
+          ? quote.options.flatMap((option) => option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) === 0)
+          : quote.cost_breakdown?.filter((line) => Number(line.cost ?? 0) === 0) ?? [];
         const existingInvoice = (job.invoices ?? []).find((invoice) => invoice.quote_id === quote.id && invoice.status !== "Void");
         const canCreateInvoice = quote.status === "Accepted" && !existingInvoice;
         return (
@@ -146,7 +150,7 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
                 ) : null}
               </div>
               <div className="shrink-0 text-left md:text-right">
-                <p className="font-display text-3xl text-[var(--gold-l)]">{currency(Number(quote.total ?? 0))}</p>
+                <p className="font-display text-3xl text-[var(--gold-l)]">{currency(quoteValue)}</p>
                 <p className="mt-1 text-xs text-[var(--muted)]">{quote.sent_at ? `Sent ${formatDate(quote.sent_at)}` : `Created ${formatDate(quote.created_at)}`}</p>
               </div>
             </div>
@@ -187,6 +191,7 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
           customerName={quoteToSend.job.customer?.full_name ?? "Customer"}
           documents={quoteToSend.job.documents ?? []}
           jobTitle={quoteToSend.job.job_title}
+          isFromPrice={isQuoteFromOptionValue(quoteToSend.quote)}
           onClose={() => setQuoteToSend(null)}
           onSent={(nextMessage) => {
             setQuoteToSend(null);
@@ -196,7 +201,7 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
           }}
           quoteId={quoteToSend.quote.id}
           quoteRef={quoteToSend.quote.quote_ref}
-          total={Number(quoteToSend.quote.total ?? 0)}
+          total={getQuotePipelineValue(quoteToSend.quote) ?? 0}
         />
       ) : null}
     </div>

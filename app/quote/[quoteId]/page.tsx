@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
+import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
@@ -23,8 +24,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
   if (!access.ok) notFound();
 
   const options = (record.options ?? []) as QuoteOption[];
-  const optionTotals = options.map((option) => Number(option.total ?? 0)).filter(Number.isFinite);
-  const displayTotal = optionTotals.length ? Math.min(...optionTotals) : Number(record.total ?? 0);
+  const displayTotal = getQuotePipelineValue(record) ?? 0;
   const visibleLineItems = record.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
 
   return (
@@ -42,7 +42,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
                 <p className="mt-3 font-ui text-base font-semibold text-[var(--text-muted)]">Quote reference {record.quote_ref}</p>
               </div>
               <div className="rounded-3xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-5 md:min-w-60">
-                <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">{options.length ? "From" : "Total"}</p>
+                <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">{isQuoteFromOptionValue(record) ? "From" : "Total"}</p>
                 <p className="mt-2 font-display text-5xl text-[var(--gold-l)]">{currency(displayTotal)}</p>
               </div>
             </div>
@@ -111,7 +111,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
           </div>
         ) : (
           <div className="card mt-5 p-5">
-            <p className="font-display text-3xl text-[var(--gold-l)]">{currency(record.total)}</p>
+            <p className="font-display text-3xl text-[var(--gold-l)]">{currency(displayTotal)}</p>
           </div>
         )}
 
@@ -154,7 +154,7 @@ function OptionBreakdown({ option }: { option: QuoteOption }) {
           </div>
           <div className="flex justify-between gap-4 border-t border-[var(--gold)]/25 pt-2 text-lg text-[var(--gold-l)]">
             <span>Total</span>
-            <strong>{currency(option.total)}</strong>
+            <strong>{currency(getOptionTotal(option) ?? 0)}</strong>
           </div>
         </div>
       </div>

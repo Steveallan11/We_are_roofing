@@ -6,6 +6,7 @@ import type {
   QuoteOption,
   QuoteRecord
 } from "@/lib/types";
+import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -80,6 +81,7 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
   const logoUrl = resolveAssetUrl(bundle.business.logo_url || "/we-are-roofing-logo.png");
   const visibleLineItems = quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
   const options = ((quote.options ?? []) as QuoteOption[]).filter((option) => Number(option.total ?? 0) > 0 || option.cost_breakdown?.length);
+  const displayTotal = getQuotePipelineValue(quote) ?? 0;
   const rows = visibleLineItems
     .map(
       (line) => `
@@ -168,7 +170,7 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
               <div class="totals">
                 <div><span>Subtotal</span><span>${formatCurrency(quote.subtotal)}</span></div>
                 <div><span>VAT</span><span>${formatCurrency(quote.vat_amount)}</span></div>
-                <div><span>Total</span><span>${formatCurrency(quote.total)}</span></div>
+                <div><span>${isQuoteFromOptionValue(quote) ? "From" : "Total"}</span><span>${formatCurrency(displayTotal)}</span></div>
               </div>`
         }
         <h2>Guarantee</h2>
@@ -207,7 +209,7 @@ function renderOptionHtml(option: QuoteOption) {
     <div class="totals">
       <div><span>Subtotal</span><span>${formatCurrency(option.subtotal)}</span></div>
       <div><span>VAT</span><span>${formatCurrency(option.vat_amount)}</span></div>
-      <div><span>Total</span><span>${formatCurrency(option.total)}</span></div>
+      <div><span>Total</span><span>${formatCurrency(getOptionTotal(option) ?? 0)}</span></div>
     </div>
   </section>`;
 }
@@ -227,6 +229,7 @@ function renderCostLineRow(line: CostLineItem) {
 }
 
 export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
+  const displayTotal = getQuotePipelineValue(quote) ?? 0;
   const lines = [
     bundle.business.business_name,
     bundle.business.trading_address || "",
@@ -258,7 +261,7 @@ export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
     "",
     `Subtotal: ${formatCurrency(quote.subtotal)}`,
     `VAT: ${formatCurrency(quote.vat_amount)}`,
-    `Total: ${formatCurrency(quote.total)}`,
+    `${isQuoteFromOptionValue(quote) ? "From" : "Total"}: ${formatCurrency(displayTotal)}`,
     "",
     "Guarantee",
     ...wrapText(quote.guarantee_text || ""),

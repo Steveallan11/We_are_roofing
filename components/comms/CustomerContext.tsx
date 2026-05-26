@@ -1,6 +1,7 @@
 "use client";
 
 import type { ConversationRecord } from "@/lib/types";
+import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 
 type Props = {
@@ -29,7 +30,7 @@ export function CustomerContext({ conversation }: Props) {
         <ContextRow label="Phone" value={customer?.phone || customer?.contact_person_phone || "No phone"} />
         <ContextRow label="Job" value={job?.job_ref ? `${job.job_ref} | ${job.job_title}` : job?.job_title || "No linked job"} />
         <ContextRow label="Status" value={job?.status ?? "No status"} />
-        <ContextRow label="Quote" value={quote ? `${quote.quote_ref} | ${currency(Number(quote.total ?? 0))}` : "No linked quote"} />
+        <ContextRow label="Quote" value={quote ? `${quote.quote_ref} | ${currency(getQuotePipelineValue(quote) ?? 0)}` : "No linked quote"} />
         <ContextRow label="Last Message" value={formatDate(conversation.last_message_at ?? conversation.updated_at ?? conversation.created_at)} />
       </div>
     </div>

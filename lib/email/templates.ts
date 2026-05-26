@@ -1,4 +1,5 @@
 import type { QuoteOption, QuoteRecord } from "@/lib/types";
+import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 const shell = (title: string, body: string) => `
@@ -53,20 +54,22 @@ export function surveyConfirmationEmail(props: {
 
 export function quoteSentEmail(props: { customerName: string; quote: QuoteRecord; quoteUrl: string }) {
   const options = (props.quote.options ?? []) as QuoteOption[];
+  const displayTotal = getQuotePipelineValue(props.quote) ?? 0;
+  const totalLabel = isQuoteFromOptionValue(props.quote) ? "From" : "Total";
   const totals = options.length
     ? options
         .map(
           (option) => `
             <div style="display:flex;justify-content:space-between;gap:14px;border-bottom:1px solid #eee3bd;padding:10px 0">
               <span style="font-size:14px;color:#555">${option.label}${option.recommended ? " (recommended)" : ""}</span>
-              <strong style="font-size:16px;color:#1a1a1a">${currency(option.total)}</strong>
+              <strong style="font-size:16px;color:#1a1a1a">${currency(getOptionTotal(option) ?? 0)}</strong>
             </div>`
         )
         .join("")
     : `
       <div style="display:flex;justify-content:space-between;gap:14px">
-        <span style="font-size:14px;color:#555">Total</span>
-        <strong style="font-size:22px;color:#1a1a1a">${currency(props.quote.total)}</strong>
+        <span style="font-size:14px;color:#555">${totalLabel}</span>
+        <strong style="font-size:22px;color:#1a1a1a">${currency(displayTotal)}</strong>
       </div>`;
 
   return shell(

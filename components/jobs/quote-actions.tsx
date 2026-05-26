@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/ui/brand-logo";
 import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import type { JobDocumentRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
@@ -209,6 +210,7 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
           customerName={customerName}
           documents={documents}
           jobTitle={jobTitle}
+          isFromPrice={isQuoteFromOptionValue(quote)}
           onClose={() => setShowSendModal(false)}
           onSent={(message) => {
             setShowSendModal(false);
@@ -218,7 +220,7 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
           }}
           quoteId={quote.id}
           quoteRef={quote.quote_ref}
-          total={Number(quote.total ?? 0)}
+          total={getQuotePipelineValue(quote) ?? 0}
         />
       ) : null}
     </div>

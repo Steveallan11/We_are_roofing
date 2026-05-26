@@ -4,12 +4,14 @@ import { DocHeader } from "@/components/documents/shared/DocHeader";
 import { DocumentBody, DocumentFrame, paragraphStyle } from "@/components/documents/shared/DocumentFrame";
 import { LineItemTable } from "@/components/documents/shared/LineItemTable";
 import { SectionHead } from "@/components/documents/shared/SectionHead";
+import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { DOC } from "@/lib/theme/documentTheme";
 import { currency, formatDate } from "@/lib/utils";
 import type { JobBundle, QuoteRecord } from "@/lib/types";
 
 export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: QuoteRecord }) {
   const visibleLineItems = quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
+  const displayTotal = getQuotePipelineValue(quote) ?? 0;
 
   return (
     <DocumentFrame>
@@ -58,7 +60,7 @@ export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: Quo
             totals={[
               { label: "Subtotal", value: currency(quote.subtotal) },
               { label: "VAT", value: currency(quote.vat_amount) },
-              { label: "Total", value: currency(quote.total), strong: true }
+              { label: isQuoteFromOptionValue(quote) ? "From" : "Total", value: currency(displayTotal), strong: true }
             ]}
           />
         )}
@@ -160,7 +162,7 @@ function OptionLineSummary({ option }: { option: NonNullable<QuoteRecord["option
         </div>
         <div style={{ borderTop: `1px solid ${DOC.lightRule}`, color: DOC.gold, display: "flex", fontSize: 18, fontWeight: 800, justifyContent: "space-between", paddingTop: 8 }}>
           <span>Total</span>
-          <span>{currency(option.total)}</span>
+          <span>{currency(getOptionTotal(option) ?? 0)}</span>
         </div>
       </div>
     </div>

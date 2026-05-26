@@ -7,6 +7,7 @@ import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle, getPricingRules } from "@/lib/data";
 import { pricingRulesToRateCard } from "@/lib/pricing/rateCard";
+import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { getLatestRoofSurvey } from "@/lib/roof-surveys";
 import { currency } from "@/lib/utils";
 
@@ -28,12 +29,13 @@ export default async function QuotePage({ params, searchParams }: Props) {
   const displayStatus = quote?.status ?? "Draft";
   const visibleCostBreakdown = quote?.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0) ?? [];
   const hiddenZeroLineCount = quote ? quote.cost_breakdown.length - visibleCostBreakdown.length : 0;
+  const displayQuoteValue = quote ? (getQuotePipelineValue(quote) ?? 0) : 0;
 
   return (
     <AppShell
       title="Quote Review"
       subtitle="Review the saved quote, approve it when the wording and totals are right, then send it to the customer."
-      actions={<QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={quote} />}
+      actions={<QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} documents={bundle.documents} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={quote} />}
     >
       <div className="mb-4 lg:hidden">
         <Link className="button-ghost w-full !justify-center" href={`/jobs/${bundle.job.id}`}>
@@ -129,10 +131,20 @@ export default async function QuotePage({ params, searchParams }: Props) {
                     <span>{currency(quote.vat_amount)}</span>
                   </div>
                   <div className="flex items-center justify-between font-semibold text-[var(--gold-l)]">
-                    <span>Total</span>
-                    <span>{currency(quote.total)}</span>
+                    <span>{isQuoteFromOptionValue(quote) ? "From" : "Total"}</span>
+                    <span>{currency(displayQuoteValue)}</span>
                   </div>
                 </div>
+                {quote.options?.length ? (
+                  <div className="mt-4 space-y-2">
+                    {quote.options.map((option) => (
+                      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-black/20 px-3 py-2 text-sm" key={option.id}>
+                        <span className="text-[var(--muted)]">{option.label}{option.recommended ? " (recommended)" : ""}</span>
+                        <span className="font-semibold text-[var(--gold-l)]">{currency(getOptionTotal(option) ?? 0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </>
             ) : (
               <p className="mt-4 text-sm text-[var(--muted)]">The pricing breakdown will appear here once the first quote draft has been created.</p>

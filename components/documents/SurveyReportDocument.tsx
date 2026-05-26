@@ -5,6 +5,7 @@ import { DocumentBody, DocumentFrame, paragraphStyle } from "@/components/docume
 import { LineItemTable } from "@/components/documents/shared/LineItemTable";
 import { MetaStrip } from "@/components/documents/shared/MetaStrip";
 import { SectionHead } from "@/components/documents/shared/SectionHead";
+import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
 import type { JobBundle } from "@/lib/types";
@@ -52,7 +53,7 @@ export function SurveyReportDocument({ bundle }: { bundle: JobBundle }) {
         {bundle.quote ? (
           <>
             <SectionHead>Indicative Budget</SectionHead>
-            <p style={paragraphStyle}>{currency(bundle.quote.total)} based on the current quote draft {bundle.quote.quote_ref}.</p>
+            <p style={paragraphStyle}>{currency(getQuotePipelineValue(bundle.quote) ?? 0)} based on the current quote draft {bundle.quote.quote_ref}.</p>
           </>
         ) : null}
       </DocumentBody>

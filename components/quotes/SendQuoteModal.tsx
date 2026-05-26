@@ -9,6 +9,7 @@ type Props = {
   quoteRef: string;
   jobTitle: string;
   total: number;
+  isFromPrice?: boolean;
   customerName: string;
   customerEmail: string | null | undefined;
   documents?: JobDocumentRecord[];
@@ -16,7 +17,7 @@ type Props = {
   onSent: (message: string) => void;
 };
 
-export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerName, customerEmail, documents = [], onClose, onSent }: Props) {
+export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice = false, customerName, customerEmail, documents = [], onClose, onSent }: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +65,8 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(6,6,6,0.84)] px-4 py-6" role="dialog" aria-modal="true">
-      <div className="card w-full max-w-2xl p-6 md:p-7">
+    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[rgba(6,6,6,0.84)] px-3 py-4 md:px-4 md:py-6" role="dialog" aria-modal="true">
+      <div className="card my-auto max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto p-5 md:max-h-[calc(100vh-3rem)] md:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="section-kicker text-[0.65rem] uppercase">Send Quote</p>
@@ -89,8 +90,8 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
             <p className="mt-2 text-sm text-white">{jobTitle}</p>
           </div>
           <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3">
-            <p className="label">Total</p>
-            <p className="mt-2 text-sm text-white">{currency(total)}</p>
+            <p className="label">{isFromPrice ? "From" : "Quote Total"}</p>
+            <p className="mt-2 text-sm text-white">{isFromPrice ? `From ${currency(total)}` : currency(total)}</p>
           </div>
         </div>
 

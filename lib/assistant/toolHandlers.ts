@@ -1,8 +1,9 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import { ensureBusinessRecord, getNextJobRef } from "@/lib/workflows";
 import type { AssistantRouteContext, ToolExecutionResult } from "@/lib/assistant/types";
-import type { JobStatus, QuoteStatus } from "@/lib/types";
+import type { JobStatus, QuoteRecord, QuoteStatus } from "@/lib/types";
 
 const VALID_JOB_STATUSES: JobStatus[] = [
   "New Lead",
@@ -418,7 +419,7 @@ async function getQuotes(input: Record<string, unknown>): Promise<ToolExecutionR
     data: rows.map((quote) => ({
       quote_ref: quote.quote_ref,
       status: quote.status,
-      total: currency(Number(quote.total ?? 0)),
+      total: currency(getQuotePipelineValue(quote as QuoteRecord) ?? 0),
       job_ref: !Array.isArray(quote.jobs) ? quote.jobs?.job_ref : null,
       job_title: !Array.isArray(quote.jobs) ? quote.jobs?.job_title : null
     }))
@@ -488,7 +489,7 @@ async function getRevenueSummary(input: Record<string, unknown>): Promise<ToolEx
 
   const [jobsResult, quotesResult] = await Promise.all([
     supabase.from("jobs").select("job_ref, final_value, completed_at, estimated_value, accepted_at"),
-    supabase.from("quotes").select("quote_ref, total, status, updated_at")
+    supabase.from("quotes").select("quote_ref, total, options, accepted_option_id, status, updated_at")
   ]);
   if (jobsResult.error || quotesResult.error) {
     throw new Error(jobsResult.error?.message ?? quotesResult.error?.message ?? "Unable to build revenue summary.");
@@ -503,7 +504,7 @@ async function getRevenueSummary(input: Record<string, unknown>): Promise<ToolEx
   const completedValue = completedJobs.reduce((sum, job) => sum + Number(job.final_value ?? 0), 0);
   const acceptedValue =
     acceptedJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0) ||
-    acceptedQuotes.reduce((sum, quote) => sum + Number(quote.total ?? 0), 0);
+    acceptedQuotes.reduce((sum, quote) => sum + Number(getQuotePipelineValue(quote as QuoteRecord) ?? 0), 0);
 
   return {
     ok: true,

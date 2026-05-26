@@ -7,6 +7,7 @@ import { sendSMS, SMS_TEMPLATES } from "@/lib/sms/sendSMS";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 import { createQuotePublicToken } from "@/lib/public-quote";
+import { getQuotePipelineValue } from "@/lib/quotes/value";
 import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
@@ -116,6 +117,7 @@ export async function POST(request: Request, { params }: Props) {
     .from("jobs")
     .update({
       status: "Quote Sent",
+      estimated_value: getQuotePipelineValue(sentQuote) ?? Number(sentQuote.total ?? 0),
       quote_sent_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
