@@ -81,6 +81,15 @@ export type QuotePriceSummaryRow = {
   gross: number;
 };
 
+export type QuotePriceDetailRow = {
+  id: string;
+  category: QuotePriceSummaryRow["id"];
+  label: string;
+  net: number;
+  vat: number;
+  gross: number;
+};
+
 export function buildQuoteOptionPriceSummary(option: Pick<QuoteOption, "cost_breakdown">): QuotePriceSummaryRow[] {
   const groups = new Map<QuotePriceSummaryRow["id"], QuotePriceSummaryRow>();
 
@@ -107,6 +116,27 @@ export function buildQuoteOptionPriceSummary(option: Pick<QuoteOption, "cost_bre
   }
 
   return (["roof_works", "access"] as const).map((id) => groups.get(id)).filter((row): row is QuotePriceSummaryRow => Boolean(row));
+}
+
+export function buildQuoteOptionPriceDetailRows(option: Pick<QuoteOption, "cost_breakdown">): QuotePriceDetailRow[] {
+  return (option.cost_breakdown ?? [])
+    .map((item, index) => {
+      const net = getLineItemNet(item);
+      if (!net) return null;
+      const category = getLineItemCategory(item);
+      const label = getDetailedLineItemLabel(item, category);
+      const vat = item.vat_applicable === false ? 0 : calculateVat(net);
+
+      return {
+        id: `${category}-${index}-${label}`,
+        category,
+        label,
+        net,
+        vat,
+        gross: roundMoney(net + vat)
+      };
+    })
+    .filter((row): row is QuotePriceDetailRow => Boolean(row));
 }
 
 function getLineItemNet(item: CostLineItem) {
@@ -152,6 +182,26 @@ function getLineItemSummaryLabel(item: CostLineItem, category: QuotePriceSummary
   }
 
   return "Roof works";
+}
+
+function getDetailedLineItemLabel(item: CostLineItem, category: QuotePriceSummaryRow["id"]) {
+  const labelSource = [item.quote_section, item.item, item.source_label, item.pricing_category].find((value) => value?.trim())?.trim();
+  if (!labelSource) return getDefaultSummaryLabel(category);
+
+  const normalised = labelSource.toLowerCase();
+  if (category === "roof_works" && /roof works|main roof|full roof|roof refurbishment/.test(normalised)) {
+    return labelSource;
+  }
+  if (category === "roof_works") {
+    return labelSource;
+  }
+  if (normalised.includes("temporary roof") || normalised.includes("weather protection")) {
+    return "Temporary roof/weather protection system";
+  }
+  if (normalised.includes("scaffold")) {
+    return "Standard scaffold";
+  }
+  return labelSource;
 }
 
 function pickBetterSummaryLabel(current: string, next: string, category: QuotePriceSummaryRow["id"]) {

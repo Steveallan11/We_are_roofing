@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
-import { buildQuoteOptionPriceSummary, getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
+import { buildQuoteOptionPriceDetailRows, getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { QuoteOption, QuoteRecord } from "@/lib/types";
@@ -101,7 +101,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
                 {option.recommended ? <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">Recommended</p> : null}
                 <h2 className={option.recommended ? "mt-2 font-display text-3xl leading-tight text-white" : "font-display text-3xl leading-tight text-white"}>{option.label}</h2>
                 {hasReadableText(option.description) ? (
-                  <div className="mt-3 text-base leading-7 text-[var(--text-second)]">
+                  <div className="mt-3 text-base leading-7 text-[#d8d8d8]">
                     <ReadableText value={option.description} compact />
                   </div>
                 ) : null}
@@ -122,21 +122,22 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 }
 
 function OptionBreakdown({ option }: { option: QuoteOption }) {
-  const summary = buildQuoteOptionPriceSummary(option);
+  const detailRows = buildQuoteOptionPriceDetailRows(option);
   const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
   const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
   const total = getOptionTotal(option) ?? fallbackSubtotal + fallbackVat;
 
   return (
-    <div className="mt-5 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
+    <div className="mt-5 rounded-2xl border border-[var(--gold)]/35 bg-[#17130a] p-4">
       <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
-      <div className="mt-4 space-y-3 font-ui text-sm text-[var(--text-second)]">
-        {summary.length > 0 ? (
+      <div className="mt-4 space-y-4 font-ui text-sm text-[#e8e8e8]">
+        {detailRows.length > 0 ? (
           <>
-            {summary.map((row) => (
-              <div className="space-y-3" key={row.id}>
+            {detailRows.map((row) => (
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3" key={row.id}>
                 <PriceRow label={row.label} value={row.net} />
-                <PriceRow label={row.vatLabel} muted value={row.vat} />
+                <PriceRow label={`VAT on ${row.label.toLowerCase()}`} muted value={row.vat} />
+                <PriceRow label={`${row.label} total`} muted value={row.gross} />
               </div>
             ))}
           </>
@@ -157,8 +158,8 @@ function OptionBreakdown({ option }: { option: QuoteOption }) {
 
 function PriceRow({ label, muted = false, value }: { label: string; muted?: boolean; value: number }) {
   return (
-    <div className={`flex justify-between gap-4 ${muted ? "text-[var(--text-muted)]" : "text-[var(--text-second)]"}`}>
-      <span>{label}</span>
+    <div className={`flex justify-between gap-4 ${muted ? "text-[#a8a8a8]" : "text-[#f2f2f2]"}`}>
+      <span className="max-w-[68%]">{label}</span>
       <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
     </div>
   );
@@ -197,7 +198,7 @@ function ReadableText({ value, compact = false }: { value?: string | null; compa
         }
 
         return (
-          <p className={compact ? "font-ui text-base leading-7 text-[var(--text-second)]" : "font-ui text-lg leading-9 text-[var(--text-second)] md:text-xl md:leading-10"} key={`p-${index}`}>
+          <p className={compact ? "font-ui text-base leading-7 text-[#d8d8d8]" : "font-ui text-lg leading-9 text-[var(--text-second)] md:text-xl md:leading-10"} key={`p-${index}`}>
             {block.text}
           </p>
         );

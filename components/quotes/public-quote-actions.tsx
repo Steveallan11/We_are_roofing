@@ -77,7 +77,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
               className={`min-h-20 rounded-2xl border-2 p-4 text-left transition ${
                 selectedOptionId === option.id
                   ? "border-[var(--gold)] bg-[var(--gold)] text-black shadow-[0_0_0_4px_rgba(212,175,55,0.16)]"
-                  : "border-[var(--border)] bg-black/15 text-[var(--text-second)]"
+                  : "border-[var(--border)] bg-black/25 text-[#f2f2f2]"
               }`}
               key={option.id}
               onClick={() => setSelectedOptionId(option.id)}
