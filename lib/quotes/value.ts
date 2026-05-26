@@ -1,4 +1,5 @@
 import type { CostLineItem, Job, QuoteOption, QuoteRecord } from "@/lib/types";
+import { currency } from "@/lib/utils";
 
 type QuoteValue = Pick<QuoteRecord, "total" | "options" | "accepted_option_id">;
 type JobValue = Pick<Job, "estimated_value" | "final_value" | "status"> & {
@@ -43,12 +44,131 @@ export function isQuoteFromOptionValue(quote?: QuoteValue | null): boolean {
 }
 
 export function getOptionTotal(option: QuoteOption): number | null {
-  return getPositiveNumber(option.total) ?? getPositiveNumber(option.subtotal + option.vat_amount) ?? calculateLineTotal(option.cost_breakdown);
+  const calculated = calculateOptionTotal(option);
+  if (process.env.NODE_ENV !== "production") {
+    const stored = getPositiveNumber(option.total);
+    if (stored && Math.abs(stored - calculated) > 0.01) {
+      console.warn(`Quote option total mismatch for ${option.id}: stored ${stored}, calculated ${calculated}`);
+    }
+  }
+
+  return getPositiveNumber(calculated) ?? getPositiveNumber(option.total) ?? getPositiveNumber(option.subtotal + option.vat_amount);
 }
 
-function calculateLineTotal(lines?: CostLineItem[] | null) {
-  if (!lines?.length) return null;
-  const subtotal = lines.reduce((sum, line) => sum + Number(line.cost || 0), 0);
-  const vat = lines.filter((line) => line.vat_applicable !== false).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0);
-  return getPositiveNumber(Math.round((subtotal + vat) * 100) / 100);
+export function formatCurrency(value: number) {
+  return currency(value);
+}
+
+export function calculateVat(net: number, vatRate = 0.2) {
+  return roundMoney(net * vatRate);
+}
+
+export function calculateLineItemGross(item: CostLineItem, vatRate = 0.2) {
+  const net = getLineItemNet(item);
+  return roundMoney(net + (item.vat_applicable === false ? 0 : calculateVat(net, vatRate)));
+}
+
+export function calculateOptionTotal(option: Pick<QuoteOption, "cost_breakdown">) {
+  return roundMoney((option.cost_breakdown ?? []).reduce((sum, item) => sum + calculateLineItemGross(item), 0));
+}
+
+export type QuotePriceSummaryRow = {
+  id: "roof_works" | "access";
+  label: string;
+  vatLabel: string;
+  net: number;
+  vat: number;
+  gross: number;
+};
+
+export function buildQuoteOptionPriceSummary(option: Pick<QuoteOption, "cost_breakdown">): QuotePriceSummaryRow[] {
+  const groups = new Map<QuotePriceSummaryRow["id"], QuotePriceSummaryRow>();
+
+  for (const item of option.cost_breakdown ?? []) {
+    const net = getLineItemNet(item);
+    if (!net) continue;
+
+    const groupId = getLineItemCategory(item);
+    const existing = groups.get(groupId) ?? {
+      id: groupId,
+      label: getDefaultSummaryLabel(groupId),
+      vatLabel: getDefaultSummaryVatLabel(groupId),
+      net: 0,
+      vat: 0,
+      gross: 0
+    };
+
+    existing.label = pickBetterSummaryLabel(existing.label, getLineItemSummaryLabel(item, groupId), groupId);
+    existing.vatLabel = `VAT on ${existing.label.toLowerCase()}`;
+    existing.net = roundMoney(existing.net + net);
+    existing.vat = roundMoney(existing.vat + (item.vat_applicable === false ? 0 : calculateVat(net)));
+    existing.gross = roundMoney(existing.net + existing.vat);
+    groups.set(groupId, existing);
+  }
+
+  return (["roof_works", "access"] as const).map((id) => groups.get(id)).filter((row): row is QuotePriceSummaryRow => Boolean(row));
+}
+
+function getLineItemNet(item: CostLineItem) {
+  return roundMoney(Math.max(0, Number(item.cost || 0)));
+}
+
+function getLineItemCategory(item: CostLineItem): QuotePriceSummaryRow["id"] {
+  return getQuoteLineItemCategory(item);
+}
+
+export function getQuoteLineItemCategory(item: CostLineItem): QuotePriceSummaryRow["id"] {
+  const identity = `${item.quote_section ?? ""} ${item.item ?? ""} ${item.source_label ?? ""}`.toLowerCase();
+
+  if (/\b(roof works|main roof|pitched|flat roof|tile|slate|leadwork|gutter|ridge|hip|valley|verge|eaves)\b/.test(identity)) {
+    return "roof_works";
+  }
+
+  if (/\b(scaffold|access|temporary roof|temp roof|weather protection|protection system|edge protection|tower)\b/.test(identity)) {
+    return "access";
+  }
+
+  const category = `${item.pricing_category ?? ""}`.toLowerCase();
+  if (/\b(scaffold|access|temporary roof|temp roof|weather protection|protection system|edge protection|tower)\b/.test(category)) {
+    return "access";
+  }
+
+  return "roof_works";
+}
+
+function getLineItemSummaryLabel(item: CostLineItem, category: QuotePriceSummaryRow["id"]) {
+  const labelSource = [item.quote_section, item.item, item.pricing_category, item.source_label].find((value) => value?.trim())?.trim();
+  if (!labelSource) return getDefaultSummaryLabel(category);
+
+  const normalised = labelSource.toLowerCase();
+  if (category === "access") {
+    if (normalised.includes("temporary roof") || normalised.includes("weather protection")) {
+      return "Temporary roof/weather protection system";
+    }
+    if (normalised.includes("scaffold")) {
+      return "Standard scaffold";
+    }
+    return labelSource;
+  }
+
+  return "Roof works";
+}
+
+function pickBetterSummaryLabel(current: string, next: string, category: QuotePriceSummaryRow["id"]) {
+  if (category === "roof_works") return "Roof works";
+  if (current === getDefaultSummaryLabel(category)) return next;
+  if (current === "Standard scaffold" && next.includes("Temporary roof")) return next;
+  return current;
+}
+
+function getDefaultSummaryLabel(category: QuotePriceSummaryRow["id"]) {
+  return category === "access" ? "Scaffold/access allowance" : "Roof works";
+}
+
+function getDefaultSummaryVatLabel(category: QuotePriceSummaryRow["id"]) {
+  return `VAT on ${getDefaultSummaryLabel(category).toLowerCase()}`;
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }

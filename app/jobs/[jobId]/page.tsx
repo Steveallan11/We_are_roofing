@@ -16,10 +16,10 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle, getPaymentSchedule } from "@/lib/data";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
-import { getJobPipelineValue, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
+import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
-import type { JobDocumentRecord } from "@/lib/types";
+import type { JobDocumentRecord, QuoteOption } from "@/lib/types";
 
 type Props = {
   params: Promise<{ jobId: string }>;
@@ -270,6 +270,22 @@ export default async function JobDetailPage({ params }: Props) {
                 <p className="text-3xl font-display text-[var(--gold-l)]">{quoteDisplayLabel}</p>
                 <p className="text-sm text-[var(--muted)]">{bundle.quote.customer_email_subject}</p>
                 <p className="text-sm text-[var(--text)]">Next step: {getNextActionLabel(bundle.job)}</p>
+                {bundle.quote.options?.length ? (
+                  <div className="mt-4 space-y-3">
+                    {bundle.quote.options.map((option) => (
+                      <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3" key={option.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-white">{option.label}</p>
+                            {option.recommended ? <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-[var(--gold)]">Recommended</p> : null}
+                          </div>
+                          <p className="shrink-0 font-semibold text-[var(--gold-l)]">{currency(getOptionTotal(option) ?? 0)}</p>
+                        </div>
+                        <QuoteOptionMiniBreakdown option={option} />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <Link className="button-secondary !mt-4 w-full !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote`}>
                   Open Quote Review
                 </Link>
@@ -457,6 +473,28 @@ function InfoRow({ label, value, href }: { label: string; value: string; href?: 
       ) : (
         <p className="max-w-[65%] text-right text-[var(--text)]">{value}</p>
       )}
+    </div>
+  );
+}
+
+function QuoteOptionMiniBreakdown({ option }: { option: QuoteOption }) {
+  const rows = buildQuoteOptionPriceSummary(option);
+  if (!rows.length) return null;
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3 text-xs">
+      {rows.map((row) => (
+        <div className="space-y-1" key={row.id}>
+          <div className="flex justify-between gap-3 text-[var(--text)]">
+            <span>{row.label}</span>
+            <span className="font-semibold text-white">{currency(row.net)}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-[var(--muted)]">
+            <span>{row.vatLabel}</span>
+            <span>{currency(row.vat)}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

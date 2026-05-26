@@ -7,7 +7,7 @@ import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle, getPricingRules } from "@/lib/data";
 import { pricingRulesToRateCard } from "@/lib/pricing/rateCard";
-import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
+import { buildQuoteOptionPriceSummary, getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { getLatestRoofSurvey } from "@/lib/roof-surveys";
 import { currency } from "@/lib/utils";
 
@@ -136,11 +136,30 @@ export default async function QuotePage({ params, searchParams }: Props) {
                   </div>
                 </div>
                 {quote.options?.length ? (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-3">
                     {quote.options.map((option) => (
-                      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-black/20 px-3 py-2 text-sm" key={option.id}>
-                        <span className="text-[var(--muted)]">{option.label}{option.recommended ? " (recommended)" : ""}</span>
-                        <span className="font-semibold text-[var(--gold-l)]">{currency(getOptionTotal(option) ?? 0)}</span>
+                      <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3 text-sm" key={option.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-white">{option.label}</p>
+                            {option.recommended ? <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-[var(--gold)]">Recommended</p> : null}
+                          </div>
+                          <span className="shrink-0 font-semibold text-[var(--gold-l)]">{currency(getOptionTotal(option) ?? 0)}</span>
+                        </div>
+                        <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3 text-xs">
+                          {buildQuoteOptionPriceSummary(option).map((row) => (
+                            <div className="space-y-1" key={row.id}>
+                              <div className="flex justify-between gap-3 text-[var(--text)]">
+                                <span>{row.label}</span>
+                                <span className="font-semibold text-white">{currency(row.net)}</span>
+                              </div>
+                              <div className="flex justify-between gap-3 text-[var(--muted)]">
+                                <span>{row.vatLabel}</span>
+                                <span>{currency(row.vat)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>

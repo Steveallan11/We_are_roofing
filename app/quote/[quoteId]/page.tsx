@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
-import { getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
+import { buildQuoteOptionPriceSummary, getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
-import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
+import type { QuoteOption, QuoteRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -122,7 +122,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 }
 
 function OptionBreakdown({ option }: { option: QuoteOption }) {
-  const summary = buildOptionPriceSummary(option.cost_breakdown ?? []);
+  const summary = buildQuoteOptionPriceSummary(option);
   const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
   const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
   const total = getOptionTotal(option) ?? fallbackSubtotal + fallbackVat;
@@ -131,12 +131,14 @@ function OptionBreakdown({ option }: { option: QuoteOption }) {
     <div className="mt-5 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
       <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
       <div className="mt-4 space-y-3 font-ui text-sm text-[var(--text-second)]">
-        {summary.roofSubtotal > 0 || summary.scaffoldSubtotal > 0 ? (
+        {summary.length > 0 ? (
           <>
-            <PriceRow label="Roof works" value={summary.roofSubtotal} />
-            <PriceRow label="VAT on roof works" muted value={summary.roofVat} />
-            <PriceRow label="Scaffold/access allowance" value={summary.scaffoldSubtotal} />
-            <PriceRow label="VAT on scaffold/access" muted value={summary.scaffoldVat} />
+            {summary.map((row) => (
+              <div className="space-y-3" key={row.id}>
+                <PriceRow label={row.label} value={row.net} />
+                <PriceRow label={row.vatLabel} muted value={row.vat} />
+              </div>
+            ))}
           </>
         ) : (
           <>
@@ -159,33 +161,6 @@ function PriceRow({ label, muted = false, value }: { label: string; muted?: bool
       <span>{label}</span>
       <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
     </div>
-  );
-}
-
-function buildOptionPriceSummary(lines: CostLineItem[]) {
-  return lines.reduce(
-    (summary, line) => {
-      const cost = Math.max(0, Number(line.cost || 0));
-      if (!cost) return summary;
-
-      const isScaffold = [line.item, line.quote_section, line.pricing_category, line.notes]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes("scaffold");
-      const vat = line.vat_applicable === false ? 0 : Math.round(cost * 0.2 * 100) / 100;
-
-      if (isScaffold) {
-        summary.scaffoldSubtotal += cost;
-        summary.scaffoldVat += vat;
-      } else {
-        summary.roofSubtotal += cost;
-        summary.roofVat += vat;
-      }
-
-      return summary;
-    },
-    { roofSubtotal: 0, roofVat: 0, scaffoldSubtotal: 0, scaffoldVat: 0 }
   );
 }
 

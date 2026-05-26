@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
+import { buildQuoteOptionPriceSummary, getQuoteLineItemCategory } from "@/lib/quotes/value";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
 import { currency } from "@/lib/utils";
 import { TakeoffQuotePreview } from "@/components/jobs/takeoff-quote-preview";
@@ -499,15 +500,26 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                 </label>
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
-                    <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
-                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px] xl:grid-cols-[minmax(0,1fr)_120px_92px_96px]">
-                        <label className="block">
-                          <span className="label">Item</span>
-                          <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
-                        </label>
-                        <label className="block">
-                          <span className="label">Price</span>
-                          <input className="field" inputMode="decimal" onChange={(event) => updateOptionLine(option.id, index, { cost: Number(event.target.value || 0) })} step="0.01" type="number" value={line.cost} />
+                      <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px_120px] xl:grid-cols-[minmax(0,1fr)_150px_120px_92px_96px]">
+                          <label className="block">
+                            <span className="label">Item</span>
+                            <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
+                          </label>
+                          <label className="block">
+                            <span className="label">Category</span>
+                            <select
+                              className="field"
+                              onChange={(event) => updateOptionLine(option.id, index, { pricing_category: event.target.value })}
+                              value={line.pricing_category || getQuoteLineItemCategory(line)}
+                            >
+                              <option value="roof_works">Roof works</option>
+                              <option value="access">Access / scaffold</option>
+                            </select>
+                          </label>
+                          <label className="block">
+                            <span className="label">Price</span>
+                            <input className="field" inputMode="decimal" onChange={(event) => updateOptionLine(option.id, index, { cost: Number(event.target.value || 0) })} step="0.01" type="number" value={line.cost} />
                         </label>
                         <label className="mt-6 flex min-h-11 items-center gap-2 text-sm text-[var(--text)]">
                           <input checked={line.vat_applicable} onChange={(event) => updateOptionLine(option.id, index, { vat_applicable: event.target.checked })} type="checkbox" />
@@ -528,14 +540,18 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                   </button>
                 </div>
                 <div className="mt-4 grid gap-2 rounded-xl border border-[var(--border)] bg-black/10 p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--muted)]">Subtotal</span>
-                    <span>{currency(option.subtotal)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--muted)]">VAT</span>
-                    <span>{currency(option.vat_amount)}</span>
-                  </div>
+                  {buildQuoteOptionPriceSummary(option).map((row) => (
+                    <div className="space-y-1" key={row.id}>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[var(--muted)]">{row.label}</span>
+                        <span>{currency(row.net)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="text-[var(--muted)]">{row.vatLabel}</span>
+                        <span>{currency(row.vat)}</span>
+                      </div>
+                    </div>
+                  ))}
                   <div className="flex items-center justify-between font-semibold text-[var(--gold-l)]">
                     <span>Total</span>
                     <span>{currency(option.total)}</span>
@@ -903,6 +919,7 @@ function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = 
     ...line,
     quantity,
     unit_rate: unitRate,
+    pricing_category: line.pricing_category || getQuoteLineItemCategory(line),
     cost: shouldRecalculate ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0)
   };
 }

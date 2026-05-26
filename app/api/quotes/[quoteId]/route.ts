@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getQuotePipelineValue } from "@/lib/quotes/value";
+import { getQuoteLineItemCategory, getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
@@ -137,6 +137,7 @@ function normaliseCostLine(line: CostLineItem): CostLineItem {
     cost,
     vat_applicable: line.vat_applicable !== false,
     notes: line.notes || "",
+    pricing_category: line.pricing_category || getQuoteLineItemCategory(line),
     quantity,
     unit_rate: unitRate
   };
