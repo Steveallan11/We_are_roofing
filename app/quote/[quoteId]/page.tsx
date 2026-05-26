@@ -43,7 +43,15 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
             </div>
           </div>
 
-          <div className="p-5 md:p-8">
+          <div className="grid gap-5 p-5 md:p-8">
+            <QuoteSection title="Roof Report" intro="What we found and what it means for the roof.">
+              <ReadableText value={record.roof_report} />
+            </QuoteSection>
+
+            <QuoteSection title="Scope of Works" intro="The work included in this quotation.">
+              <ReadableText value={record.scope_of_works} />
+            </QuoteSection>
+
             <PublicQuoteActions options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
           </div>
         </div>
@@ -56,17 +64,9 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
         <details className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl md:p-7">
           <summary className="cursor-pointer font-ui text-sm font-bold uppercase tracking-[0.16em] text-[var(--gold)]">
-            View full quote details
+            View guarantee, exclusions and terms
           </summary>
           <div className="mt-5 grid gap-5">
-            <QuoteSection title="Roof Report" intro="What we found and what it means for the roof.">
-              <ReadableText value={record.roof_report} />
-            </QuoteSection>
-
-            <QuoteSection title="Scope of Works" intro="The work included in this quotation.">
-              <ReadableText value={record.scope_of_works} />
-            </QuoteSection>
-
             {record.guarantee_text ? (
               <QuoteSection title="Guarantee">
                 <ReadableText value={record.guarantee_text} />

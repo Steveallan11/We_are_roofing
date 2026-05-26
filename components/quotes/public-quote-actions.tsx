@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { QuoteOption } from "@/lib/types";
-import { buildQuoteOptionPriceDetailRows, getOptionTotal } from "@/lib/quotes/value";
+import { buildQuoteOptionPriceSummary, getOptionTotal } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -179,7 +179,7 @@ function SelectedOptionDetail({ option, selectedIndex }: { option: QuoteOption; 
 }
 
 function SimplePriceSummary({ option }: { option: QuoteOption }) {
-  const detailRows = buildQuoteOptionPriceDetailRows(option);
+  const summaryRows = buildQuoteOptionPriceSummary(option);
   const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
   const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
   const total = getOptionTotal(option) ?? fallbackSubtotal + fallbackVat;
@@ -188,8 +188,8 @@ function SimplePriceSummary({ option }: { option: QuoteOption }) {
     <div className="mt-5 rounded-2xl border border-[var(--gold)]/30 bg-[#17130a] p-4 md:p-5">
       <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
       <div className="mt-4 space-y-3 font-ui text-sm text-[#f2f2f2] md:text-base">
-        {detailRows.length > 0 ? (
-          detailRows.map((row) => <PricePairRows key={row.id} label={getCustomerLineLabel(row.label, row.category)} net={row.net} vat={row.vat} />)
+        {summaryRows.length > 0 ? (
+          summaryRows.map((row) => <PricePairRows key={row.id} label={getCustomerLineLabel(row.label, row.id)} net={row.net} vat={row.vat} />)
         ) : (
           <>
             <PriceRow label="Works subtotal" value={fallbackSubtotal} />
@@ -249,7 +249,7 @@ function getOptionDisplay(option: QuoteOption, index: number) {
 
 function getCustomerLineLabel(label: string, category: "roof_works" | "access") {
   const normalised = label.toLowerCase();
-  if (category === "roof_works") return normalised.includes("full roof") ? "Full roof works" : "Roof works";
+  if (category === "roof_works") return "Full roof works";
   if (normalised.includes("temporary roof") || normalised.includes("weather protection")) return "Temporary roof protection";
   if (normalised.includes("scaffold")) return "Standard scaffold";
   return label.length > 34 ? `${label.slice(0, 31).trim()}...` : label;

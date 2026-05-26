@@ -149,18 +149,14 @@ function getLineItemCategory(item: CostLineItem): QuotePriceSummaryRow["id"] {
 
 export function getQuoteLineItemCategory(item: CostLineItem): QuotePriceSummaryRow["id"] {
   const identity = `${item.quote_section ?? ""} ${item.item ?? ""} ${item.source_label ?? ""}`.toLowerCase();
+  const category = `${item.pricing_category ?? ""}`.toLowerCase();
+
+  if (/\b(scaffold|access|temporary roof|temp roof|weather protection|protection system|edge protection|tower)\b/.test(`${identity} ${category}`)) {
+    return "access";
+  }
 
   if (/\b(roof works|main roof|pitched|flat roof|tile|slate|leadwork|gutter|ridge|hip|valley|verge|eaves)\b/.test(identity)) {
     return "roof_works";
-  }
-
-  if (/\b(scaffold|access|temporary roof|temp roof|weather protection|protection system|edge protection|tower)\b/.test(identity)) {
-    return "access";
-  }
-
-  const category = `${item.pricing_category ?? ""}`.toLowerCase();
-  if (/\b(scaffold|access|temporary roof|temp roof|weather protection|protection system|edge protection|tower)\b/.test(category)) {
-    return "access";
   }
 
   return "roof_works";
