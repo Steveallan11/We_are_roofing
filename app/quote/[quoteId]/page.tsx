@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
-import { buildQuoteOptionPriceDetailRows, getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
+import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { QuoteOption, QuoteRecord } from "@/lib/types";
@@ -43,24 +43,22 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
             </div>
           </div>
 
-          <div className="grid gap-5 p-5 md:p-8">
-            <section className="rounded-3xl border border-[var(--gold)]/25 bg-[var(--gold)]/10 p-5 md:p-7">
-              <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">How to read this quote</p>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {[
-                  ["1", "Roof report", "What we found and what it means."],
-                  ["2", "Scope", "The work we are allowing for."],
-                  ["3", "Options", "Choose the option that feels right, then confirm your details."]
-                ].map(([step, title, body]) => (
-                  <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-4" key={step}>
-                    <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--gold)] font-ui text-sm font-bold text-black">{step}</div>
-                    <h2 className="font-ui text-lg font-bold text-white">{title}</h2>
-                    <p className="mt-2 font-ui text-base leading-7 text-[var(--text-muted)]">{body}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
+          <div className="p-5 md:p-8">
+            <PublicQuoteActions options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
+          </div>
+        </div>
 
+        {!options.length ? (
+          <div className="card mt-5 p-5">
+            <p className="font-display text-3xl text-[var(--gold-l)]">{currency(displayTotal)}</p>
+          </div>
+        ) : null}
+
+        <details className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl md:p-7">
+          <summary className="cursor-pointer font-ui text-sm font-bold uppercase tracking-[0.16em] text-[var(--gold)]">
+            View full quote details
+          </summary>
+          <div className="mt-5 grid gap-5">
             <QuoteSection title="Roof Report" intro="What we found and what it means for the roof.">
               <ReadableText value={record.roof_report} />
             </QuoteSection>
@@ -87,81 +85,9 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
               </QuoteSection>
             ) : null}
           </div>
-        </div>
-
-        {options.length ? (
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {options.map((option) => (
-              <div
-                className={`rounded-[1.5rem] border bg-[#101010] p-5 shadow-xl md:p-6 ${
-                  option.recommended ? "border-[var(--gold)]/60 shadow-[0_0_0_1px_rgba(212,175,55,0.12)]" : "border-[var(--border)]"
-                }`}
-                key={option.id}
-              >
-                {option.recommended ? <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">Recommended</p> : null}
-                <h2 className={option.recommended ? "mt-2 font-display text-3xl leading-tight text-white" : "font-display text-3xl leading-tight text-white"}>{option.label}</h2>
-                {hasReadableText(option.description) ? (
-                  <div className="mt-3 text-base leading-7 text-[#d8d8d8]">
-                    <ReadableText value={option.description} compact />
-                  </div>
-                ) : null}
-                <OptionBreakdown option={option} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="card mt-5 p-5">
-            <p className="font-display text-3xl text-[var(--gold-l)]">{currency(displayTotal)}</p>
-          </div>
-        )}
-
-        <PublicQuoteActions options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
+        </details>
       </div>
     </main>
-  );
-}
-
-function OptionBreakdown({ option }: { option: QuoteOption }) {
-  const detailRows = buildQuoteOptionPriceDetailRows(option);
-  const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
-  const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
-  const total = getOptionTotal(option) ?? fallbackSubtotal + fallbackVat;
-
-  return (
-    <div className="mt-5 rounded-2xl border border-[var(--gold)]/35 bg-[#17130a] p-4">
-      <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
-      <div className="mt-4 space-y-4 font-ui text-sm text-[#e8e8e8]">
-        {detailRows.length > 0 ? (
-          <>
-            {detailRows.map((row) => (
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3" key={row.id}>
-                <PriceRow label={row.label} value={row.net} />
-                <PriceRow label={`VAT on ${row.label.toLowerCase()}`} muted value={row.vat} />
-                <PriceRow label={`${row.label} total`} muted value={row.gross} />
-              </div>
-            ))}
-          </>
-        ) : (
-          <>
-            <PriceRow label="Works subtotal" value={fallbackSubtotal} />
-            <PriceRow label="VAT" muted value={fallbackVat} />
-          </>
-        )}
-        <div className="flex items-end justify-between gap-4 border-t border-[var(--gold)]/30 pt-3">
-          <span className="font-ui text-base font-bold text-white">Total including VAT</span>
-          <strong className="shrink-0 font-display text-3xl text-[var(--gold-l)]">{currency(total)}</strong>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PriceRow({ label, muted = false, value }: { label: string; muted?: boolean; value: number }) {
-  return (
-    <div className={`flex justify-between gap-4 ${muted ? "text-[#a8a8a8]" : "text-[#f2f2f2]"}`}>
-      <span className="max-w-[68%]">{label}</span>
-      <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
-    </div>
   );
 }
 
