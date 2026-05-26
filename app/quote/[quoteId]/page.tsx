@@ -4,7 +4,7 @@ import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
 import { getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
-import type { QuoteOption, QuoteRecord } from "@/lib/types";
+import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -92,12 +92,19 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
         {options.length ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {options.map((option) => (
-              <div className={`card p-5 md:p-6 ${option.recommended ? "border-[var(--gold)]/55 bg-[var(--gold)]/5" : ""}`} key={option.id}>
+              <div
+                className={`rounded-[1.5rem] border bg-[#101010] p-5 shadow-xl md:p-6 ${
+                  option.recommended ? "border-[var(--gold)]/60 shadow-[0_0_0_1px_rgba(212,175,55,0.12)]" : "border-[var(--border)]"
+                }`}
+                key={option.id}
+              >
                 {option.recommended ? <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">Recommended</p> : null}
-                <h2 className="mt-2 font-display text-3xl text-white">{option.label}</h2>
-                <div className="mt-3 text-base leading-7 text-[var(--text-second)]">
-                  <ReadableText value={option.description} compact />
-                </div>
+                <h2 className={option.recommended ? "mt-2 font-display text-3xl leading-tight text-white" : "font-display text-3xl leading-tight text-white"}>{option.label}</h2>
+                {hasReadableText(option.description) ? (
+                  <div className="mt-3 text-base leading-7 text-[var(--text-second)]">
+                    <ReadableText value={option.description} compact />
+                  </div>
+                ) : null}
                 <OptionBreakdown option={option} />
               </div>
             ))}
@@ -115,13 +122,70 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 }
 
 function OptionBreakdown({ option }: { option: QuoteOption }) {
+  const summary = buildOptionPriceSummary(option.cost_breakdown ?? []);
+  const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
+  const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
+  const total = getOptionTotal(option) ?? fallbackSubtotal + fallbackVat;
+
   return (
-    <div className="mt-4">
-      <div className="rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
-        <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Option price</p>
-        <p className="mt-2 font-display text-3xl text-[var(--gold-l)]">{currency(getOptionTotal(option) ?? 0)}</p>
+    <div className="mt-5 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
+      <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
+      <div className="mt-4 space-y-3 font-ui text-sm text-[var(--text-second)]">
+        {summary.roofSubtotal > 0 || summary.scaffoldSubtotal > 0 ? (
+          <>
+            <PriceRow label="Roof works" value={summary.roofSubtotal} />
+            <PriceRow label="VAT on roof works" muted value={summary.roofVat} />
+            <PriceRow label="Scaffold/access allowance" value={summary.scaffoldSubtotal} />
+            <PriceRow label="VAT on scaffold/access" muted value={summary.scaffoldVat} />
+          </>
+        ) : (
+          <>
+            <PriceRow label="Works subtotal" value={fallbackSubtotal} />
+            <PriceRow label="VAT" muted value={fallbackVat} />
+          </>
+        )}
+        <div className="flex items-end justify-between gap-4 border-t border-[var(--gold)]/30 pt-3">
+          <span className="font-ui text-base font-bold text-white">Total including VAT</span>
+          <strong className="shrink-0 font-display text-3xl text-[var(--gold-l)]">{currency(total)}</strong>
+        </div>
       </div>
     </div>
+  );
+}
+
+function PriceRow({ label, muted = false, value }: { label: string; muted?: boolean; value: number }) {
+  return (
+    <div className={`flex justify-between gap-4 ${muted ? "text-[var(--text-muted)]" : "text-[var(--text-second)]"}`}>
+      <span>{label}</span>
+      <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
+    </div>
+  );
+}
+
+function buildOptionPriceSummary(lines: CostLineItem[]) {
+  return lines.reduce(
+    (summary, line) => {
+      const cost = Math.max(0, Number(line.cost || 0));
+      if (!cost) return summary;
+
+      const isScaffold = [line.item, line.quote_section, line.pricing_category, line.notes]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes("scaffold");
+      const vat = line.vat_applicable === false ? 0 : Math.round(cost * 0.2 * 100) / 100;
+
+      if (isScaffold) {
+        summary.scaffoldSubtotal += cost;
+        summary.scaffoldVat += vat;
+      } else {
+        summary.roofSubtotal += cost;
+        summary.roofVat += vat;
+      }
+
+      return summary;
+    },
+    { roofSubtotal: 0, roofVat: 0, scaffoldSubtotal: 0, scaffoldVat: 0 }
   );
 }
 
@@ -165,6 +229,10 @@ function ReadableText({ value, compact = false }: { value?: string | null; compa
       })}
     </>
   );
+}
+
+function hasReadableText(value?: string | null) {
+  return toReadableBlocks(value).some((block) => (block.kind === "paragraph" ? block.text.trim().length > 0 : block.items.length > 0));
 }
 
 type ReadableBlock = { kind: "paragraph"; text: string } | { kind: "list"; items: string[] };
