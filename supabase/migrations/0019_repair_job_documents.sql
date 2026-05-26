@@ -30,13 +30,10 @@ create index if not exists quote_attachments_job_document_idx on public.quote_at
 do $$
 begin
   if to_regclass('public.invoices') is not null then
-    alter table public.job_documents
-      add column if not exists invoice_id uuid references public.invoices(id) on delete set null;
+    execute 'alter table public.job_documents add column if not exists invoice_id uuid references public.invoices(id) on delete set null';
 
-    create index if not exists job_documents_invoice_idx on public.job_documents (invoice_id);
-    create unique index if not exists job_documents_job_invoice_type_idx
-      on public.job_documents (job_id, invoice_id, document_type)
-      where invoice_id is not null;
+    execute 'create index if not exists job_documents_invoice_idx on public.job_documents (invoice_id)';
+    execute 'create unique index if not exists job_documents_job_invoice_type_idx on public.job_documents (job_id, invoice_id, document_type) where invoice_id is not null';
   end if;
 end
 $$;
