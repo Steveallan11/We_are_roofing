@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { QuoteOption } from "@/lib/types";
-import { buildQuoteOptionCustomerRows, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
+import { buildQuoteOptionCustomerRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -20,6 +20,9 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
   );
   const [status, setStatus] = useState<string | null>(null);
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
+  const hasName = customerName.trim().length >= 2;
+  const hasValidEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
+  const acceptanceHelper = getAcceptanceHelper({ hasName, hasSelectedOption: !options.length || Boolean(selectedOptionId), hasValidEmail });
 
   if (!token) {
     return (
@@ -33,7 +36,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
     );
   }
   const secureToken = token;
-  const canAccept = customerName.trim().length >= 2 && /^\S+@\S+\.\S+$/.test(customerEmail.trim()) && (!options.length || selectedOptionId);
+  const canAccept = hasName && hasValidEmail && (!options.length || selectedOptionId);
 
   async function accept() {
     if (!canAccept) {
@@ -62,11 +65,11 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
 
   return (
     <div className="mt-6 space-y-5">
-      <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[var(--surface)] p-5 shadow-2xl md:p-7">
-        <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Choose your preferred option</p>
-        <h2 className="mt-2 font-display text-3xl leading-tight text-white md:text-5xl">Pick the quote option that suits you best</h2>
-        <p className="mt-3 font-ui text-base leading-7 text-[#d6d6d6] md:text-lg md:leading-8">
-          Below are your quote options. Option B is our recommended choice for the best weather protection during the works.
+      <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#f8f3e3] p-5 shadow-2xl md:p-7">
+        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">Choose your preferred option</p>
+        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-5xl">Choose the option that suits you best</h2>
+        <p className="mt-3 font-ui text-base leading-7 text-[#4a4a4a] md:text-lg md:leading-8">
+          Below are your two quote options. Option B is our recommended choice if you want the best weather protection during the works.
         </p>
       </section>
 
@@ -75,11 +78,12 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
           options.map((option, index) => {
             const meta = getQuoteOptionPresentation(option, index);
             const isSelected = selectedOptionId === option.id;
-            const total = getOptionTotal(option) ?? 0;
+            const netRows = buildQuoteOptionCustomerRows(option);
+            const netTotal = calculateOptionNet(option);
 
             return (
             <button
-              className={`relative min-h-44 rounded-[1.4rem] border-2 p-5 text-left transition ${
+              className={`relative min-h-56 rounded-[1.4rem] border-2 p-5 text-left transition ${
                 isSelected
                   ? "border-[var(--gold)] bg-[var(--gold)] text-black shadow-[0_0_0_4px_rgba(212,175,55,0.16)]"
                   : "border-[var(--border)] bg-[#101010] text-[#f2f2f2] hover:border-[var(--gold)]/50"
@@ -96,13 +100,15 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
                   <span className="block font-display text-2xl leading-tight">{meta.title}</span>
                   <span className={`block font-ui text-sm leading-6 ${isSelected ? "text-black/70" : "text-[#cfcfcf]"}`}>{meta.shortDescription}</span>
                 </span>
-                <span className="flex items-end justify-between gap-3">
-                  <span>
-                    <span className={`block font-ui text-[0.65rem] font-bold uppercase tracking-[0.14em] ${isSelected ? "text-black/60" : "text-[#9f9f9f]"}`}>
-                      Total inc VAT
-                    </span>
-                    <span className="mt-1 block font-display text-3xl leading-none">{currency(total)}</span>
+                <span className="block space-y-2">
+                  {netRows.map((row) => (
+                    <OptionCardPriceRow isSelected={isSelected} key={row.id} label={row.label} value={row.net} />
+                  ))}
+                  <span className={`block border-t pt-3 ${isSelected ? "border-black/20" : "border-white/10"}`}>
+                    <OptionCardPriceRow isSelected={isSelected} label="Total before VAT" strong value={netTotal} />
                   </span>
+                </span>
+                <span className="flex justify-end">
                   <span className={`rounded-full px-3 py-1.5 font-ui text-xs font-bold ${isSelected ? "bg-black text-[var(--gold)]" : "bg-[var(--gold)]/12 text-[var(--gold)]"}`}>
                     {isSelected ? "Selected" : "Tap to select"}
                   </span>
@@ -125,27 +131,27 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
 
       {selectedOption ? <SelectedOptionDetail option={selectedOption} selectedIndex={options.findIndex((option) => option.id === selectedOption.id)} /> : null}
 
-      <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[var(--surface)] p-5 shadow-2xl md:p-7">
-        <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Ready to accept this quote?</p>
-        <h2 className="mt-2 font-display text-3xl leading-tight text-white md:text-4xl">Ready to go ahead?</h2>
-        <p className="mt-3 font-ui text-base leading-7 text-[#d6d6d6]">
+      <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#f8f3e3] p-5 shadow-2xl md:p-7">
+        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">Ready to accept this quote?</p>
+        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-4xl">Ready to go ahead?</h2>
+        <p className="mt-3 font-ui text-base leading-7 text-[#4a4a4a]">
           Enter your details below and we&apos;ll confirm your selection and next steps.
         </p>
-        <p className="mt-2 font-ui text-sm leading-6 text-[var(--text-muted)]">
+        <p className="mt-2 font-ui text-sm leading-6 text-[#6a6a6a]">
           We&apos;ll use these details to confirm your selection and contact you about the next stage.
         </p>
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           <input className="field min-h-12" onChange={(event) => setCustomerName(event.target.value)} placeholder="Full name" autoComplete="name" value={customerName} />
           <input className="field min-h-12" onChange={(event) => setCustomerEmail(event.target.value)} placeholder="Email address" type="email" inputMode="email" autoComplete="email" value={customerEmail} />
         </div>
-        {!canAccept ? <p className="mt-4 font-ui text-sm text-[var(--gold)]">Please select an option and enter your name and email.</p> : null}
+        <p className={`mt-4 font-ui text-sm font-semibold ${canAccept ? "text-[#166534]" : "text-[#8a4b00]"}`}>{acceptanceHelper}</p>
         <button
-          className="button-primary mt-4 !min-h-14 w-full !text-base disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 min-h-14 w-full rounded-xl bg-[var(--gold)] px-5 py-3 font-ui text-base font-extrabold text-black shadow-[0_10px_28px_rgba(212,175,55,0.28)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#d6caa0] disabled:text-[#6a6248] disabled:shadow-none"
           disabled={!canAccept}
           onClick={accept}
           type="button"
         >
-          Accept Selected Quote
+          Accept This Quote
         </button>
       </section>
 
@@ -160,6 +166,15 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
 
       {status ? <p className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 font-ui text-sm text-[var(--gold-l)]">{status}</p> : null}
     </div>
+  );
+}
+
+function OptionCardPriceRow({ isSelected, label, strong = false, value }: { isSelected: boolean; label: string; strong?: boolean; value: number }) {
+  return (
+    <span className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 font-ui text-sm ${strong ? "font-extrabold" : "font-semibold"}`}>
+      <span className={`min-w-0 leading-5 ${isSelected ? "text-black/80" : "text-[#e5e5e5]"}`}>{label}</span>
+      <span className={`shrink-0 text-right ${isSelected ? "text-black" : "text-white"}`}>{currency(value)}</span>
+    </span>
   );
 }
 
@@ -216,4 +231,12 @@ function PriceRow({ label, muted = false, value }: { label: string; muted?: bool
       <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
     </div>
   );
+}
+
+function getAcceptanceHelper({ hasName, hasSelectedOption, hasValidEmail }: { hasName: boolean; hasSelectedOption: boolean; hasValidEmail: boolean }) {
+  if (!hasSelectedOption) return "Please select an option.";
+  if (!hasName && !hasValidEmail) return "Enter your name and email to accept this quote.";
+  if (!hasName) return "Please enter your full name.";
+  if (!hasValidEmail) return "Please enter a valid email address.";
+  return "You’re ready to accept this quote.";
 }
