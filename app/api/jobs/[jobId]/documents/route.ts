@@ -34,6 +34,22 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const supabase = createSupabaseAdminClient();
+  const tableCheck = await supabase.from("job_documents").select("id").limit(1);
+  if (tableCheck.error) {
+    if (isMissingJobDocumentsTable(tableCheck.error.message)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "DOCUMENTS_TABLE_MISSING",
+          message: "The job_documents table is missing in Supabase. Run migration 0019_repair_job_documents.sql, then retry the upload."
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: false, error: tableCheck.error.message }, { status: 500 });
+  }
+
   const bucket = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   if (!bucket.ok) {
     return NextResponse.json({ ok: false, error: bucket.error }, { status: 500 });
@@ -77,4 +93,8 @@ export async function POST(request: Request, { params }: Props) {
   await supabase.from("jobs").update({ updated_at: new Date().toISOString() }).eq("id", jobId);
 
   return NextResponse.json({ ok: true, message: "Document saved to job file.", document });
+}
+
+function isMissingJobDocumentsTable(message: string) {
+  return /job_documents|schema cache|could not find the table|relation .* does not exist/i.test(message);
 }
