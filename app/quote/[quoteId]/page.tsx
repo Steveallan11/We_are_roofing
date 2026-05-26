@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
-import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
+import { getOptionTotal, getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
-import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
+import type { QuoteOption, QuoteRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -25,7 +25,6 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
   const options = (record.options ?? []) as QuoteOption[];
   const displayTotal = getQuotePipelineValue(record) ?? 0;
-  const visibleLineItems = record.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0);
 
   return (
     <main className="min-h-screen bg-[var(--obsidian)] px-4 py-6 md:py-10">
@@ -37,13 +36,9 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
               <div>
                 <h1 className="font-display text-4xl leading-tight text-white md:text-6xl">Your Roofing Quote</h1>
                 <p className="mt-4 max-w-2xl font-ui text-lg leading-8 text-[var(--text-second)]">
-                  A clear breakdown of what we found, what we recommend doing, and what is included in the price.
+                  A clear explanation of what we found, what we recommend doing, and the next step if you would like to proceed.
                 </p>
                 <p className="mt-3 font-ui text-base font-semibold text-[var(--text-muted)]">Quote reference {record.quote_ref}</p>
-              </div>
-              <div className="rounded-3xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-5 md:min-w-60">
-                <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">{isQuoteFromOptionValue(record) ? "From" : "Total"}</p>
-                <p className="mt-2 font-display text-5xl text-[var(--gold-l)]">{currency(displayTotal)}</p>
               </div>
             </div>
           </div>
@@ -55,7 +50,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
                 {[
                   ["1", "Roof report", "What we found and what it means."],
                   ["2", "Scope", "The work we are allowing for."],
-                  ["3", "Price", "The priced sections, totals, and next step."]
+                  ["3", "Options", "Choose the option that feels right, then confirm your details."]
                 ].map(([step, title, body]) => (
                   <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-4" key={step}>
                     <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--gold)] font-ui text-sm font-bold text-black">{step}</div>
@@ -73,8 +68,6 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
             <QuoteSection title="Scope of Works" intro="The work included in this quotation.">
               <ReadableText value={record.scope_of_works} />
             </QuoteSection>
-
-            <CostBreakdown lines={visibleLineItems} quote={record} />
 
             {record.guarantee_text ? (
               <QuoteSection title="Guarantee">
@@ -122,41 +115,11 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 }
 
 function OptionBreakdown({ option }: { option: QuoteOption }) {
-  const lines = (option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) > 0);
-
   return (
-    <div className="mt-5">
-      {lines.length ? (
-        <div className="space-y-2">
-          {lines.map((line, index) => (
-            <div className="rounded-xl border border-[var(--border)] bg-black/15 p-3" key={`${option.id}-${line.item}-${index}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-ui text-sm font-bold leading-6 text-white">{line.quote_section || line.item}</p>
-                  {line.quote_section ? <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{line.item}</p> : null}
-                  {line.measurement_label ? <p className="mt-1 text-xs font-semibold text-[var(--gold-l)]">{line.measurement_label}</p> : null}
-                </div>
-                <p className="shrink-0 font-ui text-sm font-bold text-[var(--gold-l)]">{currency(line.cost)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className="mt-4 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
-        <div className="space-y-2 font-ui text-sm text-[var(--text-second)]">
-          <div className="flex justify-between gap-4">
-            <span>Subtotal</span>
-            <strong>{currency(option.subtotal)}</strong>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span>VAT</span>
-            <strong>{currency(option.vat_amount)}</strong>
-          </div>
-          <div className="flex justify-between gap-4 border-t border-[var(--gold)]/25 pt-2 text-lg text-[var(--gold-l)]">
-            <span>Total</span>
-            <strong>{currency(getOptionTotal(option) ?? 0)}</strong>
-          </div>
-        </div>
+    <div className="mt-4">
+      <div className="rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
+        <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Option price</p>
+        <p className="mt-2 font-display text-3xl text-[var(--gold-l)]">{currency(getOptionTotal(option) ?? 0)}</p>
       </div>
     </div>
   );
@@ -168,54 +131,6 @@ function QuoteSection({ children, intro, title }: { children: ReactNode; intro?:
       <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">{title}</p>
       {intro ? <p className="mt-2 font-ui text-base leading-7 text-[var(--text-muted)]">{intro}</p> : null}
       <div className="mt-5 space-y-5 text-lg leading-9 text-[var(--text-second)] md:text-xl md:leading-10">{children}</div>
-    </section>
-  );
-}
-
-function CostBreakdown({ lines, quote }: { lines: CostLineItem[]; quote: QuoteRecord }) {
-  if (!lines.length) return null;
-
-  return (
-    <section className="rounded-3xl border border-[var(--border)] bg-black/20 p-5 md:p-7">
-      <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Price Breakdown</p>
-      <p className="mt-2 font-ui text-base leading-7 text-[var(--text-muted)]">
-        The priced parts of this quotation, grouped in plain language so each area is easy to check.
-      </p>
-      <div className="mt-5 grid gap-3">
-        {lines.map((line, index) => (
-          <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-4 md:p-5" key={`${line.item}-${index}`}>
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="min-w-0">
-                <h3 className="font-ui text-xl font-bold leading-8 text-white">{line.quote_section || line.item}</h3>
-                {line.quote_section ? <p className="mt-1 font-ui text-base leading-7 text-[var(--text-muted)]">{line.item}</p> : null}
-                {line.measurement_label ? (
-                  <p className="mt-3 inline-flex rounded-full border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-1 font-ui text-sm font-semibold text-[var(--gold-l)]">
-                    {line.measurement_label}
-                  </p>
-                ) : null}
-                {line.notes ? <p className="mt-3 font-ui text-base leading-7 text-[var(--text-muted)]">{line.notes}</p> : null}
-              </div>
-              <p className="shrink-0 font-display text-4xl text-[var(--gold-l)]">{currency(line.cost)}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-5 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-5">
-        <div className="space-y-3 font-ui text-base text-[var(--text-second)]">
-          <div className="flex justify-between gap-4">
-            <span>Subtotal</span>
-            <strong>{currency(quote.subtotal)}</strong>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span>VAT</span>
-            <strong>{currency(quote.vat_amount)}</strong>
-          </div>
-          <div className="flex justify-between gap-4 border-t border-[var(--gold)]/25 pt-3 text-xl text-[var(--gold-l)]">
-            <span>Total</span>
-            <strong>{currency(quote.total)}</strong>
-          </div>
-        </div>
-      </div>
     </section>
   );
 }

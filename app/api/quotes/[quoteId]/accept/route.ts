@@ -11,7 +11,7 @@ type Props = {
 export async function POST(request: Request, { params }: Props) {
   const { quoteId } = await params;
   const token = new URL(request.url).searchParams.get("token");
-  const body = (await request.json().catch(() => ({}))) as { option_id?: string | null };
+  const body = (await request.json().catch(() => ({}))) as { option_id?: string | null; customer_name?: string | null; customer_email?: string | null };
 
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true });
@@ -27,6 +27,12 @@ export async function POST(request: Request, { params }: Props) {
   const access = validatePublicQuoteAccess(quoteRecord, token);
   if (!access.ok) {
     return NextResponse.json({ ok: false, error: "Quote link is invalid or has expired." }, { status: 403 });
+  }
+
+  const customerName = body.customer_name?.trim() ?? "";
+  const customerEmail = body.customer_email?.trim() ?? "";
+  if (customerName.length < 2 || !/^\S+@\S+\.\S+$/.test(customerEmail)) {
+    return NextResponse.json({ ok: false, error: "Please confirm your name and email before accepting." }, { status: 400 });
   }
 
   const acceptedOption = ((quoteRecord.options ?? []) as QuoteOption[]).find((option) => option.id === body.option_id) ?? null;
