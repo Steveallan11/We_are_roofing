@@ -39,6 +39,9 @@ export type CostLineItem = {
 export type QuoteOption = {
   id: string;
   label: string;
+  option_type?: "standard_scaffold" | "temporary_roof_protection" | string;
+  title?: string;
+  short_description?: string;
   description: string;
   cost_breakdown: CostLineItem[];
   subtotal: number;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { QuoteOption } from "@/lib/types";
-import { buildQuoteOptionPriceSummary, getOptionTotal } from "@/lib/quotes/value";
+import { buildQuoteOptionCustomerRows, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -73,7 +73,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
       <section className="grid gap-3 md:grid-cols-2" aria-label="Quote options">
         {options.length ? (
           options.map((option, index) => {
-            const meta = getOptionDisplay(option, index);
+            const meta = getQuoteOptionPresentation(option, index);
             const isSelected = selectedOptionId === option.id;
             const total = getOptionTotal(option) ?? 0;
 
@@ -164,7 +164,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
 }
 
 function SelectedOptionDetail({ option, selectedIndex }: { option: QuoteOption; selectedIndex: number }) {
-  const meta = getOptionDisplay(option, selectedIndex);
+  const meta = getQuoteOptionPresentation(option, selectedIndex);
 
   return (
     <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#101010] p-5 shadow-2xl md:p-7">
@@ -179,17 +179,21 @@ function SelectedOptionDetail({ option, selectedIndex }: { option: QuoteOption; 
 }
 
 function SimplePriceSummary({ option }: { option: QuoteOption }) {
-  const summaryRows = buildQuoteOptionPriceSummary(option);
+  const priceRows = buildQuoteOptionCustomerRows(option);
   const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
   const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
+  const vat = calculateOptionVat(option) || fallbackVat;
   const total = getOptionTotal(option) ?? fallbackSubtotal + fallbackVat;
 
   return (
     <div className="mt-5 rounded-2xl border border-[var(--gold)]/30 bg-[#17130a] p-4 md:p-5">
       <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
       <div className="mt-4 space-y-3 font-ui text-sm text-[#f2f2f2] md:text-base">
-        {summaryRows.length > 0 ? (
-          summaryRows.map((row) => <PricePairRows key={row.id} label={getCustomerLineLabel(row.label, row.id)} net={row.net} vat={row.vat} />)
+        {priceRows.length > 0 ? (
+          <>
+            {priceRows.map((row) => <PriceRow key={row.id} label={row.label} value={row.net} />)}
+            <PriceRow label="VAT" muted value={vat} />
+          </>
         ) : (
           <>
             <PriceRow label="Works subtotal" value={fallbackSubtotal} />
@@ -205,15 +209,6 @@ function SimplePriceSummary({ option }: { option: QuoteOption }) {
   );
 }
 
-function PricePairRows({ label, net, vat }: { label: string; net: number; vat: number }) {
-  return (
-    <>
-      <PriceRow label={label} value={net} />
-      <PriceRow label={getVatLabel(label)} muted value={vat} />
-    </>
-  );
-}
-
 function PriceRow({ label, muted = false, value }: { label: string; muted?: boolean; value: number }) {
   return (
     <div className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-4 ${muted ? "text-[#a9a9a9]" : "text-[#f4f4f4]"}`}>
@@ -221,44 +216,4 @@ function PriceRow({ label, muted = false, value }: { label: string; muted?: bool
       <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
     </div>
   );
-}
-
-function getOptionDisplay(option: QuoteOption, index: number) {
-  const optionName = `Option ${String.fromCharCode(65 + Math.max(index, 0))}`;
-  const identity = `${option.label} ${option.description ?? ""}`.toLowerCase();
-  const isTemporaryRoof = /temporary roof|weather protection|temp roof/.test(identity);
-
-  if (isTemporaryRoof || option.recommended) {
-    return {
-      optionName,
-      title: "Temporary Roof Weather Protection",
-      shortDescription: "Best protection during the works",
-      longDescription:
-        "A full roof refurbishment with a temporary roof covering in place during the works. This gives the best weather protection and helps reduce delays."
-    };
-  }
-
-  return {
-    optionName,
-    title: "Standard Scaffold",
-    shortDescription: "Best for lower upfront cost",
-    longDescription:
-      "A full roof refurbishment with standard scaffold access. This is the lower-cost option, but it does not include a temporary roof covering during the works."
-  };
-}
-
-function getCustomerLineLabel(label: string, category: "roof_works" | "access") {
-  const normalised = label.toLowerCase();
-  if (category === "roof_works") return "Full roof works";
-  if (normalised.includes("temporary roof") || normalised.includes("weather protection")) return "Temporary roof protection";
-  if (normalised.includes("scaffold")) return "Standard scaffold";
-  return label.length > 34 ? `${label.slice(0, 31).trim()}...` : label;
-}
-
-function getVatLabel(label: string) {
-  const normalised = label.toLowerCase();
-  if (normalised.includes("temporary roof")) return "VAT on temp roof protection";
-  if (normalised.includes("scaffold")) return "VAT on scaffold";
-  if (normalised.includes("roof")) return "VAT on roof works";
-  return `VAT on ${label.toLowerCase()}`;
 }

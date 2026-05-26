@@ -4,6 +4,7 @@ import { getJobBundle } from "@/lib/data";
 import { requireAdminApi } from "@/lib/auth";
 import { getLatestRoofSurvey } from "@/lib/roof-surveys";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { calculateOptionNet, calculateOptionVat, normaliseQuoteCostLine } from "@/lib/quotes/value";
 import { canPersistToSupabase } from "@/lib/workflows";
 import type { CostLineItem } from "@/lib/types";
 
@@ -81,14 +82,15 @@ export async function POST(request: Request, { params }: Props) {
 
   const wording = process.env.OPENAI_API_KEY ? await polishWithOpenAI({ bundle, draft, roofSurvey }) : buildFallbackWording(draft);
   const canUpdateCostBreakdown = draft.mode === "build_from_context" && Boolean(wording.cost_breakdown?.length);
-  const nextTotals = canUpdateCostBreakdown ? calculateTotals(wording.cost_breakdown ?? []) : null;
+  const nextCostBreakdown = canUpdateCostBreakdown ? (wording.cost_breakdown ?? []).map(normaliseQuoteCostLine) : draft.cost_breakdown.map(normaliseQuoteCostLine);
+  const nextTotals = canUpdateCostBreakdown ? calculateTotals(nextCostBreakdown) : null;
 
   const { data: updatedQuote, error: updateError } = await supabase
     .from("quotes")
     .update({
       roof_report: wording.roof_report,
       scope_of_works: wording.scope_of_works,
-      cost_breakdown: canUpdateCostBreakdown ? wording.cost_breakdown : draft.cost_breakdown,
+      cost_breakdown: nextCostBreakdown,
       subtotal: nextTotals ? nextTotals.subtotal : quote.subtotal,
       vat_amount: nextTotals ? nextTotals.vat_amount : quote.vat_amount,
       total: nextTotals ? nextTotals.total : quote.total,
@@ -277,7 +279,7 @@ function buildFallbackWording(draft: Partial<PolishedQuoteWording>): PolishedQuo
 }
 
 function calculateTotals(lines: CostLineItem[]) {
-  const subtotal = Math.round(lines.reduce((sum, line) => sum + Number(line.cost || 0), 0) * 100) / 100;
-  const vat_amount = Math.round(lines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0) * 100) / 100;
+  const subtotal = calculateOptionNet({ cost_breakdown: lines });
+  const vat_amount = calculateOptionVat({ cost_breakdown: lines });
   return { subtotal, vat_amount, total: subtotal + vat_amount };
 }

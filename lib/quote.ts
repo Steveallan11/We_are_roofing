@@ -8,6 +8,7 @@ import type {
   PricingRuleRecord
 } from "@/lib/types";
 import { getComparableHistoricalQuotes } from "@/lib/quote-engine";
+import { calculateOptionNet, calculateOptionVat, normaliseQuoteCostLine } from "@/lib/quotes/value";
 
 const PROMPT_VERSION = "weareroofing-v1";
 const STYLE_CATEGORIES = new Set(["Roof Report Style", "Scope Of Works", "Quote Template", "Email Style", "Historical Quote"]);
@@ -283,16 +284,13 @@ function normalizeQuote(
   quote: GeneratedQuote,
   bundle: JobBundle
 ): GeneratedQuote & { model_name: string; prompt_version: string } {
-  const subtotal = Math.round(quote.cost_breakdown.reduce((sum, item) => sum + item.cost, 0) * 100) / 100;
-  const vatAmount =
-    Math.round(
-      quote.cost_breakdown
-        .filter((item) => item.vat_applicable)
-        .reduce((sum, item) => sum + item.cost * (bundle.business.vat_rate / 100), 0) * 100
-    ) / 100;
+  const costBreakdown = quote.cost_breakdown.map(normaliseQuoteCostLine);
+  const subtotal = calculateOptionNet({ cost_breakdown: costBreakdown });
+  const vatAmount = calculateOptionVat({ cost_breakdown: costBreakdown }, bundle.business.vat_rate / 100);
 
   return {
     ...quote,
+    cost_breakdown: costBreakdown,
     subtotal,
     vat_amount: vatAmount,
     total: subtotal + vatAmount,

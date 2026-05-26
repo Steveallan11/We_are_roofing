@@ -6,7 +6,15 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
-import { buildQuoteOptionPriceSummary, getQuoteLineItemCategory } from "@/lib/quotes/value";
+import {
+  buildDefaultQuoteOptionsFromLines,
+  buildQuoteOptionPriceSummary,
+  calculateOptionNet,
+  calculateOptionVat,
+  getQuoteLineItemCategory,
+  normaliseQuoteCostLine,
+  normaliseQuoteOption
+} from "@/lib/quotes/value";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
 import { currency } from "@/lib/utils";
 import { TakeoffQuotePreview } from "@/components/jobs/takeoff-quote-preview";
@@ -96,31 +104,22 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
   }
 
   function calculateOption(lines: CostLineItem[]) {
-    const subtotal = Math.round(lines.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
-    const vatAmount =
-      Math.round(lines.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
+    const subtotal = calculateOptionNet({ cost_breakdown: lines });
+    const vatAmount = calculateOptionVat({ cost_breakdown: lines });
     return { subtotal, vat_amount: vatAmount, total: subtotal + vatAmount };
   }
 
-  function makeOption(id: string, label: string, recommended: boolean, lines = costBreakdown): QuoteOption {
-    const pricedLines = lines.map((line) => ({ ...line, cost: Number(line.cost || 0) }));
-    return {
-      id,
-      label,
-      description: recommended ? "Recommended specification based on the current survey and quote draft." : "Alternative specification for comparison.",
-      cost_breakdown: pricedLines,
-      recommended,
-      ...calculateOption(pricedLines)
-    };
+  function makeOption(index: number, lines = costBreakdown): QuoteOption {
+    return buildDefaultQuoteOptionsFromLines(lines)[index] ?? buildDefaultQuoteOptionsFromLines(lines)[0];
   }
 
   function addOption() {
     setOptions((current) => {
       if (current.length === 0) {
-        return [makeOption("option_a", "Option A - Standard", true), makeOption("option_b", "Option B - Alternative", false)];
+        return buildDefaultQuoteOptionsFromLines(costBreakdown);
       }
       const nextLetter = String.fromCharCode(65 + current.length);
-      return [...current, makeOption(`option_${nextLetter.toLowerCase()}`, `Option ${nextLetter} - Alternative`, false)];
+      return [...current, { ...makeOption(0), id: `option-${nextLetter.toLowerCase()}`, label: `Option ${nextLetter}`, recommended: false }];
     });
   }
 
@@ -898,16 +897,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
 }
 
 function normaliseOption(option: QuoteOption): QuoteOption {
-  const cost_breakdown = option.cost_breakdown.map((line) => normaliseCostLine({ ...line, cost: Number(line.cost || 0) }));
-  const subtotal = Math.round(cost_breakdown.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
-  const vat_amount = Math.round(cost_breakdown.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
-  return {
-    ...option,
-    cost_breakdown,
-    subtotal,
-    vat_amount,
-    total: subtotal + vat_amount
-  };
+  return normaliseQuoteOption(option);
 }
 
 function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = {}) {
@@ -916,10 +906,9 @@ function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = 
   const shouldRecalculate = ("quantity" in updates || "unit_rate" in updates) && quantity != null && unitRate != null;
 
   return {
-    ...line,
+    ...normaliseQuoteCostLine(line),
     quantity,
     unit_rate: unitRate,
-    pricing_category: line.pricing_category || getQuoteLineItemCategory(line),
     cost: shouldRecalculate ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0)
   };
 }

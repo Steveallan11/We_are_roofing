@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getQuoteLineItemCategory, getQuotePipelineValue } from "@/lib/quotes/value";
+import { calculateOptionNet, calculateOptionVat, getQuotePipelineValue, normaliseQuoteCostLine, normaliseQuoteOption } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
@@ -109,21 +109,7 @@ export async function PATCH(request: Request, { params }: Props) {
 }
 
 function normaliseQuoteOptions(options: QuoteOption[]) {
-  return options.map((option, index) => {
-    const costBreakdown = (option.cost_breakdown ?? []).map(normaliseCostLine);
-    const totals = calculateTotals(costBreakdown);
-    return {
-      ...option,
-      id: option.id || `option_${index + 1}`,
-      label: option.label || `Option ${index + 1}`,
-      description: option.description || "",
-      recommended: Boolean(option.recommended),
-      cost_breakdown: costBreakdown,
-      subtotal: totals.subtotal,
-      vat_amount: totals.vat_amount,
-      total: totals.total
-    };
-  });
+  return options.map((option, index) => normaliseQuoteOption(option, index));
 }
 
 function normaliseCostLine(line: CostLineItem): CostLineItem {
@@ -132,19 +118,18 @@ function normaliseCostLine(line: CostLineItem): CostLineItem {
   const cost = quantity != null && unitRate != null ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0);
 
   return {
-    ...line,
+    ...normaliseQuoteCostLine(line),
     item: line.item || "Quote item",
     cost,
     vat_applicable: line.vat_applicable !== false,
     notes: line.notes || "",
-    pricing_category: line.pricing_category || getQuoteLineItemCategory(line),
     quantity,
     unit_rate: unitRate
   };
 }
 
 function calculateTotals(lines: CostLineItem[]) {
-  const subtotal = Math.round(lines.reduce((sum, line) => sum + Number(line.cost || 0), 0) * 100) / 100;
-  const vat_amount = Math.round(lines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0) * 100) / 100;
+  const subtotal = calculateOptionNet({ cost_breakdown: lines });
+  const vat_amount = calculateOptionVat({ cost_breakdown: lines });
   return { subtotal, vat_amount, total: subtotal + vat_amount };
 }
