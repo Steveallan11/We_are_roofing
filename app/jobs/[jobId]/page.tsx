@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
@@ -61,7 +62,7 @@ export default async function JobDetailPage({ params }: Props) {
       subtitle="This is the full job file: customer, survey, photos, quote progress, documents, and the next action needed to move the work forward."
       actions={
         <>
-          <QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
+          <QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} documents={bundle.documents} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
           <Link className="button-ghost hidden lg:inline-flex" href="/dashboard">
             Back
           </Link>
@@ -317,9 +318,12 @@ export default async function JobDetailPage({ params }: Props) {
             </Link>
           </div>
 
-          <div className="card p-5">
-            <p className="section-kicker text-[0.65rem] uppercase">Documents</p>
-            <div className="mt-4 grid gap-2">
+            <div className="card p-5">
+              <p className="section-kicker text-[0.65rem] uppercase">Documents</p>
+              <div className="mt-4">
+                <DocumentUploadButton jobId={bundle.job.id} />
+              </div>
+              <div className="mt-4 grid gap-2">
               {bundle.quote ? (
                 <Link className="button-primary !justify-start !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote/preview`}>
                   Preview Quote

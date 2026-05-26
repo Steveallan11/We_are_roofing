@@ -7,13 +7,18 @@ type SendEmailParams = {
   subject: string;
   html: string;
   text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    contentType?: string;
+  }>;
   jobId?: string | null;
   quoteId?: string | null;
   templateType: string;
   sequenceDay?: number | null;
 };
 
-export async function sendEmail({ to, subject, html, text, jobId, quoteId, templateType, sequenceDay }: SendEmailParams) {
+export async function sendEmail({ to, subject, html, text, attachments, jobId, quoteId, templateType, sequenceDay }: SendEmailParams) {
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
   const fromName = process.env.RESEND_FROM_NAME || "Andy @ We Are Roofing";
   let resendId: string | null = null;
@@ -26,7 +31,8 @@ export async function sendEmail({ to, subject, html, text, jobId, quoteId, templ
       to: [to],
       subject,
       html,
-      text
+      text,
+      attachments
     });
     resendId = result.data?.id ?? null;
     status = "Sent";

@@ -4,7 +4,7 @@ import { BrandLogo } from "@/components/ui/brand-logo";
 import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { QuoteRecord } from "@/lib/types";
+import type { JobDocumentRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
   jobId: string;
@@ -12,9 +12,10 @@ type Props = {
   jobTitle: string;
   customerName: string;
   customerEmail: string | null | undefined;
+  documents?: JobDocumentRecord[];
 };
 
-export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEmail }: Props) {
+export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEmail, documents = [] }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -206,6 +207,7 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
         <SendQuoteModal
           customerEmail={customerEmail}
           customerName={customerName}
+          documents={documents}
           jobTitle={jobTitle}
           onClose={() => setShowSendModal(false)}
           onSent={(message) => {

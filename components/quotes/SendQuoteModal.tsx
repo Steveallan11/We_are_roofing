@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { currency } from "@/lib/utils";
+import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
   quoteId: string;
@@ -10,15 +11,18 @@ type Props = {
   total: number;
   customerName: string;
   customerEmail: string | null | undefined;
+  documents?: JobDocumentRecord[];
   onClose: () => void;
   onSent: (message: string) => void;
 };
 
-export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerName, customerEmail, onClose, onSent }: Props) {
+export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerName, customerEmail, documents = [], onClose, onSent }: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const attachableDocuments = documents.filter(isAttachableDocument);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -43,7 +47,7 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
     const response = await fetch(`/api/quotes/${quoteId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: nextEmail })
+      body: JSON.stringify({ to_email: nextEmail, attachment_document_ids: selectedDocumentIds })
     });
 
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
@@ -130,6 +134,57 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
           </p>
         </div>
 
+        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-black/20 p-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="label">Attach job documents</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">Optional. These will be sent as email attachments alongside the secure quote link.</p>
+            </div>
+            {attachableDocuments.length > 0 ? (
+              <button
+                className="button-ghost !px-3 !py-2 text-sm"
+                onClick={() =>
+                  setSelectedDocumentIds((current) =>
+                    current.length === attachableDocuments.length ? [] : attachableDocuments.map((document) => document.id)
+                  )
+                }
+                type="button"
+              >
+                {selectedDocumentIds.length === attachableDocuments.length ? "Clear all" : "Select all"}
+              </button>
+            ) : null}
+          </div>
+          {attachableDocuments.length > 0 ? (
+            <div className="mt-4 grid gap-2">
+              {attachableDocuments.map((document) => {
+                const selected = selectedDocumentIds.includes(document.id);
+                return (
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border)] bg-black/20 p-3" key={document.id}>
+                    <input
+                      checked={selected}
+                      className="mt-1"
+                      onChange={(event) =>
+                        setSelectedDocumentIds((current) =>
+                          event.target.checked ? [...current, document.id] : current.filter((id) => id !== document.id)
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-white">{document.display_name}</span>
+                      <span className="mt-1 block text-xs text-[var(--muted)]">
+                        {getDocumentTypeLabel(document)}{document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-[var(--muted)]">No attachable uploaded documents on this job yet. Add PDFs, reports, or supplier files from the job file Documents card.</p>
+          )}
+        </div>
+
         {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
         {success ? <p className="mt-4 text-sm text-[#7ce3a6]">{success}</p> : null}
 
@@ -144,4 +199,23 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, customerNam
       </div>
     </div>
   );
+}
+
+function isAttachableDocument(document: JobDocumentRecord) {
+  if (!document.storage_bucket || !document.storage_path) return false;
+  if (document.mime_type?.includes("text/html")) return false;
+  return !["quote_html", "invoice_html"].includes(document.document_type);
+}
+
+function getDocumentTypeLabel(document: JobDocumentRecord) {
+  if (document.source_type === "uploaded") return "Uploaded document";
+  if (document.document_type === "quote_pdf") return "Quote PDF";
+  if (document.document_type === "invoice_pdf") return "Invoice PDF";
+  if (document.document_type === "survey_snapshot") return "Survey snapshot";
+  return document.document_type.replace(/_/g, " ");
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }

@@ -7,6 +7,7 @@ import { sendSMS, SMS_TEMPLATES } from "@/lib/sms/sendSMS";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 import { createQuotePublicToken } from "@/lib/public-quote";
+import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
   params: Promise<{ quoteId: string }>;
@@ -18,6 +19,7 @@ export async function POST(request: Request, { params }: Props) {
     to_email?: string;
     subject?: string;
     body?: string;
+    attachment_document_ids?: string[];
   };
 
   if (!canPersistToSupabase()) {
@@ -54,6 +56,13 @@ export async function POST(request: Request, { params }: Props) {
   const messageBody = body.body?.trim() || quote.customer_email_body || "Please find our quotation below.";
 
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);
+  const extraAttachmentsResult = await buildDocumentAttachments(supabase, quote.job_id, body.attachment_document_ids ?? []).catch((attachmentError) => ({
+    error: attachmentError instanceof Error ? attachmentError.message : "Could not prepare selected attachments."
+  }));
+  if ("error" in extraAttachmentsResult) {
+    return NextResponse.json({ ok: false, error: extraAttachmentsResult.error }, { status: 400 });
+  }
+  const extraAttachments = extraAttachmentsResult;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
   const publicToken = quote.public_token || createQuotePublicToken();
@@ -80,7 +89,8 @@ export async function POST(request: Request, { params }: Props) {
     to: toEmail,
     subject,
     html: quoteSentEmail({ customerName: bundle.customer.full_name, quote, quoteUrl }),
-    text: `${messageBody}\n\nView your quote: ${quoteUrl}`,
+    text: `${messageBody}\n\nView your quote: ${quoteUrl}${extraAttachments.length ? `\n\nAttached documents: ${extraAttachments.map((item) => item.filename).join(", ")}` : ""}`,
+    attachments: extraAttachments,
     jobId: quote.job_id,
     quoteId,
     templateType: "quote_sent"
@@ -140,6 +150,25 @@ export async function POST(request: Request, { params }: Props) {
     });
   }
 
+  if (body.attachment_document_ids?.length) {
+    const existingRows = await supabase
+      .from("quote_attachments")
+      .select("job_document_id")
+      .eq("quote_id", quoteId)
+      .in("job_document_id", body.attachment_document_ids);
+    const existingIds = new Set(((existingRows.data as Array<{ job_document_id?: string | null }> | null) ?? []).map((row) => row.job_document_id).filter(Boolean));
+    const rows = body.attachment_document_ids
+      .filter((documentId) => !existingIds.has(documentId))
+      .map((documentId) => ({
+        quote_id: quoteId,
+        job_document_id: documentId,
+        attachment_type: "customer_email_attachment"
+      }));
+    if (rows.length > 0) {
+      await supabase.from("quote_attachments").insert(rows);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     quoteId,
@@ -151,4 +180,49 @@ export async function POST(request: Request, { params }: Props) {
     next_job_status: "Quote Sent",
     next_quote_status: "Sent"
   });
+}
+
+async function buildDocumentAttachments(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  jobId: string,
+  documentIds: string[]
+) {
+  const uniqueIds = [...new Set(documentIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("job_documents")
+    .select("*")
+    .eq("job_id", jobId)
+    .in("id", uniqueIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const documents = ((data as JobDocumentRecord[] | null) ?? []).filter((document) => document.storage_bucket && document.storage_path && !document.mime_type?.includes("text/html"));
+  const attachments: Array<{ filename: string; content: string; contentType?: string }> = [];
+  let totalBytes = 0;
+
+  for (const document of documents) {
+    const fileSize = Number(document.file_size ?? 0);
+    totalBytes += fileSize;
+    if (fileSize > 15 * 1024 * 1024 || totalBytes > 25 * 1024 * 1024) {
+      throw new Error("One or more selected documents are too large to email. Please send fewer or smaller attachments.");
+    }
+
+    const download = await supabase.storage.from(document.storage_bucket as string).download(document.storage_path as string);
+    if (download.error || !download.data) {
+      throw new Error(download.error?.message ?? `Could not attach ${document.display_name}.`);
+    }
+
+    const buffer = Buffer.from(await download.data.arrayBuffer());
+    attachments.push({
+      filename: document.display_name || document.storage_path?.split("/").at(-1) || "document",
+      content: buffer.toString("base64"),
+      contentType: document.mime_type ?? "application/octet-stream"
+    });
+  }
+
+  return attachments;
 }

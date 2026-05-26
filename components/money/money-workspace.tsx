@@ -185,6 +185,7 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
         <SendQuoteModal
           customerEmail={quoteToSend.job.customer?.email}
           customerName={quoteToSend.job.customer?.full_name ?? "Customer"}
+          documents={quoteToSend.job.documents ?? []}
           jobTitle={quoteToSend.job.job_title}
           onClose={() => setQuoteToSend(null)}
           onSent={(nextMessage) => {
