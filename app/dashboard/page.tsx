@@ -8,6 +8,7 @@ import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { getBusiness, getCustomers, getJobs, getPricingRules } from "@/lib/data";
 import { PIPELINE_GROUPS } from "@/lib/jobs/pipelineGroups";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
+import { getJobPipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 
 export default async function DashboardPage() {
@@ -17,10 +18,10 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const activeJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
   const attentionJobs = jobs.filter(needsAttention);
-  const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+  const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
   const revenueThisMonth = jobs
     .filter((job) => job.status === "Completed" && job.completed_at && new Date(job.completed_at) >= monthStart)
-    .reduce((sum, job) => sum + Number(job.final_value ?? job.estimated_value ?? 0), 0);
+    .reduce((sum, job) => sum + Number(job.final_value ?? getJobPipelineValue(job) ?? 0), 0);
   const recentJobs = [...jobs]
     .sort((left, right) => new Date(right.updated_at ?? right.created_at ?? 0).getTime() - new Date(left.updated_at ?? left.created_at ?? 0).getTime())
     .slice(0, 5);
@@ -128,7 +129,7 @@ export default async function DashboardPage() {
             <div className="mt-5 grid gap-3 md:grid-cols-4 xl:grid-cols-8">
               {PIPELINE_GROUPS.map((group) => {
                 const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
-                const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+                const value = groupJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
                 return (
                   <Link className="rounded-2xl border border-[var(--border)] bg-black/20 p-4 transition hover:border-[var(--gold)]/60" href={`/jobs?filter=${group.key}` as Route} key={group.key}>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{group.label}</p>

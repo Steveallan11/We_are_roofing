@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useMemo, useState } from "react";
+import { getJobPipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import type { Customer, Job, QuoteRecord } from "@/lib/types";
 
@@ -70,7 +71,7 @@ export function CustomersWorkspace({ customers }: Props) {
 }
 
 export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }) {
-  const totalValue = customer.jobs.reduce((sum, job) => sum + Number(job.final_value ?? job.estimated_value ?? job.quote?.total ?? 0), 0);
+  const totalValue = customer.jobs.reduce((sum, job) => sum + Number(job.final_value ?? getJobPipelineValue(job) ?? 0), 0);
   const lastUpdated = [...customer.jobs]
     .map((job) => job.updated_at ?? job.created_at)
     .filter(Boolean)

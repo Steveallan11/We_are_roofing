@@ -14,6 +14,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle, getPaymentSchedule } from "@/lib/data";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
+import { getJobPipelineValue, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
 import type { JobDocumentRecord } from "@/lib/types";
@@ -49,6 +50,10 @@ export default async function JobDetailPage({ params }: Props) {
     customer: bundle.customer,
     quote: bundle.quote ?? null
   });
+  const commercialValue = getJobPipelineValue({ ...bundle.job, quote: bundle.quote ?? null });
+  const commercialLabel = commercialValue ? `${isFromOptionValue({ ...bundle.job, quote: bundle.quote ?? null }) ? "From " : ""}${currency(commercialValue)}` : "TBC";
+  const quoteDisplayValue = getQuotePipelineValue(bundle.quote ?? null);
+  const quoteDisplayLabel = quoteDisplayValue ? `${bundle.quote && isFromOptionValue({ ...bundle.job, quote: bundle.quote }) ? "From " : ""}${currency(quoteDisplayValue)}` : "TBC";
 
   return (
         <AppShell
@@ -106,7 +111,7 @@ export default async function JobDetailPage({ params }: Props) {
 
             <div className="grid gap-3 p-5 md:grid-cols-4">
               <DossierStat label="Contact" value={bundle.customer.phone ?? "No phone"} hint={bundle.customer.email ?? "No email"} href={bundle.customer.phone ? `tel:${bundle.customer.phone}` : undefined} />
-              <DossierStat label="Commercial" value={bundle.job.estimated_value ? currency(bundle.job.estimated_value) : "TBC"} hint="Estimated value" />
+              <DossierStat label="Commercial" value={commercialLabel} hint="Estimated value" />
               <DossierStat label="Survey" value={bundle.survey ? "Saved" : "Not started"} hint={bundle.survey ? formatDate(bundle.survey.updated_at ?? bundle.survey.created_at) : "Open survey workspace"} href={`/jobs/${bundle.job.id}/survey`} />
               <DossierStat label="Documents" value={bundle.documents.length.toString()} hint="Filed against this job" />
             </div>
@@ -263,7 +268,7 @@ export default async function JobDetailPage({ params }: Props) {
                   <span className="text-sm text-[var(--muted)]">{bundle.quote.quote_ref}</span>
                   <StatusPill status={bundle.quote.status} />
                 </div>
-                <p className="text-3xl font-display text-[var(--gold-l)]">{currency(bundle.quote.total)}</p>
+                <p className="text-3xl font-display text-[var(--gold-l)]">{quoteDisplayLabel}</p>
                 <p className="text-sm text-[var(--muted)]">{bundle.quote.customer_email_subject}</p>
                 <p className="text-sm text-[var(--text)]">Next step: {getNextActionLabel(bundle.job)}</p>
                 <Link className="button-secondary !mt-4 w-full !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote`}>

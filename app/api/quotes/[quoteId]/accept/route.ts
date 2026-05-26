@@ -30,6 +30,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const acceptedOption = ((quoteRecord.options ?? []) as QuoteOption[]).find((option) => option.id === body.option_id) ?? null;
+  let acceptedTotal = Number(quoteRecord.total ?? 0);
   const quoteUpdates: Record<string, unknown> = {
     status: "Accepted",
     accepted_option_id: acceptedOption?.id ?? null,
@@ -43,6 +44,7 @@ export async function POST(request: Request, { params }: Props) {
     quoteUpdates.subtotal = selectedTotals.subtotal;
     quoteUpdates.vat_amount = selectedTotals.vat_amount;
     quoteUpdates.total = selectedTotals.total;
+    acceptedTotal = selectedTotals.total;
   }
 
   const { error: updateError } = await supabase.from("quotes").update(quoteUpdates).eq("id", quoteId);
@@ -52,7 +54,7 @@ export async function POST(request: Request, { params }: Props) {
 
   await supabase
     .from("jobs")
-    .update({ status: "Accepted", accepted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ status: "Accepted", accepted_at: new Date().toISOString(), estimated_value: acceptedTotal, updated_at: new Date().toISOString() })
     .eq("id", quoteRecord.job_id);
 
   return NextResponse.json({ ok: true, accepted_option_id: acceptedOption?.id ?? null });

@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getPipelineGroup, PIPELINE_GROUPS, type PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
 import { needsAttention, type JobForAction } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
+import { getJobPipelineValue } from "@/lib/quotes/value";
 import type { JobStatus } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
   const attentionJobs = useMemo(() => optimisticJobs.filter(needsAttention), [optimisticJobs]);
   const activeJobs = useMemo(() => optimisticJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)), [optimisticJobs]);
-  const pipelineValue = useMemo(() => activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0), [activeJobs]);
+  const pipelineValue = useMemo(() => activeJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0), [activeJobs]);
   const filteredJobs = useMemo(() => {
     if (activeFilter === "attention") return attentionJobs;
     const group = getPipelineGroup(activeFilter);
@@ -124,7 +125,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
             <div className="hidden gap-4 overflow-x-auto pb-2 lg:flex">
               {visibleGroups.map((group) => {
                 const groupJobs = optimisticJobs.filter((job) => group.statuses.includes(job.status));
-                const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+                const value = groupJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
                 const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--gold)";
                 return (
                   <section
@@ -182,7 +183,7 @@ function PipelineTotalsBar({ jobs }: { jobs: JobForAction[] }) {
   const total = Math.max(jobs.length, 1);
   const segments = PIPELINE_GROUPS.map((group) => {
     const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
-    const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+    const value = groupJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
     const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--border-mid)";
     return {
       color,

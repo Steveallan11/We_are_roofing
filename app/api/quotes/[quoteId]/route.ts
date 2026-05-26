@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
-import type { CostLineItem, QuoteOption } from "@/lib/types";
+import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 
 type Props = {
   params: Promise<{ quoteId: string }>;
@@ -94,10 +95,12 @@ export async function PATCH(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Unable to update quote." }, { status: 500 });
   }
 
+  const nextJobValue = getQuotePipelineValue(updatedQuote as QuoteRecord) ?? Number(updatedQuote.total ?? 0);
+
   await supabase
     .from("jobs")
     .update({
-      estimated_value: updatedQuote.total,
+      estimated_value: nextJobValue,
       updated_at: new Date().toISOString()
     })
     .eq("id", existingQuote.job_id);

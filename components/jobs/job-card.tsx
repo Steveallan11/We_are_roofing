@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getContextDateLabel, getNextAction, getSecondaryAction, needsAttention } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
+import { getJobPipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { URGENCY_COLORS } from "@/lib/theme/statusColors";
 import { currency } from "@/lib/utils";
 import type { Customer, InvoiceRecord, Job, JobDocumentRecord, QuoteRecord } from "@/lib/types";
@@ -32,6 +33,8 @@ export function JobCard({ job, compact = false, list = false }: Props) {
   const statusColor = getStatusColor(job.status);
   const documentLinks = getDocumentLinks(job);
   const urgency = job.urgency ? URGENCY_COLORS[job.urgency as keyof typeof URGENCY_COLORS] : null;
+  const pipelineValue = getJobPipelineValue(job);
+  const valueLabel = pipelineValue ? `${isFromOptionValue(job) ? "From " : ""}${currency(pipelineValue)}` : "TBC";
 
   return (
     <article
@@ -101,7 +104,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
         <Link className="pointer-events-auto text-xs text-[var(--muted)] underline-offset-4 hover:text-[var(--gold-l)] hover:underline" href={`/jobs/${job.id}` as Route}>
           Open job file
         </Link>
-        <p className={`${compact ? "text-lg" : "text-2xl"} text-right font-display text-[var(--gold-l)]`}>{job.estimated_value ? currency(job.estimated_value) : "TBC"}</p>
+        <p className={`${compact ? "text-lg" : "text-2xl"} text-right font-display text-[var(--gold-l)]`}>{valueLabel}</p>
       </div>
     </article>
   );

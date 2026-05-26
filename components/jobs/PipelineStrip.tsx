@@ -1,6 +1,7 @@
 "use client";
 
 import { PIPELINE_GROUPS, type PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
+import { getJobPipelineValue } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 import type { JobForAction } from "@/lib/jobs/nextAction";
 
@@ -15,7 +16,7 @@ export function PipelineStrip({ jobs, active, onSelect }: Props) {
     <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
       {PIPELINE_GROUPS.map((group) => {
         const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
-        const value = groupJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+        const value = groupJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
         const selected = active === group.key;
         return (
           <button

@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DeleteCustomerAction } from "@/components/customers/delete-customer-action";
 import { JobCard } from "@/components/jobs/job-card";
 import { getCustomers, getJobs } from "@/lib/data";
+import { getJobPipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 
 type Props = {
@@ -18,7 +19,7 @@ export default async function CustomerDetailPage({ params }: Props) {
   if (!customer) notFound();
 
   const customerJobs = jobs.filter((job) => job.customer_id === customer.id);
-  const lifetimeValue = customerJobs.reduce((sum, job) => sum + Number(job.final_value ?? job.estimated_value ?? job.quote?.total ?? 0), 0);
+  const lifetimeValue = customerJobs.reduce((sum, job) => sum + Number(job.final_value ?? getJobPipelineValue(job) ?? 0), 0);
 
   return (
     <AppShell

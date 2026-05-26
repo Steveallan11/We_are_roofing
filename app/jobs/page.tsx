@@ -5,6 +5,7 @@ import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { getBusiness, getJobs } from "@/lib/data";
 import { needsAttention } from "@/lib/jobs/nextAction";
 import type { PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
+import { getJobPipelineValue } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -19,7 +20,7 @@ export default async function JobsPage({ searchParams }: Props) {
   const [business, jobs] = await Promise.all([getBusiness(), getJobs()]);
   const activeJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
   const urgent = jobs.filter(needsAttention).length;
-  const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(job.estimated_value ?? 0), 0);
+  const pipelineValue = activeJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
 
   return (
     <AppShell
