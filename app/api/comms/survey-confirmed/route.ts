@@ -38,7 +38,9 @@ export async function POST(request: Request) {
         jobRef: booking.jobRef,
         surveyorName: "Andy",
         accessNotes: booking.notes,
-        googleCalLink: googleCalendarLink(booking)
+        googleCalLink: googleCalendarLink(booking),
+        businessPhone: bundle.business.phone,
+        businessEmail: bundle.business.email
       }),
       jobId: body.job_id,
       templateType: "survey_confirmation"

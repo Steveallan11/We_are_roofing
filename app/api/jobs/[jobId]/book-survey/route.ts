@@ -105,7 +105,9 @@ export async function POST(request: Request, { params }: Props) {
         jobRef: bundle.job.job_ref ?? "WR-J-TBC",
         surveyorName: "Andy",
         accessNotes: body.notes,
-        googleCalLink: googleCalendarLink(calendarBooking)
+        googleCalLink: googleCalendarLink(calendarBooking),
+        businessPhone: bundle.business.phone,
+        businessEmail: bundle.business.email
       }),
       jobId,
       templateType: "survey_confirmation"

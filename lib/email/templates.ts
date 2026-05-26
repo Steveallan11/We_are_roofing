@@ -1,7 +1,12 @@
 import type { QuoteRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
-const shell = (title: string, body: string) => `
+type BusinessFooter = {
+  businessPhone?: string | null;
+  businessEmail?: string | null;
+};
+
+const shell = (title: string, body: string, footer: BusinessFooter = {}) => `
   <div style="background:#f8f7f4;padding:40px 20px;font-family:Helvetica,Arial,sans-serif">
     <div style="max-width:580px;margin:0 auto">
       <div style="background:#0a0a0a;padding:28px 32px;border-radius:8px 8px 0 0">
@@ -9,12 +14,14 @@ const shell = (title: string, body: string) => `
         <div style="color:#777;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-top:4px">${title}</div>
       </div>
       <div style="background:#fff;border:1px solid #e8e4da;border-top:0;padding:32px;color:#1a1a1a">${body}</div>
-      <div style="background:#0a0a0a;padding:16px 32px;border-radius:0 0 8px 8px;text-align:center;color:#666;font-size:11px">
-        We Are Roofing UK Ltd · Yateley, Hampshire · 01252 000000
-      </div>
+      <div style="background:#0a0a0a;padding:16px 32px;border-radius:0 0 8px 8px;text-align:center;color:#666;font-size:11px">${buildFooterText(footer)}</div>
     </div>
   </div>
 `;
+
+function buildFooterText({ businessEmail, businessPhone }: BusinessFooter) {
+  return ["We Are Roofing UK Ltd", "Yateley, Hampshire", businessPhone, businessEmail].filter(Boolean).join(" - ");
+}
 
 export function surveyConfirmationEmail(props: {
   customerName: string;
@@ -25,6 +32,8 @@ export function surveyConfirmationEmail(props: {
   surveyorName: string;
   accessNotes?: string;
   googleCalLink: string;
+  businessPhone?: string | null;
+  businessEmail?: string | null;
 }) {
   const firstName = props.customerName.split(" ")[0] || props.customerName;
   return shell(
@@ -47,11 +56,18 @@ export function surveyConfirmationEmail(props: {
       <p style="text-align:center;margin:26px 0 4px">
         <a href="${props.googleCalLink}" style="background:#D4AF37;color:#000;padding:10px 20px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none">Add to Google Calendar</a>
       </p>
-    `
+    `,
+    { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
   );
 }
 
-export function quoteSentEmail(props: { customerName: string; quote: QuoteRecord; quoteUrl: string }) {
+export function quoteSentEmail(props: {
+  customerName: string;
+  quote: QuoteRecord;
+  quoteUrl: string;
+  businessPhone?: string | null;
+  businessEmail?: string | null;
+}) {
   return shell(
     "Your Roofing Quote Is Ready",
     `
@@ -69,7 +85,8 @@ export function quoteSentEmail(props: { customerName: string; quote: QuoteRecord
         <a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:15px 30px;border-radius:8px;font-size:16px;font-weight:700;text-decoration:none;display:inline-block">View Quote</a>
       </p>
       <p style="font-size:15px;color:#555;line-height:1.75;margin-bottom:0">If anything is unclear, just reply to this email or use the question box on the quote page and Andy will talk you through it.</p>
-    `
+    `,
+    { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
   );
 }
 
@@ -85,6 +102,8 @@ export function invoiceSentEmail(props: {
   bankSortCode?: string | null;
   bankAccount?: string | null;
   bankAccountName?: string | null;
+  businessPhone?: string | null;
+  businessEmail?: string | null;
 }) {
   const firstName = props.customerName.split(" ")[0] || props.customerName;
   return shell(
@@ -122,11 +141,15 @@ export function invoiceSentEmail(props: {
         <a href="${props.invoiceUrl}" style="background:#D4AF37;color:#000;padding:12px 22px;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none">View invoice</a>
       </p>
       <p style="font-size:13px;color:#555;line-height:1.6">If you have any questions about this invoice, just reply to this email and we will help.</p>
-    `
+    `,
+    { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
   );
 }
 
-export function nurtureEmail(day: number, props: { customerName: string; town?: string | null; quoteUrl: string; quoteRef: string }) {
+export function nurtureEmail(
+  day: number,
+  props: { customerName: string; town?: string | null; quoteUrl: string; quoteRef: string; businessPhone?: string | null; businessEmail?: string | null }
+) {
   const firstName = props.customerName.split(" ")[0] || props.customerName;
   const copy: Record<number, { title: string; body: string }> = {
     2: { title: `Any questions about your quote, ${firstName}?`, body: `Just checking in to see if you had any questions about quote ${props.quoteRef}. Happy to talk through any aspect of it on the phone.` },
@@ -140,7 +163,8 @@ export function nurtureEmail(day: number, props: { customerName: string; town?: 
     subject: item.title,
     html: shell(
       `Quote Follow-up Day ${day}`,
-      `<p style="font-size:16px;margin-top:0">Hi ${firstName},</p><p style="font-size:14px;line-height:1.7;color:#555">${item.body}</p><p style="text-align:center;margin:24px 0"><a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:10px 20px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none">View quote</a></p>`
+      `<p style="font-size:16px;margin-top:0">Hi ${firstName},</p><p style="font-size:14px;line-height:1.7;color:#555">${item.body}</p><p style="text-align:center;margin:24px 0"><a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:10px 20px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none">View quote</a></p>`,
+      { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
     )
   };
 }

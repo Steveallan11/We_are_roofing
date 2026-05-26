@@ -57,7 +57,9 @@ export async function POST(request: Request, { params }: Props) {
       bankName: bundle.business.bank_name,
       bankSortCode: bundle.business.bank_sort_code,
       bankAccount: bundle.business.bank_account,
-      bankAccountName: bundle.business.bank_account_name
+      bankAccountName: bundle.business.bank_account_name,
+      businessPhone: bundle.business.phone,
+      businessEmail: bundle.business.email
     }),
     text: `Your invoice ${invoice.invoice_ref} is ready. View it here: ${invoiceUrl}`,
     jobId: bundle.job.id,

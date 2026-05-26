@@ -37,7 +37,9 @@ export async function GET() {
       customerName: bundle.customer.full_name,
       town: bundle.customer.town,
       quoteUrl: `${appUrl}/quote/${sequence.quote_id}`,
-      quoteRef: quote.quote_ref
+      quoteRef: quote.quote_ref,
+      businessPhone: bundle.business.phone,
+      businessEmail: bundle.business.email
     });
     await sendEmail({
       to: bundle.customer.email,

@@ -89,7 +89,13 @@ export async function POST(request: Request, { params }: Props) {
   const emailResult = await sendEmail({
     to: toEmail,
     subject,
-    html: quoteSentEmail({ customerName: bundle.customer.full_name, quote, quoteUrl }),
+    html: quoteSentEmail({
+      customerName: bundle.customer.full_name,
+      quote,
+      quoteUrl,
+      businessPhone: bundle.business.phone,
+      businessEmail: bundle.business.email
+    }),
     text: `${messageBody}\n\nView your quote: ${quoteUrl}${extraAttachments.length ? `\n\nAttached documents: ${extraAttachments.map((item) => item.filename).join(", ")}` : ""}`,
     attachments: extraAttachments,
     jobId: quote.job_id,
