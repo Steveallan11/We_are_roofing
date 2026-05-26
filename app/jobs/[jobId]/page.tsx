@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { CustomerContactEditor } from "@/components/customers/customer-contact-editor";
 import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
@@ -136,11 +137,8 @@ export default async function JobDetailPage({ params }: Props) {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="card p-5">
               <p className="section-kicker text-[0.65rem] uppercase">Customer</p>
-              <div className="mt-4 space-y-3 text-sm">
-                <InfoRow label="Name" value={bundle.customer.full_name} />
-                <InfoRow label="Phone" value={bundle.customer.phone ?? "No phone saved"} href={bundle.customer.phone ? `tel:${bundle.customer.phone}` : undefined} />
-                <InfoRow label="Email" value={bundle.customer.email ?? "No email saved"} />
-                <InfoRow label="Address" value={bundle.job.property_address} />
+              <div className="mt-4">
+                <CustomerContactEditor compact customer={bundle.customer} />
               </div>
             </div>
 

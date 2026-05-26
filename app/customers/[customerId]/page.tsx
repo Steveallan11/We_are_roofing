@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { CustomerContactEditor } from "@/components/customers/customer-contact-editor";
 import { DeleteCustomerAction } from "@/components/customers/delete-customer-action";
 import { JobCard } from "@/components/jobs/job-card";
 import { getCustomers, getJobs } from "@/lib/data";
@@ -53,11 +54,8 @@ export default async function CustomerDetailPage({ params }: Props) {
         <aside className="stack">
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Contact</p>
-            <div className="mt-4 space-y-3 text-sm">
-              <p><span className="text-[var(--muted)]">Phone:</span> {customer.phone ? <a className="text-[var(--gold-l)]" href={`tel:${customer.phone}`}>{customer.phone}</a> : "Not saved"}</p>
-              <p><span className="text-[var(--muted)]">Email:</span> {customer.email ?? "Not saved"}</p>
-              <p><span className="text-[var(--muted)]">Address:</span> {[customer.address_line_1, customer.town, customer.county, customer.postcode].filter(Boolean).join(", ") || "Not saved"}</p>
-              {customer.notes ? <p><span className="text-[var(--muted)]">Notes:</span> {customer.notes}</p> : null}
+            <div className="mt-4">
+              <CustomerContactEditor compact customer={customer} />
             </div>
           </div>
           <div className="card p-5">
