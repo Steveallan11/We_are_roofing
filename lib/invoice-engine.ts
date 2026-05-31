@@ -1,4 +1,5 @@
-import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
+import { getDocumentFileHref, getInvoicePdfHref } from "@/lib/documents";
+import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceLineItem, InvoiceRecord, JobBundle, QuoteRecord } from "@/lib/types";
 
@@ -172,11 +173,11 @@ export async function persistInvoiceArtifacts(
   const pdfPath = `${basePath}/${invoice.invoice_ref.toLowerCase()}-${timestamp}.pdf`;
   const html = buildInvoiceDocumentHtml(bundle, invoice);
   const pdf = buildInvoicePdfBuffer(bundle, invoice);
-  let htmlUrl: string | null = null;
-  let pdfUrl: string | null = null;
+  let htmlStored = false;
+  let pdfStored = false;
   let error: string | null = null;
 
-  const bucketResult = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+  const bucketResult = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   if (!bucketResult.ok) {
     error = bucketResult.error;
   } else {
@@ -190,8 +191,8 @@ export async function persistInvoiceArtifacts(
     });
 
     error = htmlUpload.error?.message ?? pdfUpload.error?.message ?? null;
-    if (!htmlUpload.error) htmlUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, htmlPath);
-    if (!pdfUpload.error) pdfUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, pdfPath);
+    if (!htmlUpload.error) htmlStored = true;
+    if (!pdfUpload.error) pdfStored = true;
   }
 
   const [{ data: existingHtml }, { data: existingPdf }] = await Promise.all([
@@ -204,9 +205,9 @@ export async function persistInvoiceArtifacts(
     invoice_id: invoice.id,
     document_type: "invoice_html",
     display_name: `${invoice.invoice_ref} HTML Snapshot`,
-    storage_bucket: htmlUrl ? JOB_DOCUMENTS_BUCKET : null,
-    storage_path: htmlUrl ? htmlPath : null,
-    public_url: htmlUrl,
+    storage_bucket: htmlStored ? JOB_DOCUMENTS_BUCKET : null,
+    storage_path: htmlStored ? htmlPath : null,
+    public_url: null,
     source_type: "generated",
     mime_type: "text/html",
     file_size: Buffer.byteLength(html, "utf8"),
@@ -218,25 +219,28 @@ export async function persistInvoiceArtifacts(
     invoice_id: invoice.id,
     document_type: "invoice_pdf",
     display_name: `${invoice.invoice_ref}.pdf`,
-    storage_bucket: pdfUrl ? JOB_DOCUMENTS_BUCKET : null,
-    storage_path: pdfUrl ? pdfPath : null,
-    public_url: pdfUrl,
+    storage_bucket: pdfStored ? JOB_DOCUMENTS_BUCKET : null,
+    storage_path: pdfStored ? pdfPath : null,
+    public_url: null,
     source_type: "generated",
     mime_type: "application/pdf",
     file_size: pdf.length,
     content_html: null
   };
 
-  await Promise.all([
+  const [htmlResult, pdfResult] = await Promise.all([
     existingHtml?.id
-      ? supabase.from("job_documents").update(htmlPayload).eq("id", existingHtml.id)
-      : supabase.from("job_documents").insert(htmlPayload),
+      ? supabase.from("job_documents").update(htmlPayload).eq("id", existingHtml.id).select("id").single()
+      : supabase.from("job_documents").insert(htmlPayload).select("id").single(),
     existingPdf?.id
-      ? supabase.from("job_documents").update(pdfPayload).eq("id", existingPdf.id)
-      : supabase.from("job_documents").insert(pdfPayload)
+      ? supabase.from("job_documents").update(pdfPayload).eq("id", existingPdf.id).select("id").single()
+      : supabase.from("job_documents").insert(pdfPayload).select("id").single()
   ]);
 
-  if (pdfUrl) {
+  const htmlUrl = htmlResult.data?.id && (htmlStored || Boolean(existingHtml?.id)) ? getDocumentFileHref(htmlResult.data.id) : null;
+  const pdfUrl = pdfStored || Boolean(existingPdf?.id) ? getInvoicePdfHref(invoice.id) : null;
+
+  if (pdfStored) {
     await supabase.from("invoices").update({ pdf_url: pdfUrl }).eq("id", invoice.id);
   }
 

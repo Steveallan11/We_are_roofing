@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle, getPricingRules } from "@/lib/data";
+import { getJobDocumentHref } from "@/lib/documents";
 import { pricingRulesToRateCard } from "@/lib/pricing/rateCard";
 import { buildQuoteOptionPriceSummary, getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { getLatestRoofSurvey } from "@/lib/roof-surveys";
@@ -203,11 +204,9 @@ export default async function QuotePage({ params, searchParams }: Props) {
                     <div className="rounded-2xl border p-3" key={document.id}>
                       <p className="font-semibold text-white">{document.display_name}</p>
                       <p className="mt-1 text-xs text-[var(--muted)]">{document.document_type}</p>
-                      {document.public_url ? (
-                        <a className="mt-2 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={document.public_url} rel="noreferrer" target="_blank">
-                          Open document
-                        </a>
-                      ) : null}
+                      <a className="mt-2 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={getJobDocumentHref(document)} target="_blank">
+                        Open document
+                      </a>
                     </div>
                   ))
               ) : (

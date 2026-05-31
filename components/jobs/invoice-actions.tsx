@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useState, useTransition } from "react";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
+import { getInvoicePdfHref } from "@/lib/documents";
 import type { InvoiceRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
@@ -99,7 +100,7 @@ export function InvoiceActions({ jobId, quote, invoices, customerName, customerE
               Preview
             </Link>
             {invoice.pdf_url ? (
-              <a className="button-ghost !px-3 !py-2 text-sm" href={invoice.pdf_url} rel="noreferrer" target="_blank">
+              <a className="button-ghost !px-3 !py-2 text-sm" href={getInvoicePdfHref(invoice.id)} target="_blank">
                 Open PDF
               </a>
             ) : null}

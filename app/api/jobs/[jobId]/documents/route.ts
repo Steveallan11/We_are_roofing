@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
-import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
+import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -41,7 +41,7 @@ export async function POST(request: Request, { params }: Props) {
         {
           ok: false,
           error: "DOCUMENTS_TABLE_MISSING",
-          message: "The job_documents table is missing in Supabase. Run migration 0019_repair_job_documents.sql, then retry the upload."
+          message: "The job_documents table is missing in Supabase. Run migration 0021_repair_phase0_core_tables.sql, then retry the upload."
         },
         { status: 500 }
       );
@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: tableCheck.error.message }, { status: 500 });
   }
 
-  const bucket = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+  const bucket = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   if (!bucket.ok) {
     return NextResponse.json({ ok: false, error: bucket.error }, { status: 500 });
   }
@@ -68,7 +68,6 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: upload.error.message }, { status: 500 });
   }
 
-  const publicUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, storagePath);
   const { data: document, error } = await supabase
     .from("job_documents")
     .insert({
@@ -77,7 +76,7 @@ export async function POST(request: Request, { params }: Props) {
       display_name: displayName || file.name,
       storage_bucket: JOB_DOCUMENTS_BUCKET,
       storage_path: storagePath,
-      public_url: publicUrl,
+      public_url: null,
       source_type: "uploaded",
       mime_type: mimeType,
       file_size: file.size,

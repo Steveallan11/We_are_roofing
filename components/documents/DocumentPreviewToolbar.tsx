@@ -19,7 +19,7 @@ export function DocumentPreviewToolbar({ backHref, pdfHref }: Props) {
           Print / Save PDF
         </button>
         {pdfHref ? (
-          <a className="button-primary" href={pdfHref} rel="noreferrer" target="_blank">
+          <a className="button-primary" href={pdfHref} target="_blank">
             Open Filed PDF
           </a>
         ) : null}

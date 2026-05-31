@@ -14,6 +14,7 @@ import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle, getPaymentSchedule } from "@/lib/data";
+import { getJobDocumentHref } from "@/lib/documents";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
 import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
@@ -369,13 +370,9 @@ export default async function JobDetailPage({ params }: Props) {
                           <div className="rounded-xl border border-[var(--border)] bg-black/20 p-3" key={document.id}>
                             <p className="font-semibold text-white">{document.display_name}</p>
                             <p className="mt-1 text-xs text-[var(--muted)]">{getDocumentDisplayType(document)}</p>
-                            {document.public_url ? (
-                              <a className="mt-2 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={document.public_url} rel="noreferrer" target="_blank">
-                                Open document
-                              </a>
-                            ) : (
-                              <p className="mt-2 text-xs text-[var(--dim)]">Snapshot saved in job file</p>
-                            )}
+                            <a className="mt-2 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={getJobDocumentHref(document)} target="_blank">
+                              Open document
+                            </a>
                           </div>
                         ))}
                       </div>

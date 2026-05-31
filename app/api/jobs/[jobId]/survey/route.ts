@@ -6,7 +6,7 @@ import {
   getSurveyFieldLabel,
   getSurveySectionLabel
 } from "@/lib/survey-utils";
-import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
+import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 type Props = {
@@ -205,7 +205,7 @@ async function persistSurveySnapshot({
   });
 
   const storagePath = `${jobId}/surveys/${surveyId}/site-survey-latest.html`;
-  const bucketResult = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+  const bucketResult = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   const upload = bucketResult.ok
     ? await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(storagePath, Buffer.from(html, "utf8"), {
         contentType: "text/html; charset=utf-8",
@@ -213,15 +213,14 @@ async function persistSurveySnapshot({
       })
     : { error: { message: bucketResult.error } };
 
-  const publicUrl = upload.error ? null : getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, storagePath);
   const payload = {
     job_id: jobId,
     quote_id: null,
     document_type: "survey_snapshot",
     display_name: "Site Survey Snapshot",
-    storage_bucket: publicUrl ? JOB_DOCUMENTS_BUCKET : null,
-    storage_path: publicUrl ? storagePath : null,
-    public_url: publicUrl,
+    storage_bucket: upload.error ? null : JOB_DOCUMENTS_BUCKET,
+    storage_path: upload.error ? null : storagePath,
+    public_url: null,
     source_type: "generated",
     mime_type: "text/html",
     file_size: Buffer.byteLength(html, "utf8"),

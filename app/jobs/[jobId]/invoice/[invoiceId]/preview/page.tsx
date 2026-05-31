@@ -3,6 +3,7 @@ import { DocumentPreviewToolbar } from "@/components/documents/DocumentPreviewTo
 import { InvoiceDocument } from "@/components/documents/InvoiceDocument";
 import { AppShell } from "@/components/layout/app-shell";
 import { getJobBundle } from "@/lib/data";
+import { getInvoicePdfHref } from "@/lib/documents";
 
 type Props = {
   params: Promise<{ jobId: string; invoiceId: string }>;
@@ -16,7 +17,7 @@ export default async function InvoicePreviewPage({ params }: Props) {
 
   return (
     <AppShell title="Invoice Preview" subtitle="Customer-facing invoice preview. Check this before sending or downloading." wide>
-      <DocumentPreviewToolbar backHref={`/jobs/${jobId}`} pdfHref={invoice.pdf_url} />
+      <DocumentPreviewToolbar backHref={`/jobs/${jobId}`} pdfHref={getInvoicePdfHref(invoice.id)} />
       <InvoiceDocument bundle={bundle} invoice={invoice} />
     </AppShell>
   );

@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
 import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
+import { getInvoicePdfHref, getQuotePdfHref } from "@/lib/documents";
 import { getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import type { Customer, InvoiceRecord, Job, JobDocumentRecord, QuoteRecord } from "@/lib/types";
@@ -172,12 +173,12 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
                 Open Job File
               </Link>
               {quote.pdf_url ? (
-                <a className="button-ghost !px-4 !py-2 text-sm" href={quote.pdf_url} rel="noreferrer" target="_blank">
+                <a className="button-ghost !px-4 !py-2 text-sm" href={getQuotePdfHref(quote.id)} target="_blank">
                   Open PDF
                 </a>
               ) : null}
               {existingInvoice?.pdf_url ? (
-                <a className="button-secondary !px-4 !py-2 text-sm" href={existingInvoice.pdf_url} rel="noreferrer" target="_blank">
+                <a className="button-secondary !px-4 !py-2 text-sm" href={getInvoicePdfHref(existingInvoice.id)} target="_blank">
                   Open Invoice PDF
                 </a>
               ) : null}
@@ -282,7 +283,7 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {invoice.pdf_url ? (
-              <a className="button-primary !px-4 !py-2 text-sm" href={invoice.pdf_url} rel="noreferrer" target="_blank">
+              <a className="button-primary !px-4 !py-2 text-sm" href={getInvoicePdfHref(invoice.id)} target="_blank">
                 Open PDF
               </a>
             ) : (

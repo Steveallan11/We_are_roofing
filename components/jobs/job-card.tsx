@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { getInvoicePdfHref, getJobDocumentHref, getQuotePdfHref } from "@/lib/documents";
 import { getContextDateLabel, getNextAction, getSecondaryAction, needsAttention } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
 import { getJobPipelineValue, isFromOptionValue } from "@/lib/quotes/value";
@@ -136,20 +137,20 @@ function getDocumentLinks(
   const links: DocumentLink[] = [];
 
   if (job.quote?.pdf_url) {
-    links.push({ label: "Quote PDF", href: job.quote.pdf_url, external: true });
+    links.push({ label: "Quote PDF", href: getQuotePdfHref(job.quote.id), external: true });
   }
 
   for (const invoice of job.invoices ?? []) {
     if (invoice.pdf_url) {
-      links.push({ label: invoice.invoice_ref || "Invoice PDF", href: invoice.pdf_url, external: true });
+      links.push({ label: invoice.invoice_ref || "Invoice PDF", href: getInvoicePdfHref(invoice.id), external: true });
     }
   }
 
   for (const document of job.documents ?? []) {
     links.push({
       label: getDocumentLabel(document),
-      href: document.public_url || null,
-      external: Boolean(document.public_url)
+      href: getJobDocumentHref(document),
+      external: true
     });
   }
 
@@ -184,7 +185,6 @@ function DocumentQuickLinks({ compact, jobId, links }: { compact: boolean; jobId
             className="rounded-full border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--gold-l)] hover:border-[var(--gold)]"
             href={link.href}
             key={`${link.label}-${index}`}
-            rel="noreferrer"
             target="_blank"
           >
             {link.label}

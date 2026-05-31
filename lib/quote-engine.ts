@@ -6,8 +6,9 @@ import type {
   QuoteOption,
   QuoteRecord
 } from "@/lib/types";
+import { getDocumentFileHref, getQuotePdfHref } from "@/lib/documents";
 import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
-import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
+import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 function scoreHistoricalQuote(bundle: JobBundle, record: HistoricalQuoteRecord) {
@@ -316,13 +317,13 @@ export async function persistQuoteArtifacts(
   const html = buildQuoteDocumentHtml(bundle, quote);
   const pdf = buildQuotePdfBuffer(bundle, quote);
 
-  let htmlUrl: string | null = null;
-  let pdfUrl: string | null = null;
+  let htmlStored = false;
+  let pdfStored = false;
   let bucketError: string | null = null;
   let htmlError: string | null = null;
   let pdfError: string | null = null;
 
-  const bucketResult = await ensurePublicStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
+  const bucketResult = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   if (!bucketResult.ok) {
     bucketError = bucketResult.error;
     htmlError = bucketError;
@@ -335,10 +336,7 @@ export async function persistQuoteArtifacts(
     if (htmlUpload.error) {
       htmlError = htmlUpload.error.message;
     } else {
-      htmlUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, htmlPath);
-      if (!htmlUrl) {
-        htmlError = "HTML snapshot uploaded, but no public URL could be generated.";
-      }
+      htmlStored = true;
     }
 
     const pdfUpload = await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(pdfPath, pdf, {
@@ -348,10 +346,7 @@ export async function persistQuoteArtifacts(
     if (pdfUpload.error) {
       pdfError = pdfUpload.error.message;
     } else {
-      pdfUrl = getStoragePublicUrl(supabase, JOB_DOCUMENTS_BUCKET, pdfPath);
-      if (!pdfUrl) {
-        pdfError = "PDF uploaded, but no public URL could be generated.";
-      }
+      pdfStored = true;
     }
   }
 
@@ -377,9 +372,9 @@ export async function persistQuoteArtifacts(
     quote_id: quote.id,
     document_type: "quote_html",
     display_name: `${quote.quote_ref} HTML Snapshot`,
-    storage_bucket: htmlUrl ? JOB_DOCUMENTS_BUCKET : null,
-    storage_path: htmlUrl ? htmlPath : null,
-    public_url: htmlUrl,
+    storage_bucket: htmlStored ? JOB_DOCUMENTS_BUCKET : null,
+    storage_path: htmlStored ? htmlPath : null,
+    public_url: null,
     source_type: "generated",
     mime_type: "text/html",
     file_size: Buffer.byteLength(html, "utf8"),
@@ -391,25 +386,28 @@ export async function persistQuoteArtifacts(
     quote_id: quote.id,
     document_type: "quote_pdf",
     display_name: `${quote.quote_ref}.pdf`,
-    storage_bucket: pdfUrl ? JOB_DOCUMENTS_BUCKET : null,
-    storage_path: pdfUrl ? pdfPath : null,
-    public_url: pdfUrl,
+    storage_bucket: pdfStored ? JOB_DOCUMENTS_BUCKET : null,
+    storage_path: pdfStored ? pdfPath : null,
+    public_url: null,
     source_type: "generated",
     mime_type: "application/pdf",
     file_size: pdf.length,
     content_html: null
   };
 
-  await Promise.all([
+  const [htmlResult, pdfResult] = await Promise.all([
     existingHtml?.id
-      ? supabase.from("job_documents").update(htmlPayload).eq("id", existingHtml.id)
-      : supabase.from("job_documents").insert(htmlPayload),
+      ? supabase.from("job_documents").update(htmlPayload).eq("id", existingHtml.id).select("id").single()
+      : supabase.from("job_documents").insert(htmlPayload).select("id").single(),
     existingPdf?.id
-      ? supabase.from("job_documents").update(pdfPayload).eq("id", existingPdf.id)
-      : supabase.from("job_documents").insert(pdfPayload)
+      ? supabase.from("job_documents").update(pdfPayload).eq("id", existingPdf.id).select("id").single()
+      : supabase.from("job_documents").insert(pdfPayload).select("id").single()
   ]);
 
-  if (pdfUrl) {
+  const htmlUrl = htmlResult.data?.id && (htmlStored || Boolean(existingHtml?.id)) ? getDocumentFileHref(htmlResult.data.id) : null;
+  const pdfUrl = pdfStored || Boolean(existingPdf?.id) ? getQuotePdfHref(quote.id) : null;
+
+  if (pdfStored) {
     await supabase
       .from("quotes")
       .update({
