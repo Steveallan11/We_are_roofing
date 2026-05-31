@@ -12,6 +12,10 @@ export async function POST(request: Request) {
   const params = new URLSearchParams(body);
   const from = params.get("From") || "";
   const text = params.get("Body") || "";
+  if (!from.trim() || !text.trim()) {
+    return NextResponse.json({ ok: false, error: "Missing Twilio sender or message body." }, { status: 400 });
+  }
+
   const isWhatsApp = from.startsWith("whatsapp:");
   const phone = from.replace("whatsapp:", "");
   const channel = isWhatsApp ? "whatsapp" : "sms";
@@ -60,13 +64,26 @@ function isValidTwilioRequest(request: Request, body: string) {
   const signature = request.headers.get("x-twilio-signature");
   if (!signature) return false;
 
-  const url = request.url.replace(/^http:\/\//, "https://");
   const params = new URLSearchParams(body);
-  const data = [...params.keys()]
-    .sort()
-    .reduce((acc, key) => `${acc}${key}${params.get(key) ?? ""}`, url);
-  const expected = createHmac("sha1", authToken).update(data).digest("base64");
-  const left = Buffer.from(signature);
-  const right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
+  return getTwilioSignatureUrls(request).some((url) => {
+    const data = [...params.keys()]
+      .sort()
+      .reduce((acc, key) => `${acc}${key}${params.get(key) ?? ""}`, url);
+    const expected = createHmac("sha1", authToken).update(data).digest("base64");
+    const left = Buffer.from(signature);
+    const right = Buffer.from(expected);
+    return left.length === right.length && timingSafeEqual(left, right);
+  });
+}
+
+function getTwilioSignatureUrls(request: Request) {
+  const parsed = new URL(request.url);
+  const urls = new Set<string>([request.url.replace(/^http:\/\//, "https://")]);
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (forwardedHost) {
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+    urls.add(`${forwardedProto}://${forwardedHost}${parsed.pathname}${parsed.search}`);
+    urls.add(`https://${forwardedHost}${parsed.pathname}${parsed.search}`);
+  }
+  return [...urls];
 }

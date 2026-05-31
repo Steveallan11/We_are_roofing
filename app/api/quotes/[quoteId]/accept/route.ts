@@ -35,7 +35,12 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: "Please confirm your name and email before accepting." }, { status: 400 });
   }
 
-  const acceptedOption = ((quoteRecord.options ?? []) as QuoteOption[]).find((option) => option.id === body.option_id) ?? null;
+  const quoteOptions = (quoteRecord.options ?? []) as QuoteOption[];
+  const acceptedOption = quoteOptions.find((option) => option.id === body.option_id) ?? null;
+  if (quoteOptions.length > 0 && !acceptedOption) {
+    return NextResponse.json({ ok: false, error: "Please choose the quote option you want to accept." }, { status: 400 });
+  }
+
   let acceptedTotal = Number(quoteRecord.total ?? 0);
   const quoteUpdates: Record<string, unknown> = {
     status: "Accepted",

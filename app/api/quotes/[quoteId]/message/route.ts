@@ -28,14 +28,20 @@ export async function POST(request: Request, { params }: Props) {
   const { quoteId } = await params;
   const token = new URL(request.url).searchParams.get("token");
   const body = (await request.json().catch(() => ({}))) as {
-    sender_type?: "customer" | "admin";
     sender_name?: string;
     sender_email?: string;
     message?: string;
   };
 
-  if (!body.message?.trim()) {
+  const message = body.message?.trim() ?? "";
+  const senderName = body.sender_name?.trim().slice(0, 120) || null;
+  const senderEmail = body.sender_email?.trim().slice(0, 180) || null;
+
+  if (!message) {
     return NextResponse.json({ ok: false, error: "Message is required." }, { status: 400 });
+  }
+  if (senderEmail && !/^\S+@\S+\.\S+$/.test(senderEmail)) {
+    return NextResponse.json({ ok: false, error: "Please enter a valid email address." }, { status: 400 });
   }
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
@@ -51,10 +57,10 @@ export async function POST(request: Request, { params }: Props) {
     .insert({
       quote_id: quoteId,
       job_id: quote?.job_id ?? null,
-      sender_type: body.sender_type === "admin" ? "admin" : "customer",
-      sender_name: body.sender_name || null,
-      sender_email: body.sender_email || null,
-      message: body.message.trim()
+      sender_type: "customer",
+      sender_name: senderName,
+      sender_email: senderEmail,
+      message
     })
     .select("*")
     .single();
