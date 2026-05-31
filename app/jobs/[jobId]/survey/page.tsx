@@ -6,7 +6,6 @@ import { QuoteActions } from "@/components/jobs/quote-actions";
 import { AppShell } from "@/components/layout/app-shell";
 import { SurveyForm } from "@/components/forms/survey-form";
 import { SurveyTypePicker } from "@/components/survey/SurveyTypePicker";
-import { StatusPill } from "@/components/ui/status-pill";
 import { getJobBundle } from "@/lib/data";
 
 type Props = {
@@ -56,32 +55,6 @@ export default async function SurveyPage({ params }: Props) {
               <p className="text-white">{bundle.customer.full_name}</p>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link className="button-primary" href={`/jobs/${bundle.job.id}/survey/video` as Route}>
-              AI Video Survey
-            </Link>
-            <Link className="button-secondary" href={roofSurveyHref}>
-              Roof Map
-            </Link>
-          </div>
-        </div>
-
-        <div className="card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="section-kicker text-[0.65rem] uppercase">Quote Readiness</p>
-              <div className="mt-3 flex items-center gap-3">
-                <StatusPill status={bundle.job.status} />
-                {bundle.quote ? <StatusPill status={bundle.quote.status} /> : null}
-              </div>
-              <p className="mt-3 text-sm text-[var(--muted)]">
-                Save the survey, upload the supporting photos, then generate the first draft from this screen. The draft will be saved back into the job file for review and sending.
-              </p>
-            </div>
-            <div className="min-w-[280px] flex-1">
-              <PhotoUploadButton jobId={bundle.job.id} />
-            </div>
-          </div>
         </div>
 
         <div className="card overflow-hidden">
@@ -90,6 +63,17 @@ export default async function SurveyPage({ params }: Props) {
             <Link className="border-b-2 border-transparent px-5 py-3 text-sm font-semibold text-[var(--text-faint)] transition hover:text-[var(--gold)]" href={roofSurveyHref}>
               Roof Map
             </Link>
+          </div>
+          <div className="border-b border-[var(--border)] bg-black/10 p-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,560px)] lg:items-start">
+              <div>
+                <p className="section-kicker text-[0.65rem] uppercase">Supporting Photos</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  Add site photos while you fill out the survey. They stay on the job file and give the quote/review process better context.
+                </p>
+              </div>
+              <PhotoUploadButton jobId={bundle.job.id} />
+            </div>
           </div>
           <SurveyForm
             initialSurvey={bundle.survey}
