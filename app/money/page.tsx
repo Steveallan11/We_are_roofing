@@ -1,5 +1,3 @@
-import Link from "next/link";
-import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { MoneyWorkspace } from "@/components/money/money-workspace";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
@@ -20,18 +18,8 @@ export default async function MoneyPage() {
   return (
     <AppShell
       title="Money"
-      subtitle={`${quotes.length} quotes | ${invoices.length} invoices | ${currency(quotePipeline)} quoted | ${currency(outstanding)} outstanding.`}
+      subtitle={`${currency(quotePipeline)} quoted | ${currency(outstanding)} outstanding. Quotes, invoices, and money actions in one place.`}
       wide
-      actions={
-        <>
-          <Link className="button-primary" href={"/settings/rates" as Route}>
-            Rate Card
-          </Link>
-          <Link className="button-ghost" href={"/jobs" as Route}>
-            Open Jobs
-          </Link>
-        </>
-      }
     >
       {!hasRateCard ? <RateCardNudge /> : null}
       <MoneyWorkspace jobs={jobs} />

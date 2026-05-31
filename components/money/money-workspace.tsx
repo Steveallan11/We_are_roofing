@@ -39,10 +39,11 @@ export function MoneyWorkspace({ jobs }: Props) {
   );
   const pricingNeeded = quotes.some(({ quote }) => !getQuotePipelineValue(quote));
   const draftCount = quotes.filter(({ quote }) => quote.status === "Draft" || quote.status === "Needs Review").length;
-  const readyCount = quotes.filter(({ quote }) => quote.status === "Approved").length;
-  const sentCount = quotes.filter(({ quote }) => quote.status === "Sent").length;
-  const acceptedCount = quotes.filter(({ quote }) => quote.status === "Accepted").length;
-  const outstandingInvoices = invoices.filter(({ invoice }) => !["Paid", "Void"].includes(invoice.status));
+  const readyToSendQuotes = quotes.filter(({ quote }) => quote.status === "Approved");
+  const sentQuotes = quotes.filter(({ quote }) => quote.status === "Sent");
+  const acceptedNoInvoice = quotes.filter(({ job, quote }) => quote.status === "Accepted" && !hasLiveInvoice(job, quote.id));
+  const outstandingInvoices = invoices.filter(({ invoice }) => !isClosedInvoice(invoice));
+  const overdueInvoices = outstandingInvoices.filter(({ invoice }) => isOverdueInvoice(invoice));
   const invoiceTotal = outstandingInvoices.reduce((sum, { invoice }) => sum + Number(invoice.balance_due ?? invoice.total ?? 0), 0);
 
   return (
@@ -62,9 +63,16 @@ export function MoneyWorkspace({ jobs }: Props) {
       ) : null}
 
       <section className="grid gap-3 md:grid-cols-4">
+        <ActionSummaryCard count={readyToSendQuotes.length} cta="Open quotes" label="Ready to send" onClick={() => setTab("quotes")} tone="gold" />
+        <ActionSummaryCard count={sentQuotes.length} cta="Check follow-ups" label="Sent awaiting reply" onClick={() => setTab("quotes")} />
+        <ActionSummaryCard count={acceptedNoInvoice.length} cta="Create invoices" label="Accepted needs invoice" onClick={() => setTab("quotes")} tone="green" />
+        <ActionSummaryCard count={overdueInvoices.length} cta="Open invoices" label="Overdue invoices" onClick={() => setTab("invoices")} tone="red" />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-4">
         <MoneyStat label="Draft / Review" value={draftCount.toString()} />
-        <MoneyStat label="Ready To Send" value={readyCount.toString()} />
-        <MoneyStat label="Sent Quotes" value={sentCount.toString()} />
+        <MoneyStat label="Ready To Send" value={readyToSendQuotes.length.toString()} />
+        <MoneyStat label="Sent Quotes" value={sentQuotes.length.toString()} />
         <MoneyStat label="Outstanding" value={currency(invoiceTotal)} danger={invoiceTotal > 0} />
       </section>
 
@@ -78,7 +86,7 @@ export function MoneyWorkspace({ jobs }: Props) {
           </button>
         </div>
         <p className="px-2 text-sm text-[var(--muted)]">
-          {acceptedCount} accepted quote{acceptedCount === 1 ? "" : "s"} ready to become invoice work.
+          {acceptedNoInvoice.length} accepted quote{acceptedNoInvoice.length === 1 ? "" : "s"} ready to become invoice work.
         </p>
       </div>
 
@@ -119,12 +127,13 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
     <div className="grid gap-3">
       {message ? <p className="rounded-2xl border border-[#10b981]/30 bg-[#10b981]/10 px-4 py-3 text-sm text-[#7ce3a6]">{message}</p> : null}
       {error ? <p className="rounded-2xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ff9a91]">{error}</p> : null}
-      {quotes.map(({ job, quote }) => {
+      {[...quotes].sort(sortQuoteActions).map(({ job, quote }) => {
         const quoteValue = getQuotePipelineValue(quote) ?? 0;
+        const quoteValueLabel = quoteValue ? `${isQuoteFromOptionValue(quote) ? "From " : ""}${currency(quoteValue)}` : "TBC";
         const zeroLines = quote.options?.length
           ? quote.options.flatMap((option) => option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) === 0)
           : quote.cost_breakdown?.filter((line) => Number(line.cost ?? 0) === 0) ?? [];
-        const existingInvoice = (job.invoices ?? []).find((invoice) => invoice.quote_id === quote.id && invoice.status !== "Void");
+        const existingInvoice = getLiveInvoice(job, quote.id);
         const canCreateInvoice = quote.status === "Accepted" && !existingInvoice;
         return (
           <article className="card p-4" key={quote.id}>
@@ -151,7 +160,7 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
                 ) : null}
               </div>
               <div className="shrink-0 text-left md:text-right">
-                <p className="font-display text-3xl text-[var(--gold-l)]">{currency(quoteValue)}</p>
+                <p className="font-display text-3xl text-[var(--gold-l)]">{quoteValueLabel}</p>
                 <p className="mt-1 text-xs text-[var(--muted)]">{quote.sent_at ? `Sent ${formatDate(quote.sent_at)}` : `Created ${formatDate(quote.created_at)}`}</p>
               </div>
             </div>
@@ -259,7 +268,7 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
     <div className="grid gap-3">
       {message ? <p className="rounded-2xl border border-[#10b981]/30 bg-[#10b981]/10 px-4 py-3 text-sm text-[#7ce3a6]">{message}</p> : null}
       {error ? <p className="rounded-2xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ff9a91]">{error}</p> : null}
-      {invoices.map(({ job, invoice }) => (
+      {[...invoices].sort(sortInvoiceActions).map(({ job, invoice }) => (
         <article className="card p-4" key={invoice.id}>
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
@@ -272,6 +281,11 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
               <p className="mt-1 text-sm text-[var(--muted)]">
                 Due {formatDate(invoice.due_date)} | Balance {currency(Number(invoice.balance_due ?? 0))}
               </p>
+              {isOverdueInvoice(invoice) ? (
+                <p className="mt-3 rounded-2xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ffb3ad]">
+                  Overdue - chase payment or mark paid if already received.
+                </p>
+              ) : null}
               <p className={`mt-3 rounded-2xl border px-3 py-2 text-sm ${invoice.pdf_url ? "border-[#10b981]/30 bg-[#10b981]/10 text-[#7ce3a6]" : "border-[var(--gold)]/35 bg-[var(--gold)]/10 text-[var(--gold-l)]"}`}>
                 {invoice.pdf_url ? "PDF filed and ready" : "PDF not filed yet"}
               </p>
@@ -294,12 +308,12 @@ function InvoicesTab({ invoices }: { invoices: Array<{ job: MoneyJob; invoice: I
             <button className="button-ghost !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => regeneratePdf(invoice)} type="button">
               {activeId === invoice.id ? "Working..." : invoice.pdf_url ? "Regenerate PDF" : "Generate PDF"}
             </button>
-            {invoice.status !== "Paid" && invoice.status !== "Void" ? (
+            {!isClosedInvoice(invoice) ? (
               <button className="button-secondary !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => setInvoiceToSend({ job, invoice })} type="button">
                 {invoice.status === "Sent" ? "Resend Invoice" : "Send Invoice"}
               </button>
             ) : null}
-            {invoice.status !== "Paid" && invoice.status !== "Void" ? (
+            {!isClosedInvoice(invoice) ? (
               <button className="button-secondary !px-4 !py-2 text-sm" disabled={isPending || activeId === invoice.id} onClick={() => markPaid(invoice)} type="button">
                 {activeId === invoice.id ? "Updating..." : "Mark Paid"}
               </button>
@@ -340,6 +354,36 @@ function MoneyStat({ label, value, danger = false }: { label: string; value: str
   );
 }
 
+function ActionSummaryCard({
+  count,
+  cta,
+  label,
+  onClick,
+  tone = "default"
+}: {
+  count: number;
+  cta: string;
+  label: string;
+  onClick: () => void;
+  tone?: "default" | "gold" | "green" | "red";
+}) {
+  const active = count > 0;
+  const tones = {
+    default: active ? "border-white/15 bg-white/5" : "border-[var(--border)] bg-black/10",
+    gold: active ? "border-[var(--gold)]/45 bg-[var(--gold)]/10" : "border-[var(--border)] bg-black/10",
+    green: active ? "border-[#10b981]/35 bg-[#10b981]/10" : "border-[var(--border)] bg-black/10",
+    red: active ? "border-[#ef4444]/45 bg-[#ef4444]/10" : "border-[var(--border)] bg-black/10"
+  };
+
+  return (
+    <button className={`rounded-3xl border p-4 text-left transition hover:border-[var(--gold)]/50 ${tones[tone]}`} onClick={onClick} type="button">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[var(--dim)]">{label}</p>
+      <p className={`mt-2 font-display text-4xl leading-none ${tone === "red" && active ? "text-[#ffb3ad]" : tone === "green" && active ? "text-[#7ce3a6]" : "text-[var(--gold-l)]"}`}>{count}</p>
+      <p className="mt-3 text-sm font-semibold text-[var(--text)]">{count > 0 ? cta : "Nothing waiting"}</p>
+    </button>
+  );
+}
+
 function getQuoteActionLabel(quote: QuoteRecord) {
   if (quote.status === "Draft" || quote.status === "Needs Review") return "Review & Price";
   if (quote.status === "Approved") return "Send Quote";
@@ -358,4 +402,42 @@ function InvoiceBadge({ status }: { status: InvoiceRecord["status"] }) {
           ? "border-white/10 bg-white/5 text-[var(--muted)]"
           : "border-[var(--gold)]/35 bg-[var(--gold)]/10 text-[var(--gold-l)]";
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${className}`}>{status}</span>;
+}
+
+function getLiveInvoice(job: MoneyJob, quoteId: string) {
+  return (job.invoices ?? []).find((invoice) => invoice.quote_id === quoteId && !isClosedInvoice(invoice));
+}
+
+function hasLiveInvoice(job: MoneyJob, quoteId: string) {
+  return Boolean(getLiveInvoice(job, quoteId));
+}
+
+function isClosedInvoice(invoice: InvoiceRecord) {
+  return ["Paid", "Void", "Cancelled"].includes(invoice.status);
+}
+
+function isOverdueInvoice(invoice: InvoiceRecord) {
+  if (isClosedInvoice(invoice)) return false;
+  if (invoice.status === "Overdue") return true;
+  if (!invoice.due_date) return false;
+  const due = new Date(`${invoice.due_date}T23:59:59`);
+  return Number.isFinite(due.getTime()) && due.getTime() < Date.now();
+}
+
+function sortQuoteActions(left: { job: MoneyJob; quote: QuoteRecord }, right: { job: MoneyJob; quote: QuoteRecord }) {
+  return quotePriority(left) - quotePriority(right) || new Date(right.quote.updated_at ?? right.quote.created_at ?? 0).getTime() - new Date(left.quote.updated_at ?? left.quote.created_at ?? 0).getTime();
+}
+
+function quotePriority({ job, quote }: { job: MoneyJob; quote: QuoteRecord }) {
+  if (quote.status === "Approved") return 0;
+  if (quote.status === "Accepted" && !hasLiveInvoice(job, quote.id)) return 1;
+  if (quote.status === "Sent") return 2;
+  if (quote.status === "Draft" || quote.status === "Needs Review") return 3;
+  return 4;
+}
+
+function sortInvoiceActions(left: { invoice: InvoiceRecord }, right: { invoice: InvoiceRecord }) {
+  const leftPriority = isOverdueInvoice(left.invoice) ? 0 : isClosedInvoice(left.invoice) ? 2 : 1;
+  const rightPriority = isOverdueInvoice(right.invoice) ? 0 : isClosedInvoice(right.invoice) ? 2 : 1;
+  return leftPriority - rightPriority || new Date(right.invoice.created_at ?? 0).getTime() - new Date(left.invoice.created_at ?? 0).getTime();
 }
