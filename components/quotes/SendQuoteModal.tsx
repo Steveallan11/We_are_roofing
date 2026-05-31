@@ -93,7 +93,7 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
             <p className="mt-2 text-sm text-white">{jobTitle}</p>
           </div>
           <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3">
-            <p className="label">{isFromPrice ? "From" : "Quote Total"}</p>
+            <p className="label">{isFromPrice ? "Internal From Price" : "Internal Total"}</p>
             <p className="mt-2 text-sm text-white">{isFromPrice ? `From ${currency(total)}` : currency(total)}</p>
           </div>
         </div>
@@ -125,7 +125,7 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
             {[
               ["Readable quote", "Bigger paragraphs with report, scope, and price split clearly."],
               ["Secure link", "They can view, accept, or ask a question from one page."],
-              ["Clean email", "Professional branded email with the total and next step."]
+              ["Clean email", "Professional branded email with one clear View Quote button."]
             ].map(([title, body]) => (
               <div className="rounded-xl border border-[var(--border)] bg-black/20 p-3" key={title}>
                 <p className="text-sm font-bold text-white">{title}</p>

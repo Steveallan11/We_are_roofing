@@ -3,6 +3,7 @@ import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { nurtureEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
+import { createQuotePublicToken } from "@/lib/public-quote";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -37,10 +38,27 @@ export async function GET() {
     if (!bundle?.customer.email) continue;
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
+    const publicToken = quote.public_token || createQuotePublicToken();
+    if (!quote.public_token) {
+      const { error: tokenError } = await supabase
+        .from("quotes")
+        .update({
+          public_token: publicToken,
+          public_token_created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", sequence.quote_id);
+
+      if (tokenError) {
+        console.warn("Nurture quote token could not be created:", tokenError.message);
+        continue;
+      }
+    }
+
     const email = nurtureEmail(day, {
       customerName: bundle.customer.full_name,
       town: bundle.customer.town,
-      quoteUrl: `${appUrl}/quote/${sequence.quote_id}`,
+      quoteUrl: `${appUrl}/quote/${sequence.quote_id}?token=${encodeURIComponent(publicToken)}`,
       quoteRef: quote.quote_ref,
       businessPhone: bundle.business.phone,
       businessEmail: bundle.business.email

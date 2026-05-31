@@ -57,7 +57,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
     const response = await fetch(`/api/quotes/${quoteId}/message?token=${encodeURIComponent(secureToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sender_type: "customer", sender_name: customerName, sender_email: customerEmail, message })
+      body: JSON.stringify({ sender_name: customerName, sender_email: customerEmail, message })
     });
     setStatus(response.ok ? "Message sent to We Are Roofing." : "Sorry, message could not be sent.");
     if (response.ok) setMessage("");
@@ -238,5 +238,5 @@ function getAcceptanceHelper({ hasName, hasSelectedOption, hasValidEmail }: { ha
   if (!hasName && !hasValidEmail) return "Enter your name and email to accept this quote.";
   if (!hasName) return "Please enter your full name.";
   if (!hasValidEmail) return "Please enter a valid email address.";
-  return "You’re ready to accept this quote.";
+  return "You're ready to accept this quote.";
 }
