@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -9,6 +10,9 @@ export async function PATCH(request: Request) {
   if (!location) return NextResponse.json({ ok: false, error: "Location is required." }, { status: 400 });
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const business = await getBusiness();
   const supabase = createSupabaseAdminClient();

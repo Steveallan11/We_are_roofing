@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { buildInvoiceLineItemsFromQuote, persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -19,6 +20,9 @@ export async function POST(_request: Request, { params }: Props) {
       invoice: null
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const bundle = await getJobBundle(jobId);
   if (!bundle) {

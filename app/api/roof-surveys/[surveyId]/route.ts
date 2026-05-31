@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hydrateRoofSurvey } from "@/lib/roof-surveys";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -8,6 +9,9 @@ type Props = {
 };
 
 export async function GET(_: Request, { params }: Props) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const { surveyId } = await params;
   const survey = await hydrateRoofSurvey(surveyId);
   return NextResponse.json({ ok: true, survey });
@@ -26,6 +30,9 @@ export async function PUT(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, survey: { id: surveyId, ...body } });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
@@ -50,6 +57,9 @@ export async function DELETE(_: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("roof_surveys").delete().eq("id", surveyId);

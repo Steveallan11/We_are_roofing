@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMessages } from "@/lib/data";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -11,6 +12,9 @@ type Props = {
 export async function GET(_request: Request, { params }: Props) {
   const { id } = await params;
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true, conversation: null, messages: [] });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
@@ -36,6 +40,9 @@ export async function PATCH(request: Request, { params }: Props) {
   };
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const payload: Record<string, unknown> = {
     updated_at: new Date().toISOString()

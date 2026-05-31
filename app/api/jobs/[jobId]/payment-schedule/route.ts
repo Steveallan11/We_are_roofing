@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase, getNextInvoiceRef } from "@/lib/workflows";
@@ -27,6 +28,9 @@ export async function POST(request: Request, { params }: Props) {
   const { jobId } = await params;
   const body = (await request.json().catch(() => ({}))) as { template?: string };
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const bundle = await getJobBundle(jobId);
   if (!bundle?.quote) return NextResponse.json({ ok: false, error: "A quote is required before creating a payment schedule." }, { status: 400 });
@@ -58,6 +62,9 @@ export async function PATCH(request: Request, { params }: Props) {
   const body = (await request.json().catch(() => ({}))) as { stage_id?: string; action?: "invoice" | "paid"; payment_ref?: string };
   if (!body.stage_id || !body.action) return NextResponse.json({ ok: false, error: "Stage id and action are required." }, { status: 400 });
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const bundle = await getJobBundle(jobId);
   if (!bundle?.quote) return NextResponse.json({ ok: false, error: "Quote not found." }, { status: 404 });

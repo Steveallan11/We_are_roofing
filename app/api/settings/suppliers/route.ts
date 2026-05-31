@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 export async function GET() {
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true, suppliers: [] });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const business = await getBusiness();
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.from("suppliers").select("*").eq("business_id", business.id).order("name", { ascending: true });
@@ -19,6 +24,9 @@ export async function POST(request: Request) {
   }
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const business = await getBusiness();
   const supabase = createSupabaseAdminClient();
@@ -48,6 +56,9 @@ export async function PATCH(request: Request) {
   if (!body.id) return NextResponse.json({ ok: false, error: "Supplier id is required." }, { status: 400 });
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase

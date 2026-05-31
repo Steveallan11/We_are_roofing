@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createRoofSurvey, getLatestRoofSurvey } from "@/lib/roof-surveys";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 export async function GET(request: Request) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const url = new URL(request.url);
   const jobId = url.searchParams.get("jobId");
   if (!jobId) {
@@ -30,6 +34,9 @@ export async function POST(request: Request) {
       }
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: job } = await supabase.from("jobs").select("job_title").eq("id", body.job_id).single();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -15,6 +16,9 @@ export async function POST(_request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Invoice PDF preview completed.", pdf_url: null });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: invoice, error } = await supabase.from("invoices").select("*").eq("id", invoiceId).single();

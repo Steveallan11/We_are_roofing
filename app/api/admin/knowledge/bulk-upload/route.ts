@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getBusiness } from "@/lib/data";
 import { parseKnowledgeUpload, createSourceRecordId } from "@/lib/knowledge-upload";
 import { syncHistoricalQuotesToKnowledgeBase } from "@/lib/knowledge-sync";
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Knowledge upload preview completed.", results: [] });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const business = await getBusiness();
   const supabase = createSupabaseAdminClient();

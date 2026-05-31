@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { quoteSentEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -32,6 +33,9 @@ export async function POST(request: Request, { params }: Props) {
       next_quote_status: "Sent"
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: quote, error } = await supabase.from("quotes").select("*").eq("id", quoteId).single();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getLineLength, getSectionArea } from "@/lib/survey/geometry";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
@@ -18,6 +19,9 @@ export async function POST(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, survey: { ...body.survey, id: surveyId } });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const survey = body.survey;

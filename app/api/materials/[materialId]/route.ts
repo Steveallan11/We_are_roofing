@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -11,6 +12,9 @@ export async function PATCH(request: Request, { params }: Props) {
   const body = await request.json().catch(() => ({}));
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const quantity = body.quantity == null ? undefined : Number(body.quantity || 0);
   const unitCost = body.unit_cost == null ? undefined : Number(body.unit_cost || 0);
@@ -35,6 +39,9 @@ export async function PATCH(request: Request, { params }: Props) {
 export async function DELETE(_request: Request, { params }: Props) {
   const { materialId } = await params;
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("materials").delete().eq("id", materialId);

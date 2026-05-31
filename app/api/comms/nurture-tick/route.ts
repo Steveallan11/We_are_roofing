@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { nurtureEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -9,6 +10,9 @@ const DAYS = [2, 5, 10, 14, 21];
 
 export async function GET() {
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true, sent: 0 });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: sequences, error } = await supabase.from("nurture_sequences").select("*").eq("status", "active");

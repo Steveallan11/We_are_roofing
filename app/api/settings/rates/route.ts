@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -17,8 +18,6 @@ type SaveRatesBody = {
 };
 
 export async function GET() {
-  const business = await getBusiness();
-
   if (!canPersistToSupabase()) {
     return NextResponse.json({
       ok: true,
@@ -27,6 +26,10 @@ export async function GET() {
     });
   }
 
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const business = await getBusiness();
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("pricing_rules")
@@ -46,7 +49,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as SaveRatesBody;
-  const business = await getBusiness();
   const rates: RateCardEntry[] = (body.rates?.length ? body.rates : DEFAULT_RATES.map((rate) => ({ ...rate, rate: rate.default_rate, active: true }))).map((rate) => ({
     ...rate,
     rate: Number(rate.rate || rate.default_rate || 0)
@@ -56,6 +58,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, rates, repricedQuotes: 0 });
   }
 
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const business = await getBusiness();
   const supabase = createSupabaseAdminClient();
   const rows = rates.map((rate) => ({
     business_id: business.id,

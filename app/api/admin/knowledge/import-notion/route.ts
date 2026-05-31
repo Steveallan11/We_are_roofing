@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getBusiness } from "@/lib/data";
 import { importNotionBatch } from "@/lib/notion-import";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +22,9 @@ export async function POST(request: Request) {
         message: "Notion import preview completed."
       });
     }
+
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
 
     const business = await getBusiness();
     const result = await importNotionBatch({

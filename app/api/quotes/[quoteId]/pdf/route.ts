@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { persistQuoteArtifacts } from "@/lib/quote-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +19,9 @@ export async function POST(_request: Request, { params }: Props) {
       pdf_url: null
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: quote, error } = await supabase.from("quotes").select("*").eq("id", quoteId).single();

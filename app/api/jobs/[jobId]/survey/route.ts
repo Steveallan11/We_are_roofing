@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   formatSurveySnapshotValue,
@@ -118,6 +119,9 @@ async function saveSurvey(request: Request, { params }: Props) {
       received: payload
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const [{ data: existingSurvey }, { count: photoCount }] = await Promise.all([
@@ -330,6 +334,9 @@ export async function GET(_request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, data: null });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase

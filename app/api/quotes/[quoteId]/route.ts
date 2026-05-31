@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { calculateOptionNet, calculateOptionVat, getQuotePipelineValue, normaliseQuoteCostLine, normaliseQuoteOption } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -60,6 +61,9 @@ export async function PATCH(request: Request, { params }: Props) {
       }
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: existingQuote, error: existingError } = await supabase.from("quotes").select("job_id").eq("id", quoteId).single();

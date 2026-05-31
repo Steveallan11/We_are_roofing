@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -22,6 +23,9 @@ export async function PATCH(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Job title updated in preview mode." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase

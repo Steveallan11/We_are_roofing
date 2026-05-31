@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getConversations, getUnreadConversationCount } from "@/lib/data";
 import { findOrCreateConversation } from "@/lib/comms/findOrCreateConversation";
@@ -6,6 +7,9 @@ import { canPersistToSupabase } from "@/lib/workflows";
 import type { ConversationChannel } from "@/lib/types";
 
 export async function GET(request: Request) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const url = new URL(request.url);
   const summaryOnly = url.searchParams.get("summary") === "1";
   const conversations = await getConversations();
@@ -35,6 +39,9 @@ export async function POST(request: Request) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, conversation: null });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const conversation = await findOrCreateConversation({
     customerEmail: body.customerEmail,

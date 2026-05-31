@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const body = (await request.json().catch(() => ({}))) as { job_id?: string };
   if (!body.job_id) return NextResponse.json({ ok: false, error: "job_id is required." }, { status: 400 });
 

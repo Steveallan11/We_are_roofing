@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { requireServerEnv } from "@/lib/env";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 import { buildSystemPrompt } from "@/lib/assistant/systemPrompt";
@@ -108,6 +109,9 @@ async function logToolAction(conversationId: string, toolName: string, toolInput
 }
 
 export async function GET() {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("assistant_conversations")
@@ -134,6 +138,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const body = (await request.json()) as AssistantChatRequest;
   const uiMessages = body.messages ?? [];
   const routeContext = body.context;

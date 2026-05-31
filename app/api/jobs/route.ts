@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { requireAdminApi } from "@/lib/auth";
 import { createJobSchema } from "@/lib/validators";
 import { deleteJobWithCleanup } from "@/lib/jobs/deleteJob";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -57,6 +58,9 @@ export async function POST(request: Request) {
       received: parsed.data
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const business = await ensureBusinessRecord();
@@ -209,6 +213,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true, message: "Job status updated in preview mode." });
   }
 
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const supabase = createSupabaseAdminClient();
   const patch: Record<string, string> = {
     status: body.status,
@@ -247,6 +254,9 @@ export async function DELETE(request: Request) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Job deleted in preview mode." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const result = await deleteJobWithCleanup(createSupabaseAdminClient(), body.job_id, body.confirmation);
   if (!result.ok) {

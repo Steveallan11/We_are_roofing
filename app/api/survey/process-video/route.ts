@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensurePrivateStorageBucket, ensurePublicStorageBucket, getStoragePublicUrl, JOB_PHOTOS_BUCKET, SURVEY_FRAMES_BUCKET, SURVEY_VIDEOS_BUCKET } from "@/lib/storage";
 import { extractFrames, type ExtractedFrame } from "@/lib/survey/frameExtractor";
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Video survey preview completed." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const payload = await readVideoPayload(request, supabase);

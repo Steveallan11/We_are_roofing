@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { requireAdminApi } from "@/lib/auth";
 import { deleteCustomerWithJobs } from "@/lib/customers/deleteCustomer";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -19,6 +20,9 @@ export async function POST(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Customer deleted in preview mode." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const result = await deleteCustomerWithJobs(createSupabaseAdminClient(), customerId, body.confirmation);
   if (!result.ok) {

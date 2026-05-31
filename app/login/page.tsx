@@ -22,11 +22,11 @@ export default function LoginPage() {
             <Suspense fallback={<div className="text-sm text-[var(--muted)]">Loading sign-in...</div>}>
               <LoginForm authEnabled={authEnabled} defaultEmail={defaultEmail} />
             </Suspense>
-            <div className="rounded-2xl border border-[var(--border)] bg-[rgba(212,175,55,0.05)] p-4 text-sm text-[var(--muted)]">
-              <p className="text-[var(--text)]">Admin account: {defaultEmail}</p>
-              <p className="mt-2">Once signed in successfully, the app should keep the session and open straight back into the protected area.</p>
-              {!authEnabled ? <p className="mt-2 text-[#ff9a91]">Supabase env vars are not configured in this environment yet.</p> : null}
-            </div>
+            {!authEnabled ? (
+              <div className="rounded-2xl border border-[#ff9a91]/35 bg-[#ff9a91]/10 p-4 text-sm text-[#ffb8b1]">
+                Supabase env vars are not configured in this environment yet.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

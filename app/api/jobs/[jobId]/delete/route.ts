@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { deleteJobWithCleanup } from "@/lib/jobs/deleteJob";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -18,6 +19,9 @@ export async function POST(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Job deleted in preview mode." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const result = await deleteJobWithCleanup(createSupabaseAdminClient(), jobId, body.confirmation);
   if (!result.ok) {

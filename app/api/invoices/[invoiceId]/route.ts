@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceStatus } from "@/lib/types";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -25,6 +26,9 @@ export async function PATCH(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Invoice update preview completed." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: invoice, error } = await supabase.from("invoices").select("*").eq("id", invoiceId).single();

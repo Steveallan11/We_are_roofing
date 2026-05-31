@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMessages } from "@/lib/data";
 import { sendMessage } from "@/lib/comms/sendMessage";
@@ -11,6 +12,9 @@ type Props = {
 
 export async function GET(_request: Request, { params }: Props) {
   const { id } = await params;
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   return NextResponse.json({ ok: true, messages: await getMessages(id) });
 }
 
@@ -30,6 +34,9 @@ export async function POST(request: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, status: "preview" });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: conversation, error } = await supabase

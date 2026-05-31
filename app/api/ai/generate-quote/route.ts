@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getHistoricalQuotes, getJobBundle, getKnowledgeBase, getPricingRules } from "@/lib/data";
 import { persistQuoteArtifacts } from "@/lib/quote-engine";
 import { generateQuoteFromBundle } from "@/lib/quote";
@@ -9,6 +10,11 @@ export async function POST(request: Request) {
   const body = (await request.json()) as { job_id?: string };
   if (!body.job_id) {
     return NextResponse.json({ ok: false, error: "job_id is required" }, { status: 400 });
+  }
+
+  if (canPersistToSupabase()) {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
   }
 
   const bundle = await getJobBundle(body.job_id);

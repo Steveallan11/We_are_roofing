@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStoragePublicUrl, JOB_DOCUMENTS_BUCKET, ensurePublicStorageBucket } from "@/lib/storage";
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Knowledge upload preview completed." });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const business = await getBusiness();
   const supabase = createSupabaseAdminClient();

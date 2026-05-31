@@ -74,6 +74,9 @@ export async function DELETE(_request: Request, { params }: Props) {
   const { customerId } = await params;
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
 
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const supabase = createSupabaseAdminClient();
   const { data: linkedJobs, error: checkError } = await supabase
     .from("jobs")

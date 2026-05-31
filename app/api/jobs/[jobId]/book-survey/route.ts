@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { googleCalendarLink, type CalendarBooking } from "@/lib/calendar/generateICS";
 import { surveyConfirmationEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -36,6 +37,9 @@ export async function POST(request: Request, { params }: Props) {
   const duration = Number(body.duration_mins || 60);
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const bundle = await getJobBundle(jobId);
   if (!bundle) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });

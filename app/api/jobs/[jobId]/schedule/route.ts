@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -13,6 +14,9 @@ export async function PATCH(request: Request, { params }: Props) {
 
   if (!body.start_date) return NextResponse.json({ ok: false, error: "Start date is required." }, { status: 400 });
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const bundle = await getJobBundle(jobId);
   if (!bundle) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });

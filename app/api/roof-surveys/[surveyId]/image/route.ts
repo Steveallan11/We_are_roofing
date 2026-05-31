@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensurePrivateStorageBucket, SURVEY_IMAGES_BUCKET } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -17,6 +18,9 @@ export async function POST(request: Request, { params }: Props) {
       token: "preview-token"
     });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const { data: survey, error: surveyError } = await supabase.from("roof_surveys").select("job_id").eq("id", surveyId).single();

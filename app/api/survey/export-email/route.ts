@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildCsv } from "@/lib/survey/csvExporter";
 import { buildKml } from "@/lib/survey/kmlExporter";
@@ -18,6 +19,9 @@ type ExportEmailBody = {
 };
 
 export async function POST(request: Request) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
   const body = (await request.json().catch(() => null)) as ExportEmailBody | null;
   if (!body?.surveyId || !body.toEmail) {
     return NextResponse.json({ ok: false, error: "surveyId and toEmail are required." }, { status: 400 });

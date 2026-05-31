@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { syncAllHistoricalQuotesToKnowledgeBase } from "@/lib/knowledge-sync";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -10,6 +11,9 @@ export async function GET() {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, synced: 0, total: 0 });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   try {
     const result = await syncAllHistoricalQuotesToKnowledgeBase(createSupabaseAdminClient());

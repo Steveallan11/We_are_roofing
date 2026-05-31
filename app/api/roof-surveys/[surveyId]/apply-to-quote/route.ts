@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hydrateRoofSurvey } from "@/lib/roof-surveys";
 import { buildRoofSurveyBom, toMaterialRows, toQuoteCostBreakdown } from "@/lib/survey/geometry";
@@ -23,6 +24,9 @@ export async function POST(_: Request, { params }: Props) {
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, quote_url: quoteUrl, imported_items: bom.length });
   }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
   const [jobResult, customerResult, existingQuoteResult, pricingRulesResult] = await Promise.all([
