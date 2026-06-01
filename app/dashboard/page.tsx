@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   return (
     <AppShell
       title="Dashboard"
-      subtitle={`Good morning, Andy. ${business.business_name} has ${attentionJobs.length} item${attentionJobs.length === 1 ? "" : "s"} needing attention today.`}
+      subtitle={`${business.business_name} at a glance. Keep surveys, quotes, customers, and next actions moving from one clear workspace.`}
       actions={
         <>
           <Link className="button-primary" href="/jobs/new">
@@ -45,17 +45,20 @@ export default async function DashboardPage() {
         </>
       }
     >
-      {!hasRateCard ? (
-        <div className="hidden lg:block">
-          <RateCardNudge />
-        </div>
-      ) : null}
+      {!hasRateCard ? <RateCardNudge /> : null}
 
-      <section className="hidden grid-cols-2 gap-3 lg:grid lg:grid-cols-4 lg:gap-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <MetricCard hint="Open work excluding completed, lost, and archived" label="Active Jobs" value={activeJobs.length} />
         <MetricCard hint="Estimated value across active jobs" label="Pipeline Value" value={currency(pipelineValue)} />
         <MetricCard hint="Completed jobs this month" label="Revenue This Month" value={currency(revenueThisMonth)} />
         <MetricCard hint="Saved customer records" label="Customers" value={customers.length} />
+      </section>
+
+      <section className="mt-4 grid gap-3 md:grid-cols-2 xl:hidden">
+        <QuickAction href="/jobs/new" label="Add New Job" text="Create the customer record and job file." />
+        <QuickAction href="/jobs?filter=survey" label="Book Survey" text="Open jobs waiting for a site visit." />
+        <QuickAction href="/jobs?filter=quoting" label="Create Quote" text="Pick up survey-complete jobs ready to price." />
+        <QuickAction href="/knowledge" label="Knowledge Base" text="Manage examples, style references, and uploads." />
       </section>
 
       <section className="mt-4 card p-4">
@@ -74,7 +77,7 @@ export default async function DashboardPage() {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="section-kicker text-[0.65rem] uppercase">Needs Attention</p>
-                <h2 className="mt-2 font-condensed text-3xl text-white">{attentionJobs.length ? `${attentionJobs.length} jobs need action` : "Nothing urgent right now"}</h2>
+                <h2 className="mt-2 font-condensed text-3xl text-white">{attentionJobs.length ? `${attentionJobs.length} jobs need action` : "Everything looks up to date"}</h2>
                 <p className="mt-2 text-sm text-[var(--muted)]">
                   {attentionJobs.length
                     ? attentionJobs
@@ -102,7 +105,7 @@ export default async function DashboardPage() {
 
           <div className="card p-5 xl:hidden">
             <p className="section-kicker text-[0.65rem] uppercase">Work This Week</p>
-            <h2 className="mt-2 font-condensed text-3xl text-white">{nextSurvey ? "Next survey" : "No survey booked"}</h2>
+            <h2 className="mt-2 font-condensed text-3xl text-white">{nextSurvey ? "Next booked survey" : "No survey booked"}</h2>
             {nextSurvey ? (
               <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
                 <p className="font-semibold text-white">{nextSurvey.job_ref ?? "WR-J-TBC"} | {nextSurvey.customer?.full_name ?? nextSurvey.job_title}</p>
@@ -163,16 +166,16 @@ export default async function DashboardPage() {
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Quick Actions</p>
             <div className="mt-4 grid gap-3">
-              <QuickAction href="/jobs/new" label="Add New Job" text="Create the job file and customer record." />
-              <QuickAction href="/jobs?filter=survey" label="Book A Survey" text="Find jobs waiting for site survey." />
-              <QuickAction href="/jobs?filter=quoting" label="Generate Quote" text="See survey-complete jobs ready to price." />
+              <QuickAction href="/jobs/new" label="Add New Job" text="Create the customer record and job file." />
+              <QuickAction href="/jobs?filter=survey" label="Book Survey" text="Find jobs waiting for a site survey." />
+              <QuickAction href="/jobs?filter=quoting" label="Create Quote" text="Open survey-complete jobs ready to price." />
               <QuickAction href="/knowledge" label="Knowledge Base" text="Upload quote examples and style references." />
             </div>
           </div>
 
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">This Week</p>
-            <h2 className="mt-2 font-condensed text-3xl text-white">{nextSurvey ? "Next survey" : "No survey booked"}</h2>
+            <h2 className="mt-2 font-condensed text-3xl text-white">{nextSurvey ? "Next booked survey" : "No survey booked"}</h2>
             {nextSurvey ? (
               <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
                 <p className="font-semibold text-white">{nextSurvey.job_ref ?? "WR-J-TBC"} | {nextSurvey.customer?.full_name ?? nextSurvey.job_title}</p>
@@ -185,15 +188,6 @@ export default async function DashboardPage() {
               <p className="mt-3 text-sm text-[var(--muted)]">No future survey date found. Use Jobs to book the next site visit.</p>
             )}
           </div>
-
-          <div className="card hidden border-[var(--gold)]/40 bg-[var(--gold)]/5 p-5 lg:block">
-            <p className="section-kicker text-[0.65rem] uppercase">Gauge Suggestion</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--text)]">
-              {attentionJobs.length
-                ? `You have ${attentionJobs.length} job${attentionJobs.length === 1 ? "" : "s"} needing attention. Start with ${attentionJobs[0].job_ref ?? attentionJobs[0].job_title}.`
-                : "Everything looks under control. A pipeline review would be the useful next check."}
-            </p>
-          </div>
         </aside>
       </section>
     </AppShell>
@@ -202,9 +196,12 @@ export default async function DashboardPage() {
 
 function QuickAction({ href, label, text }: { href: string; label: string; text: string }) {
   return (
-    <Link className="rounded-2xl border border-[var(--border)] bg-black/20 p-4 transition hover:border-[var(--gold)]/60" href={href as Route}>
-      <p className="font-semibold text-white">{label}</p>
-      <p className="mt-1 text-sm text-[var(--muted)]">{text}</p>
+    <Link className="rounded-2xl border border-[var(--gold)]/25 bg-[linear-gradient(135deg,rgba(212,175,55,0.16),rgba(8,8,8,0.88))] p-4 transition hover:border-[var(--gold)]/70 hover:bg-[linear-gradient(135deg,rgba(212,175,55,0.2),rgba(8,8,8,0.92))]" href={href as Route}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-semibold text-white">{label}</p>
+        <span className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--gold-l)]">Open</span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-[var(--text)]">{text}</p>
     </Link>
   );
 }
