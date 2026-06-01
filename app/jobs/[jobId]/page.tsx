@@ -39,7 +39,7 @@ export default async function JobDetailPage({ params }: Props) {
   const surveyHighlights = getSurveyHighlights(bundle.survey);
   const surveyMeasurements = getSurveyMeasurementsSummary(bundle.survey);
   const documentGroups = groupDocuments(bundle.documents);
-  const timeline = [
+  const workflowTimeline = [
     { label: "Job created", date: bundle.job.created_at, detail: bundle.job.job_ref ?? "Job file opened" },
     { label: "Survey booked", date: bundle.job.survey_date, detail: bundle.survey ? "Survey workspace active" : "Waiting for survey" },
     { label: "Survey completed", date: bundle.survey?.updated_at ?? bundle.survey?.created_at, detail: bundle.survey ? "Survey details saved" : null },
@@ -57,11 +57,20 @@ export default async function JobDetailPage({ params }: Props) {
   const commercialLabel = commercialValue ? `${isFromOptionValue({ ...bundle.job, quote: bundle.quote ?? null }) ? "From " : ""}${currency(commercialValue)}` : "TBC";
   const quoteDisplayValue = getQuotePipelineValue(bundle.quote ?? null);
   const quoteDisplayLabel = quoteDisplayValue ? `${bundle.quote && isFromOptionValue({ ...bundle.job, quote: bundle.quote }) ? "From " : ""}${currency(quoteDisplayValue)}` : "TBC";
+  const activityFeed = buildActivityFeed({
+    documents: bundle.documents,
+    emailLogs: bundle.email_logs,
+    events: workflowTimeline,
+    jobId: bundle.job.id
+  });
+  const totalDocumentCount = bundle.documents.length;
+  const uploadedDocumentCount = documentGroups.Uploads.length;
+  const generatedDocumentCount = totalDocumentCount - uploadedDocumentCount;
 
   return (
         <AppShell
       title={bundle.job.job_title}
-      subtitle="This is the full job file: customer, survey, photos, quote progress, documents, and the next action needed to move the work forward."
+      subtitle="Full job file with the customer details, survey notes, quote progress, paperwork, and the next step needed to keep this one moving."
       actions={
         <>
           <QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} documents={bundle.documents} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={bundle.quote ?? null} />
@@ -114,9 +123,9 @@ export default async function JobDetailPage({ params }: Props) {
 
             <div className="grid gap-3 p-5 md:grid-cols-4">
               <DossierStat label="Contact" value={bundle.customer.phone ?? "No phone"} hint={bundle.customer.email ?? "No email"} href={bundle.customer.phone ? `tel:${bundle.customer.phone}` : undefined} />
-              <DossierStat label="Commercial" value={commercialLabel} hint="Estimated value" />
+              <DossierStat label="Job Value" value={commercialLabel} hint="Current pipeline value" />
               <DossierStat label="Survey" value={bundle.survey ? "Saved" : "Not started"} hint={bundle.survey ? formatDate(bundle.survey.updated_at ?? bundle.survey.created_at) : "Open survey workspace"} href={`/jobs/${bundle.job.id}/survey`} />
-              <DossierStat label="Documents" value={bundle.documents.length.toString()} hint="Filed against this job" />
+              <DossierStat label="Documents" value={bundle.documents.length.toString()} hint="Uploads, reports, and PDFs" />
             </div>
 
             <div className="grid gap-3 border-t border-[var(--border)] bg-black/10 p-5 md:grid-cols-4">
@@ -161,25 +170,36 @@ export default async function JobDetailPage({ params }: Props) {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="section-kicker text-[0.65rem] uppercase">{bundle.job.job_ref ?? "WR-J-TBC"}</p>
-                <h2 className="mt-2 font-condensed text-3xl text-white">Job timeline</h2>
+                <h2 className="mt-2 font-condensed text-3xl text-white">Recent activity</h2>
+                <p className="mt-2 text-sm text-[var(--muted)]">Key job milestones, emails, and filed documents in date order.</p>
               </div>
               <Link className="button-ghost !px-4 !py-2 text-sm" href={`/jobs/${bundle.job.id}`}>
                 Job file
               </Link>
             </div>
             <div className="mt-5 space-y-3">
-              {timeline.map((event, index) => (
-                <div className="grid grid-cols-[1rem_1fr] gap-3" key={`${event.label}-${index}`}>
+              {activityFeed.map((event, index) => (
+                <div className="grid grid-cols-[1rem_1fr] gap-3" key={`${event.type}-${event.label}-${index}`}>
                   <div className="relative flex justify-center">
-                    <span className="mt-1.5 h-3 w-3 rounded-full bg-[var(--gold)] shadow-[0_0_18px_rgba(212,175,55,0.35)]" />
-                    {index < timeline.length - 1 ? <span className="absolute top-5 h-[calc(100%+0.25rem)] w-px bg-[var(--border)]" /> : null}
+                    <span className={`mt-1.5 h-3 w-3 rounded-full shadow-[0_0_18px_rgba(212,175,55,0.35)] ${getActivityDotClass(event.type)}`} />
+                    {index < activityFeed.length - 1 ? <span className="absolute top-5 h-[calc(100%+0.25rem)] w-px bg-[var(--border)]" /> : null}
                   </div>
                   <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-white">{event.label}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-white">{event.label}</p>
+                        <span className="rounded-full border border-[var(--border)] bg-black/20 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[var(--dim)]">
+                          {event.badge}
+                        </span>
+                      </div>
                       <p className="text-xs text-[var(--muted)]">{formatDate(event.date ?? null)}</p>
                     </div>
                     {event.detail ? <p className="mt-1 text-sm text-[var(--muted)]">{event.detail}</p> : null}
+                    {event.href ? (
+                      <Link className="mt-3 inline-flex text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline" href={event.href as Route}>
+                        Open
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -335,6 +355,14 @@ export default async function JobDetailPage({ params }: Props) {
 
             <div className="card p-5">
               <p className="section-kicker text-[0.65rem] uppercase">Documents</p>
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                Keep supplier files, customer paperwork, reports, and generated PDFs together so they are ready to preview or attach when sending the quote.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <MiniInfoCard label="All files" value={String(totalDocumentCount)} hint="Everything on this job file" />
+                <MiniInfoCard label="Uploaded" value={String(uploadedDocumentCount)} hint="Manual uploads and third-party files" />
+                <MiniInfoCard label="Generated" value={String(generatedDocumentCount)} hint="Quote, invoice, and survey outputs" />
+              </div>
               <div className="mt-4">
                 <DocumentUploadButton jobId={bundle.job.id} />
               </div>
@@ -364,15 +392,26 @@ export default async function JobDetailPage({ params }: Props) {
                 Object.entries(documentGroups).map(([group, documents]) =>
                   documents.length > 0 ? (
                     <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3" key={group}>
-                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-d)]">{group}</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-d)]">{group}</p>
+                        <span className="text-xs text-[var(--muted)]">{documents.length} file{documents.length === 1 ? "" : "s"}</span>
+                      </div>
                       <div className="mt-3 space-y-2">
                         {documents.map((document) => (
                           <div className="rounded-xl border border-[var(--border)] bg-black/20 p-3" key={document.id}>
-                            <p className="font-semibold text-white">{document.display_name}</p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">{getDocumentDisplayType(document)}</p>
-                            <a className="mt-2 inline-flex text-sm text-[var(--gold-l)] underline-offset-4 hover:underline" href={getJobDocumentHref(document)} target="_blank">
-                              Open document
-                            </a>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-white">{document.display_name}</p>
+                                <p className="mt-1 text-xs text-[var(--muted)]">
+                                  {getDocumentDisplayType(document)}
+                                  {document.created_at ? ` | Added ${formatDate(document.created_at)}` : ""}
+                                  {document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
+                                </p>
+                              </div>
+                              <a className="inline-flex shrink-0 text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline" href={getJobDocumentHref(document)} target="_blank">
+                                Open document
+                              </a>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -387,15 +426,31 @@ export default async function JobDetailPage({ params }: Props) {
 
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Email Log</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">Everything sent from this job file, with quick links back to the related quote when available.</p>
             <div className="mt-4 space-y-3">
               {bundle.email_logs.length > 0 ? (
                 bundle.email_logs.map((item) => (
                   <div className="rounded-2xl border p-3" key={item.id}>
-                    <p className="font-semibold text-white">{item.subject}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">{item.to_email}</p>
-                    <p className="mt-1 text-xs text-[var(--dim)]">
-                      {item.status} - {formatDate(item.sent_at ?? null)}
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white">{item.subject}</p>
+                        <p className="mt-1 text-sm text-[var(--muted)]">{item.to_email ?? item.to_phone ?? "Recipient not saved"}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {item.channel ? <span className="rounded-full border border-[var(--border)] bg-black/20 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--dim)]">{item.channel}</span> : null}
+                        {item.template_type ? <span className="rounded-full border border-[var(--border)] bg-black/20 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--dim)]">{item.template_type}</span> : null}
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--dim)]">
+                      {item.status} | {formatDate(item.sent_at ?? null)}
+                      {item.opened_at ? ` | Opened ${formatDate(item.opened_at)}` : ""}
+                      {item.clicked_at ? ` | Clicked ${formatDate(item.clicked_at)}` : ""}
                     </p>
+                    {item.quote_id ? (
+                      <Link className="mt-3 inline-flex text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline" href={`/jobs/${bundle.job.id}/quote/preview`}>
+                        Open related quote
+                      </Link>
+                    ) : null}
                   </div>
                 ))
               ) : (
@@ -474,6 +529,16 @@ function InfoRow({ label, value, href }: { label: string; value: string; href?: 
   );
 }
 
+function MiniInfoCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3">
+      <p className="text-[0.62rem] font-bold uppercase tracking-[0.22em] text-[var(--dim)]">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p>
+    </div>
+  );
+}
+
 function QuoteOptionMiniBreakdown({ option }: { option: QuoteOption }) {
   const rows = buildQuoteOptionPriceSummary(option);
   if (!rows.length) return null;
@@ -505,6 +570,64 @@ function groupDocuments(documents: JobDocumentRecord[]) {
   };
 }
 
+type ActivityFeedItem = {
+  type: "workflow" | "document" | "email";
+  badge: string;
+  label: string;
+  detail: string | null;
+  date: string | null | undefined;
+  href?: string;
+};
+
+function buildActivityFeed({
+  events,
+  documents,
+  emailLogs,
+  jobId
+}: {
+  events: Array<{ label: string; detail: string | null; date: string | null | undefined }>;
+  documents: JobDocumentRecord[];
+  emailLogs: Array<{ subject: string; status: string; sent_at?: string | null; quote_id?: string | null; to_email?: string | null }>;
+  jobId: string;
+}): ActivityFeedItem[] {
+  const workflowItems: ActivityFeedItem[] = events.map((event) => ({
+    type: "workflow",
+    badge: "Workflow",
+    label: event.label,
+    detail: event.detail,
+    date: event.date
+  }));
+
+  const documentItems: ActivityFeedItem[] = documents.slice(0, 6).map((document) => ({
+    type: "document",
+    badge: "Document",
+    label: document.display_name,
+    detail: getDocumentDisplayType(document),
+    date: document.created_at,
+    href: getJobDocumentHref(document)
+  }));
+
+  const emailItems: ActivityFeedItem[] = emailLogs.slice(0, 6).map((item) => ({
+    type: "email",
+    badge: "Email",
+    label: item.subject,
+    detail: [item.status, item.to_email].filter(Boolean).join(" | ") || null,
+    date: item.sent_at,
+    href: item.quote_id ? `/jobs/${jobId}/quote/preview` : undefined
+  }));
+
+  return [...workflowItems, ...documentItems, ...emailItems]
+    .filter((item) => item.date || item.detail)
+    .sort((left, right) => new Date(right.date ?? 0).getTime() - new Date(left.date ?? 0).getTime())
+    .slice(0, 10);
+}
+
+function getActivityDotClass(type: ActivityFeedItem["type"]) {
+  if (type === "document") return "bg-[#3b82f6]";
+  if (type === "email") return "bg-[#10b981]";
+  return "bg-[var(--gold)]";
+}
+
 function getDocumentDisplayType(document: JobDocumentRecord) {
   if (document.document_type === "survey_snapshot") return "Survey snapshot";
   if (document.document_type === "quote_html") return "Quote HTML snapshot";
@@ -512,4 +635,9 @@ function getDocumentDisplayType(document: JobDocumentRecord) {
   if (document.document_type === "invoice_pdf") return "Invoice PDF";
   if (document.document_type === "invoice_html") return "Invoice HTML snapshot";
   return document.document_type;
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
