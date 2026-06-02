@@ -153,3 +153,30 @@ export const STATUS_COLORS: Record<JobStatus, { bg: string; text: string; dot: s
 export function getStatusColor(status: JobStatus) {
   return STATUS_COLORS[status] ?? STATUS_COLORS.Archived;
 }
+
+type Stage = "alert" | "pending" | "ready" | "active" | "complete";
+
+export function getStageColor(stage: Stage): { bg: string; border: string; text: string } {
+  switch (stage) {
+    case "alert":
+      return { bg: "var(--stage-alert-bg)", border: "var(--stage-alert-border)", text: "var(--stage-alert-text)" };
+    case "pending":
+      return { bg: "var(--stage-pending-bg)", border: "var(--stage-pending-border)", text: "var(--stage-pending-text)" };
+    case "ready":
+      return { bg: "var(--stage-ready-bg)", border: "var(--stage-ready-border)", text: "var(--stage-ready-text)" };
+    case "active":
+      return { bg: "var(--stage-active-bg)", border: "var(--stage-active-border)", text: "var(--stage-active-text)" };
+    case "complete":
+      return { bg: "var(--stage-complete-bg)", border: "var(--stage-complete-border)", text: "var(--stage-complete-text)" };
+  }
+}
+
+export function getJobStage(status: JobStatus): Stage {
+  const config = STATUS_CONFIG[status];
+  if (!config) return "complete";
+
+  const themeColor = THEME_STATUS_COLORS[status];
+  if (!themeColor) return "complete";
+
+  return (themeColor as any).stage ?? "complete";
+}
