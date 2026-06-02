@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
+import { Button } from "@/components/ui/primitives";
 import { QuoteEditor } from "@/components/jobs/quote-editor";
 import { AppShell } from "@/components/layout/app-shell";
 import { QuoteActions } from "@/components/jobs/quote-actions";
@@ -39,9 +40,9 @@ export default async function QuotePage({ params, searchParams }: Props) {
       actions={<QuoteActions customerEmail={bundle.customer.email} customerName={bundle.customer.full_name} documents={bundle.documents} jobId={bundle.job.id} jobTitle={bundle.job.job_title} quote={quote} />}
     >
       <div className="mb-4 lg:hidden">
-        <Link className="button-ghost w-full !justify-center" href={`/jobs/${bundle.job.id}`}>
-          Back to Job File
-        </Link>
+        <Button variant="ghost" size="md" fullWidth asChild>
+          <Link href={(`/jobs/${bundle.job.id}` as Route)}>Back to Job File</Link>
+        </Button>
       </div>
       <section className="page-grid">
         <div className="stack">
