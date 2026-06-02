@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 
 function getQuickPrompts(pathname: string) {
-  if (pathname === "/crm") {
+  if (pathname === "/jobs") {
     return ["What needs following up?", "Show me this week's jobs", "Create a new job"];
   }
   if (/^\/jobs\/[^/]+$/.test(pathname)) {

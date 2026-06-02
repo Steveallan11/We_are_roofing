@@ -34,7 +34,7 @@ You can NAVIGATE: return a navigation action to move the operator to the right p
 You can SUMMARISE: pipeline, overdue work, recent activity, and commercial state
 
 ## Real App Routes
-- Jobs board: /crm
+- Jobs board: /jobs
 - New job: /jobs/new
 - Job file: /jobs/[jobId]
 - Site survey: /jobs/[jobId]/survey

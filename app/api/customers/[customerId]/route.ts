@@ -106,7 +106,6 @@ export async function DELETE(_request: Request, { params }: Props) {
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   revalidatePath("/customers");
   revalidatePath(`/customers/${customerId}`);
-  revalidatePath("/crm");
   revalidatePath("/jobs");
   return NextResponse.json({ ok: true });
 }

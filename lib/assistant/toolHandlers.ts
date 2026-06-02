@@ -567,7 +567,7 @@ async function navigateTo(input: Record<string, unknown>, routeContext?: Assista
 
   if (!path && destination) {
     if (destination === "dashboard") path = "/dashboard";
-    if (destination === "jobs") path = "/crm";
+    if (destination === "jobs") path = "/jobs";
     if (destination === "new_job") path = "/jobs/new";
     if (destination === "knowledge") path = "/knowledge";
     if (destination === "job" && jobId) path = `/jobs/${jobId}`;
@@ -585,18 +585,18 @@ async function navigateTo(input: Record<string, unknown>, routeContext?: Assista
   if (path.startsWith("/admin")) {
     path = path
       .replace("/admin/jobs/new", "/jobs/new")
-      .replace("/admin/jobs", "/crm")
-      .replace("/admin/quotes", "/crm")
-      .replace("/admin/customers", "/crm")
+      .replace("/admin/jobs", "/jobs")
+      .replace("/admin/quotes", "/jobs")
+      .replace("/admin/customers", "/jobs")
       .replace("/admin/knowledge", "/knowledge");
   }
 
   if (path === "/quotes" || path === "/quotes/new" || path.startsWith("/quotes/")) {
-    path = jobId ? `/jobs/${jobId}/quote` : "/crm";
+    path = jobId ? `/jobs/${jobId}/quote` : "/jobs";
   }
 
   if (path === "/admin/quotes/new" || path === "/admin/quotes") {
-    path = jobId ? `/jobs/${jobId}/quote` : "/crm";
+    path = jobId ? `/jobs/${jobId}/quote` : "/jobs";
   }
 
   return {

@@ -31,7 +31,6 @@ export async function POST(request: Request, { params }: Props) {
 
   revalidatePath("/customers");
   revalidatePath(`/customers/${customerId}`);
-  revalidatePath("/crm");
   revalidatePath("/jobs");
 
   return NextResponse.json({ ok: true, message: result.message });
