@@ -532,6 +532,15 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                   <span className="label">Customer description</span>
                   <textarea className="field min-h-20" onChange={(event) => updateOption(option.id, { description: event.target.value })} value={option.description} />
                 </label>
+                <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-[rgba(212,175,55,0.07)] p-3">
+                  <p className="section-kicker text-[0.62rem] uppercase text-[var(--gold)]">Section pricing</p>
+                  <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                    Add one roof works price and one scaffold/access price for each roof section. Both lines include VAT when the customer accepts this option.
+                  </p>
+                  <button className="button-primary mt-3 !min-h-10 !px-3 !py-2 text-xs" onClick={() => addSectionPackage(option.id)} type="button">
+                    + Add roof section + scaffold price
+                  </button>
+                </div>
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
                       <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
@@ -612,9 +621,15 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             ))}
           </div>
         ) : (
-          <p className="mt-4 rounded-2xl border border-[var(--border)] bg-black/10 p-4 text-sm text-[var(--muted)]">
-            No quote options yet. The single cost breakdown above is still used unless you create options.
-          </p>
+          <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-[rgba(212,175,55,0.07)] p-4">
+            <p className="font-semibold text-white">Create customer-selectable quote options first.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              Once Option A/B exists, you can add section prices such as front roof works, front scaffold, rear roof works, and rear scaffold.
+            </p>
+            <button className="button-primary mt-4" onClick={addOption} type="button">
+              Create Option A/B and add section pricing
+            </button>
+          </div>
         )}
       </div>
 
