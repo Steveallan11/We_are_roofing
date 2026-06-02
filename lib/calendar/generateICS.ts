@@ -6,6 +6,7 @@ export type CalendarBooking = {
   address: string;
   notes?: string;
   jobRef: string;
+  calendarTitle?: string;
 };
 
 function pad(value: number) {
@@ -42,6 +43,7 @@ function escapeICS(value: string) {
 export function generateICS(booking: CalendarBooking): string {
   const start = formatICSDate(booking.date, booking.timeStart);
   const end = formatICSDate(booking.date, booking.timeStart, booking.duration);
+  const title = booking.calendarTitle || `Roof Survey - ${booking.title}`;
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -52,7 +54,7 @@ export function generateICS(booking: CalendarBooking): string {
     `UID:${booking.jobRef}-booking@weareroofing.co.uk`,
     `DTSTART:${start}`,
     `DTEND:${end}`,
-    `SUMMARY:${escapeICS(`Roof Survey - ${booking.title}`)}`,
+    `SUMMARY:${escapeICS(title)}`,
     `LOCATION:${escapeICS(booking.address)}`,
     `DESCRIPTION:${escapeICS(`Job ${booking.jobRef}\n${booking.notes || ""}`)}`,
     "END:VEVENT",
@@ -63,7 +65,8 @@ export function generateICS(booking: CalendarBooking): string {
 export function googleCalendarLink(booking: CalendarBooking): string {
   const base = "https://calendar.google.com/calendar/render?action=TEMPLATE";
   const dates = `${formatGCal(booking.date, booking.timeStart)}/${formatGCal(booking.date, booking.timeStart, booking.duration)}`;
-  return `${base}&text=${encodeURIComponent(`Roof Survey - ${booking.title}`)}&dates=${dates}&location=${encodeURIComponent(booking.address)}&details=${encodeURIComponent(`Job ${booking.jobRef}\n${booking.notes || ""}`)}`;
+  const title = booking.calendarTitle || `Roof Survey - ${booking.title}`;
+  return `${base}&text=${encodeURIComponent(title)}&dates=${dates}&location=${encodeURIComponent(booking.address)}&details=${encodeURIComponent(`Job ${booking.jobRef}\n${booking.notes || ""}`)}`;
 }
 
 export function icsDataUrl(booking: CalendarBooking) {
