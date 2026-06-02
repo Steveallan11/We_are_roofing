@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useMemo, useState } from "react";
+import { Button, Input, Badge } from "@/components/ui/primitives";
 import { getJobPipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import type { Customer, Job, QuoteRecord } from "@/lib/types";
@@ -46,20 +47,20 @@ export function CustomersWorkspace({ customers }: Props) {
 
   return (
     <div className="stack">
-      <div className="card p-5">
+      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="section-kicker text-[0.65rem] uppercase">Customers</p>
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">Customers</p>
             <h2 className="mt-2 font-condensed text-3xl text-white">{customers.length} saved contacts</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">Search by name, phone, email, town or postcode. Active customers have live jobs in the pipeline.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link className="button-primary" href={"/customers/new" as Route}>
-              Add Customer
-            </Link>
-            <Link className="button-ghost" href={"/jobs/new" as Route}>
-              Add Job
-            </Link>
+            <Button variant="primary" size="md" asChild>
+              <Link href={"/customers/new" as Route}>Add Customer</Link>
+            </Button>
+            <Button variant="ghost" size="md" asChild>
+              <Link href={"/jobs/new" as Route}>Add Job</Link>
+            </Button>
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -68,15 +69,17 @@ export function CustomersWorkspace({ customers }: Props) {
           <CustomerStat danger={missingEmailCount > 0} label="Missing Email" value={missingEmailCount.toString()} />
           <CustomerStat danger={missingPhoneCount > 0} label="Missing Phone" value={missingPhoneCount.toString()} />
         </div>
-        <div className="mt-4 flex rounded-2xl border border-[var(--border)] bg-black/20 p-1">
-          <button className={view === "active" ? "flex-1 rounded-xl bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black" : "flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-[var(--muted)]"} onClick={() => setView("active")} type="button">
+        <div className="mt-4 flex gap-2">
+          <Button variant={view === "active" ? "primary" : "secondary"} className="flex-1" onClick={() => setView("active")}>
             Active ({activeCustomers.length})
-          </button>
-          <button className={view === "historic" ? "flex-1 rounded-xl bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black" : "flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-[var(--muted)]"} onClick={() => setView("historic")} type="button">
+          </Button>
+          <Button variant={view === "historic" ? "primary" : "secondary"} className="flex-1" onClick={() => setView("historic")}>
             Historic ({historicCustomers.length})
-          </button>
+          </Button>
         </div>
-        <input className="field mt-4" onChange={(event) => setQuery(event.target.value)} placeholder="Search customers..." value={query} />
+        <div className="mt-4">
+          <Input placeholder="Search customers..." onChange={(e) => setQuery(e.target.value)} value={query} />
+        </div>
       </div>
 
       {filtered.length ? (
@@ -86,12 +89,12 @@ export function CustomersWorkspace({ customers }: Props) {
           ))}
         </div>
       ) : (
-        <div className="empty-state">
-          <p className="empty-state__title">No customers found</p>
-          <p className="empty-state__hint">Try a different search, switch tabs, or add a new customer to get started.</p>
-          <Link className="button-primary mt-2" href={"/customers/new" as Route}>
-            Add Customer
-          </Link>
+        <div className="rounded-xl border border-dashed border-[var(--border-mid)] p-8 text-center">
+          <p className="font-semibold text-[var(--text)]">No customers found</p>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">Try a different search, switch tabs, or add a new customer to get started.</p>
+          <Button variant="primary" size="md" asChild className="mt-4">
+            <Link href={"/customers/new" as Route}>Add Customer</Link>
+          </Button>
         </div>
       )}
     </div>
@@ -119,7 +122,7 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
     .toUpperCase();
 
   return (
-    <article className="card overflow-hidden">
+    <article className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
@@ -129,9 +132,9 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="truncate font-condensed text-2xl text-white">{displayName}</h3>
-              <span className={activeJobs.length ? "tag-chip tag-chip--success" : "tag-chip"}>
+              <Badge variant={activeJobs.length ? "active" : "neutral"} size="sm">
                 {activeJobs.length ? `${activeJobs.length} active` : "Historic"}
-              </span>
+              </Badge>
             </div>
             <p className="mt-1 truncate text-sm text-[var(--muted)]">{subtitle}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-sm">
@@ -149,29 +152,29 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
         {missing.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {missing.map((item) => (
-              <span className="tag-chip tag-chip--warning" key={item}>
+              <Badge key={item} variant="alert" size="sm">
                 {item}
-              </span>
+              </Badge>
             ))}
           </div>
         ) : null}
       </div>
       <div className="flex flex-wrap gap-3 border-t border-[var(--border)] bg-black/20 p-4">
-        <Link className="button-secondary !px-4 !py-2 text-sm" href={`/customers/${customer.id}` as Route}>
-          Open Customer
-        </Link>
-        <Link className="button-ghost !px-4 !py-2 text-sm" href={`/jobs/new?customerId=${customer.id}` as Route}>
-          New Job
-        </Link>
+        <Button variant="secondary" size="sm" asChild>
+          <Link href={`/customers/${customer.id}` as Route}>Open Customer</Link>
+        </Button>
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`/jobs/new?customerId=${customer.id}` as Route}>New Job</Link>
+        </Button>
         {phone ? (
-          <a className="button-ghost !px-4 !py-2 text-sm" href={`tel:${phone}`}>
-            Call
-          </a>
+          <Button variant="ghost" size="sm" asChild>
+            <a href={`tel:${phone}`}>Call</a>
+          </Button>
         ) : null}
         {email ? (
-          <a className="button-ghost !px-4 !py-2 text-sm" href={`mailto:${email}`}>
-            Email
-          </a>
+          <Button variant="ghost" size="sm" asChild>
+            <a href={`mailto:${email}`}>Email</a>
+          </Button>
         ) : null}
       </div>
     </article>
