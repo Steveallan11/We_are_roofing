@@ -91,6 +91,16 @@ export async function POST(request: Request, { params }: Props) {
 
   await supabase.from("jobs").update({ updated_at: new Date().toISOString() }).eq("id", jobId);
 
+  // Trigger AI analysis for analyzable document types (images and PDFs)
+  const ANALYZABLE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+  if (document && ANALYZABLE_TYPES.includes(mimeType)) {
+    // Non-blocking: trigger analysis in background
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/jobs/${jobId}/documents/${document.id}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }).catch((err) => console.error("Background analysis failed:", err));
+  }
+
   return NextResponse.json({ ok: true, message: "Document saved to job file.", document });
 }
 

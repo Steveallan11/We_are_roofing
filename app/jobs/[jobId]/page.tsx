@@ -5,6 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { CustomerContactEditor } from "@/components/customers/customer-contact-editor";
 import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
+import { DocumentAnalysisCard } from "@/components/documents/DocumentAnalysisCard";
+import { JobDocumentsSection } from "@/components/documents/JobDocumentsSection";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
 import { JobTitleEditor } from "@/components/jobs/job-title-editor";
@@ -399,41 +401,7 @@ export default async function JobDetailPage({ params }: Props) {
                 Preview Completion Certificate
               </Link>
             </div>
-            <div className="mt-4 grid gap-3">
-              {bundle.documents.length > 0 ? (
-                Object.entries(documentGroups).map(([group, documents]) =>
-                  documents.length > 0 ? (
-                    <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3" key={group}>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-d)]">{group}</p>
-                        <span className="text-xs text-[var(--muted)]">{documents.length} file{documents.length === 1 ? "" : "s"}</span>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {documents.map((document) => (
-                          <div className="rounded-xl border border-[var(--border)] bg-black/20 p-3" key={document.id}>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <p className="truncate font-semibold text-white">{document.display_name}</p>
-                                <p className="mt-1 text-xs text-[var(--muted)]">
-                                  {getDocumentDisplayType(document)}
-                                  {document.created_at ? ` | Added ${formatDate(document.created_at)}` : ""}
-                                  {document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
-                                </p>
-                              </div>
-                              <a className="inline-flex shrink-0 text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline" href={getJobDocumentHref(document)} target="_blank">
-                                Open document
-                              </a>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null
-                )
-              ) : (
-                <p className="text-sm text-[var(--muted)]">Generated quote documents and supporting files will appear here.</p>
-              )}
-            </div>
+            <JobDocumentsSection jobId={bundle.job.id} documents={bundle.documents} documentGroups={documentGroups} />
           </div>
 
           <div className="card p-5">

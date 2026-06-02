@@ -610,6 +610,9 @@ export type JobDocumentRecord = {
   file_size?: number | null;
   content_html?: string | null;
   created_at?: string;
+  analysis_data?: Record<string, any> | null;
+  analysis_status?: string | null;
+  analysis_created_at?: string | null;
 };
 
 export type QuoteAttachmentRecord = {
