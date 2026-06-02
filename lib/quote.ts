@@ -123,6 +123,25 @@ ${record.imported_text}`
     )
     .join("\n");
 
+  const analyzedDocuments = bundle.documents.filter((doc) => doc.analysis_status === "completed" && doc.analysis_data);
+  const documentAnalysisContext =
+    analyzedDocuments.length > 0
+      ? analyzedDocuments
+          .map(
+            (doc) => `
+Document: ${doc.display_name}
+Type: ${(doc.analysis_data as any)?.document_type_inferred ?? "Unknown"}
+Summary: ${(doc.analysis_data as any)?.summary ?? "No summary available"}
+Key Observations:
+${(doc.analysis_data as any)?.key_observations?.map((obs: string) => `- ${obs}`).join("\n") ?? "- No observations"}
+Recommended Actions:
+${(doc.analysis_data as any)?.recommended_actions?.map((action: string) => `- ${action}`).join("\n") ?? "- No actions"}
+Confidence: ${(doc.analysis_data as any)?.confidence_level ?? "Unknown"}
+`
+          )
+          .join("\n---\n")
+      : "No analyzed documents available.";
+
   const prompt = `
 You are the We Are Roofing Expert Quote Builder.
 Use the survey and knowledge base below to produce a professional quote in Andrew's We Are Roofing style, wording, and tone.
@@ -146,6 +165,9 @@ ${JSON.stringify(bundle.survey, null, 2)}
 
 Photo metadata:
 ${JSON.stringify(bundle.photos, null, 2)}
+
+Technical Documents Analysis:
+${documentAnalysisContext}
 
 Knowledge base:
 ${knowledge || "No relevant knowledge base entries available."}

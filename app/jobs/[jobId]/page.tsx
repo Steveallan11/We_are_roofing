@@ -5,6 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { CustomerContactEditor } from "@/components/customers/customer-contact-editor";
 import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
+import { DocumentAnalysisCard } from "@/components/documents/DocumentAnalysisCard";
+import { JobDocumentsSection } from "@/components/documents/JobDocumentsSection";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { InvoiceActions } from "@/components/jobs/invoice-actions";
 import { JobTitleEditor } from "@/components/jobs/job-title-editor";
@@ -17,6 +19,7 @@ import { getJobBundle, getPaymentSchedule } from "@/lib/data";
 import { getJobDocumentHref } from "@/lib/documents";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
+import { getJobStage, getStageColor } from "@/lib/jobs/statusColors";
 import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
@@ -53,6 +56,8 @@ export default async function JobDetailPage({ params }: Props) {
     customer: bundle.customer,
     quote: bundle.quote ?? null
   });
+  const jobStage = getJobStage(bundle.job.status);
+  const stageColors = getStageColor(jobStage);
   const commercialValue = getJobPipelineValue({ ...bundle.job, quote: bundle.quote ?? null });
   const commercialLabel = commercialValue ? `${isFromOptionValue({ ...bundle.job, quote: bundle.quote ?? null }) ? "From " : ""}${currency(commercialValue)}` : "TBC";
   const quoteDisplayValue = getQuotePipelineValue(bundle.quote ?? null);
@@ -111,7 +116,13 @@ export default async function JobDetailPage({ params }: Props) {
                     </SmartActionLink>
                   </div>
                 </div>
-                <div className="rounded-[1.25rem] border border-[var(--gold-border)] bg-[var(--gold-bg)] p-4 lg:min-w-[260px]">
+                <div
+                  className="rounded-[1.25rem] border p-4 lg:min-w-[260px]"
+                  style={{
+                    backgroundColor: stageColors.bg,
+                    borderColor: stageColors.border
+                  }}
+                >
                   <p className="section-kicker text-[0.58rem] uppercase">Next Action</p>
                   <p className="mt-2 text-lg font-semibold text-white">{nextAction.label}</p>
                   <p className="mt-1 text-sm text-[var(--muted)]">{getNextActionLabel(bundle.job)}</p>
@@ -385,41 +396,7 @@ export default async function JobDetailPage({ params }: Props) {
                 Preview Completion Certificate
               </Link>
             </div>
-            <div className="mt-4 grid gap-3">
-              {bundle.documents.length > 0 ? (
-                Object.entries(documentGroups).map(([group, documents]) =>
-                  documents.length > 0 ? (
-                    <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3" key={group}>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-d)]">{group}</p>
-                        <span className="text-xs text-[var(--muted)]">{documents.length} file{documents.length === 1 ? "" : "s"}</span>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {documents.map((document) => (
-                          <div className="rounded-xl border border-[var(--border)] bg-black/20 p-3" key={document.id}>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <p className="truncate font-semibold text-white">{document.display_name}</p>
-                                <p className="mt-1 text-xs text-[var(--muted)]">
-                                  {getDocumentDisplayType(document)}
-                                  {document.created_at ? ` | Added ${formatDate(document.created_at)}` : ""}
-                                  {document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
-                                </p>
-                              </div>
-                              <a className="inline-flex shrink-0 text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline" href={getJobDocumentHref(document)} target="_blank">
-                                Open document
-                              </a>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null
-                )
-              ) : (
-                <p className="text-sm text-[var(--muted)]">Generated quote documents and supporting files will appear here.</p>
-              )}
-            </div>
+            <JobDocumentsSection jobId={bundle.job.id} documents={bundle.documents} documentGroups={documentGroups} />
           </div>
 
           <div className="card p-5">
