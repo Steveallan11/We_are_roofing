@@ -340,11 +340,11 @@ function gridLines(dark: boolean) {
 
 export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
   const coords = allPoints(opts).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
-  const roofCoords = measuredRoofPoints(opts);
-  const bounds = getGeoBounds(roofCoords.length ? roofCoords : coords);
-  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, 8) : null;
+  const cropCoords = primaryCropPoints(opts);
+  const bounds = getGeoBounds(cropCoords.length ? cropCoords : coords);
+  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, 3) : null;
   const center = bounds ? geoBoundsCenter(bounds) : null;
-  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514) : null;
+  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, 1) : null;
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
@@ -362,7 +362,7 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const coords = section.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 3) return;
     const color = staticMapColor(exportSectionColor(index, section.color));
-    const path = [`color:0x${color}ff`, `fillcolor:0x${color}66`, "weight:5", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
+    const path = [`color:0x${color}ff`, `fillcolor:0x${color}aa`, "weight:8", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
     params.append("path", path);
     const centre = geoCentroid(coords);
     params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
@@ -372,7 +372,7 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const coords = line.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 2) return;
     const color = staticMapColor(line.color || "#D4AF37");
-    params.append("path", [`color:0x${color}ff`, "weight:4", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    params.append("path", [`color:0x${color}ff`, "weight:6", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
   });
 
   opts.features.slice(0, 12).forEach((feature) => {
@@ -406,11 +406,14 @@ function getGeoBounds(points: Array<{ lat: number; lng: number }>) {
   };
 }
 
-function measuredRoofPoints(opts: Pick<DrawingOpts, "sections" | "lines">) {
-  return [
-    ...opts.sections.flatMap((section) => section.points),
-    ...opts.lines.flatMap((line) => line.points)
-  ].map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
+function primaryCropPoints(opts: Pick<DrawingOpts, "sections" | "lines" | "features">) {
+  const sectionPoints = opts.sections.flatMap((section) => section.points).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
+  if (sectionPoints.length) return sectionPoints;
+
+  const linePoints = opts.lines.flatMap((line) => line.points).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
+  if (linePoints.length) return linePoints;
+
+  return opts.features.map((feature) => toCoord(feature.point)).filter(Boolean) as Array<{ lat: number; lng: number }>;
 }
 
 function expandGeoBoundsByMeters(bounds: NonNullable<ReturnType<typeof getGeoBounds>>, metres: number) {
@@ -433,12 +436,12 @@ function geoBoundsCenter(bounds: NonNullable<ReturnType<typeof getGeoBounds>>) {
   };
 }
 
-function getStaticMapZoom(bounds: NonNullable<ReturnType<typeof getGeoBounds>>, width: number, height: number) {
+function getStaticMapZoom(bounds: NonNullable<ReturnType<typeof getGeoBounds>>, width: number, height: number, boost = 0) {
   const lngSpan = Math.max(Math.abs(bounds.east - bounds.west), 0.00001);
   const latFraction = Math.max(Math.abs(latRad(bounds.north) - latRad(bounds.south)), 0.00001);
   const lngZoom = Math.floor(Math.log2(width / 256 / (lngSpan / 360)));
   const latZoom = Math.floor(Math.log2(height / 256 / latFraction));
-  return Math.max(18, Math.min(22, Math.min(lngZoom, latZoom)));
+  return Math.max(18, Math.min(22, Math.min(lngZoom, latZoom) + boost));
 }
 
 function latRad(lat: number) {
