@@ -25,3 +25,23 @@ export function slugifyRef(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
+export function generateSecureToken(length: number = 32): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let token = "";
+  if (typeof window === "undefined") {
+    // Server-side: use crypto module
+    const crypto = require("crypto");
+    const randomBytes = crypto.randomBytes(length);
+    for (let i = 0; i < length; i++) {
+      token += chars[randomBytes[i] % chars.length];
+    }
+  } else {
+    // Client-side: use crypto.getRandomValues
+    const randomValues = new Uint8Array(length);
+    crypto.getRandomValues(randomValues);
+    for (let i = 0; i < length; i++) {
+      token += chars[randomValues[i] % chars.length];
+    }
+  }
+  return token;
+}

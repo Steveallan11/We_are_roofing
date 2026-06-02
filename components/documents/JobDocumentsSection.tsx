@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DocumentAnalysisCard } from "./DocumentAnalysisCard";
+import { DocumentShareButton } from "./DocumentShareButton";
 import type { JobDocumentRecord } from "@/lib/types";
 import { getJobDocumentHref } from "@/lib/documents";
 import { formatDate } from "@/lib/utils";
@@ -60,14 +61,21 @@ export function JobDocumentsSection({ jobId, documents, documentGroups }: Props)
                             {document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
                           </p>
                         </div>
-                        <a
-                          className="inline-flex shrink-0 text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline"
-                          href={getJobDocumentHref(document)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Open document
-                        </a>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <DocumentShareButton
+                            jobId={jobId}
+                            documentId={document.id}
+                            documentName={document.display_name}
+                          />
+                          <a
+                            className="inline-flex text-sm font-semibold text-[var(--gold-l)] underline-offset-4 hover:underline"
+                            href={getJobDocumentHref(document)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open
+                          </a>
+                        </div>
                       </div>
                     </div>
                     <DocumentAnalysisCard
