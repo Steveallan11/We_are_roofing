@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import animatePlugin from "tailwindcss-animate";
 
 const config: Config = {
   content: [
@@ -71,11 +72,23 @@ const config: Config = {
         "pulse-gold": "goldPulse 2.4s ease-in-out infinite",
         "slide-in": "slideIn 0.2s ease",
         "fade-in": "fadeIn 0.3s ease",
-        shimmer: "shimmer 1.8s ease-in-out infinite"
+        shimmer: "shimmer 1.8s ease-in-out infinite",
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out"
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" }
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" }
+        }
       }
     }
   },
-  plugins: [],
+  plugins: [animatePlugin],
   safelist: [
     { pattern: /text-(lead|survey|quoting|sent|active|done|gold)/ },
     { pattern: /bg-(lead|survey|quoting|sent|active|done|gold)/ },

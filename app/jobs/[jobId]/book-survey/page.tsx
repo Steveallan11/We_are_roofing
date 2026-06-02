@@ -1,6 +1,8 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { Button } from "@/components/ui/primitives";
 import { BookSurveyForm } from "@/components/jobs/book-survey-form";
 import { getJobBundle } from "@/lib/data";
 
@@ -18,9 +20,9 @@ export default async function BookSurveyPage({ params }: Props) {
       title="Book Survey"
       subtitle="Pick the survey date, check the weather, add access notes, and send confirmation to the customer."
       actions={
-        <Link className="button-ghost" href={`/jobs/${bundle.job.id}`}>
-          Back to Job
-        </Link>
+        <Button variant="ghost" size="md" asChild>
+          <Link href={(`/jobs/${bundle.job.id}` as Route)}>Back to Job</Link>
+        </Button>
       }
     >
       <BookSurveyForm bundle={bundle} />

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "@/app/globals.css";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ToastProvider } from "@/components/ui/primitives";
 
 export const metadata: Metadata = {
   title: "We Are Roofing OS",
@@ -13,8 +14,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          {children}
-          <AssistantPanel />
+          <ToastProvider>
+            {children}
+            <AssistantPanel />
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>
