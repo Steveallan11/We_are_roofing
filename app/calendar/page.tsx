@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getBookings, getJobs } from "@/lib/data";
 import { googleCalendarLink } from "@/lib/calendar/generateICS";
 import { formatDate } from "@/lib/utils";
+import { MonthViewClient } from "@/components/calendar/MonthViewClient";
 
 type CalendarEvent = {
   id: string;
@@ -27,9 +28,10 @@ const FILTERS = [
   { id: "follow-up", label: "Follow-ups" }
 ] as const;
 
-export default async function CalendarPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
-  const [params, bookings, jobs] = await Promise.all([searchParams ?? Promise.resolve({ view: undefined as string | undefined }), getBookings(), getJobs()]);
+export default async function CalendarPage({ searchParams }: { searchParams?: Promise<{ view?: string; display?: string }> }) {
+  const [params, bookings, jobs] = await Promise.all([searchParams ?? Promise.resolve({ view: undefined as string | undefined, display: "month" as string | undefined }), getBookings(), getJobs()]);
   const view = params.view;
+  const display = params.display ?? "month";
   const activeView = FILTERS.some((filter) => filter.id === view) ? view : "all";
 
   const startDates: CalendarEvent[] = jobs
@@ -100,44 +102,70 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
         <section className="card p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="section-kicker text-[0.65rem] uppercase">Diary View</p>
+              <p className="section-kicker text-[0.65rem] uppercase">{display === "month" ? "Month View" : "Diary View"}</p>
               <h2 className="mt-2 font-condensed text-3xl text-white">Upcoming schedule</h2>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {FILTERS.map((filter) => {
-                const active = activeView === filter.id;
-                return (
-                  <Link
-                    className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${
-                      active ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-black/20 text-[var(--muted)] hover:border-[var(--gold)]/60"
-                    }`}
-                    href={`/calendar?view=${filter.id}` as Route}
-                    key={filter.id}
-                  >
-                    {filter.label}
-                  </Link>
-                );
-              })}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {FILTERS.map((filter) => {
+                  const active = activeView === filter.id;
+                  return (
+                    <Link
+                      className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${
+                        active ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-black/20 text-[var(--muted)] hover:border-[var(--gold)]/60"
+                      }`}
+                      href={`/calendar?view=${filter.id}&display=${display}` as Route}
+                      key={filter.id}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="flex gap-1 rounded-2xl border border-[var(--border)] bg-black/20 p-1">
+                <Link
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                    display === "month" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"
+                  }`}
+                  href={`/calendar?view=${activeView}&display=month` as Route}
+                >
+                  Month
+                </Link>
+                <Link
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                    display === "list" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"
+                  }`}
+                  href={`/calendar?view=${activeView}&display=list` as Route}
+                >
+                  List
+                </Link>
+              </div>
             </div>
           </div>
 
-          <div className="mt-5 grid gap-5">
-            {groupedEvents.length ? (
-              groupedEvents.map((group) => (
-                <div key={group.date}>
-                  <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--border)] pb-2">
-                    <p className="font-semibold text-white">{formatDate(group.date)}</p>
-                    <p className="text-xs text-[var(--muted)]">{group.events.length} event{group.events.length === 1 ? "" : "s"}</p>
-                  </div>
-                  <div className="grid gap-3">
-                    {group.events.map((event) => (
-                      <CalendarEventCard event={event} key={event.id} />
-                    ))}
-                  </div>
-                </div>
-              ))
+          <div className="mt-5">
+            {display === "month" ? (
+              <MonthViewClient events={visibleEvents} filterView={activeView} />
             ) : (
-              <p className="rounded-2xl border border-[var(--border)] bg-black/20 p-5 text-sm text-[var(--muted)]">No upcoming events for this view.</p>
+              <div className="grid gap-5">
+                {groupedEvents.length ? (
+                  groupedEvents.map((group) => (
+                    <div key={group.date}>
+                      <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--border)] pb-2">
+                        <p className="font-semibold text-white">{formatDate(group.date)}</p>
+                        <p className="text-xs text-[var(--muted)]">{group.events.length} event{group.events.length === 1 ? "" : "s"}</p>
+                      </div>
+                      <div className="grid gap-3">
+                        {group.events.map((event) => (
+                          <CalendarEventCard event={event} key={event.id} />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-2xl border border-[var(--border)] bg-black/20 p-5 text-sm text-[var(--muted)]">No upcoming events for this view.</p>
+                )}
+              </div>
             )}
           </div>
         </section>
