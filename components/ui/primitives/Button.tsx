@@ -54,6 +54,26 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   const Comp = asChild ? Slot : "button";
   const isDisabled = disabled || loading;
 
+  const content = asChild ? (
+    children
+  ) : (
+    <>
+      {loading ? (
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden />
+      ) : leftIcon ? (
+        <span className="inline-flex shrink-0" aria-hidden>
+          {leftIcon}
+        </span>
+      ) : null}
+      <span className="inline-flex items-center">{children}</span>
+      {!loading && rightIcon ? (
+        <span className="inline-flex shrink-0" aria-hidden>
+          {rightIcon}
+        </span>
+      ) : null}
+    </>
+  );
+
   return (
     <Comp
       ref={ref}
@@ -72,19 +92,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       )}
       {...props}
     >
-      {loading ? (
-        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden />
-      ) : leftIcon ? (
-        <span className="inline-flex shrink-0" aria-hidden>
-          {leftIcon}
-        </span>
-      ) : null}
-      <span className="inline-flex items-center">{children}</span>
-      {!loading && rightIcon ? (
-        <span className="inline-flex shrink-0" aria-hidden>
-          {rightIcon}
-        </span>
-      ) : null}
+      {content}
     </Comp>
   );
 });
