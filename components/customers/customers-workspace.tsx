@@ -86,9 +86,12 @@ export function CustomersWorkspace({ customers }: Props) {
           ))}
         </div>
       ) : (
-        <div className="card p-8 text-center">
-          <p className="font-condensed text-3xl text-white">No customers found</p>
-          <p className="mt-2 text-sm text-[var(--muted)]">Try a different search, switch tabs, or create a new job.</p>
+        <div className="empty-state">
+          <p className="empty-state__title">No customers found</p>
+          <p className="empty-state__hint">Try a different search, switch tabs, or add a new customer to get started.</p>
+          <Link className="button-primary mt-2" href={"/customers/new" as Route}>
+            Add Customer
+          </Link>
         </div>
       )}
     </div>
@@ -126,7 +129,7 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="truncate font-condensed text-2xl text-white">{displayName}</h3>
-              <span className={`rounded-full border px-2 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] ${activeJobs.length ? "border-[#10b981]/35 bg-[#10b981]/10 text-[#7ce3a6]" : "border-white/10 bg-white/5 text-[var(--muted)]"}`}>
+              <span className={activeJobs.length ? "tag-chip tag-chip--success" : "tag-chip"}>
                 {activeJobs.length ? `${activeJobs.length} active` : "Historic"}
               </span>
             </div>
@@ -146,7 +149,7 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
         {missing.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {missing.map((item) => (
-              <span className="rounded-full border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 py-1 text-xs font-semibold text-[#ffd38b]" key={item}>
+              <span className="tag-chip tag-chip--warning" key={item}>
                 {item}
               </span>
             ))}
@@ -177,9 +180,9 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
 
 function CustomerStat({ danger = false, label, value }: { danger?: boolean; label: string; value: string }) {
   return (
-    <div className={`rounded-2xl border p-3 ${danger ? "border-[#f59e0b]/35 bg-[#f59e0b]/10" : "border-[var(--border)] bg-black/20"}`}>
+    <div className={`rounded-2xl border p-3 ${danger ? "border-[color:var(--warning-border)] bg-[color:var(--warning-bg)]" : "border-[var(--border)] bg-black/20"}`}>
       <p className="text-[0.62rem] font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{label}</p>
-      <p className={`mt-1 font-display text-3xl leading-none ${danger ? "text-[#ffd38b]" : "text-[var(--gold-l)]"}`}>{value}</p>
+      <p className={`mt-1 font-display text-3xl leading-none ${danger ? "text-[color:var(--warning-text)]" : "text-[var(--gold-l)]"}`}>{value}</p>
     </div>
   );
 }

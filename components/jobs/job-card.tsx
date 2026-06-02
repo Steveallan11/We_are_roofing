@@ -40,7 +40,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
   return (
     <article
       className="card relative overflow-hidden border-l-4 transition hover:-translate-y-0.5"
-      style={{ borderLeftColor: attention ? "#ef4444" : statusColor.dot }}
+      style={{ borderLeftColor: attention ? "var(--emergency)" : statusColor.dot }}
     >
       <Link aria-label={`Open job file for ${job.job_title}`} className="absolute inset-0 z-0" href={`/jobs/${job.id}` as Route} />
       <div className={compact ? "p-3" : "p-4"}>
@@ -73,7 +73,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
               ) : null}
             </div>
           </div>
-          {attention ? <span className="mt-1 h-3 w-3 rounded-full bg-[#ef4444] shadow-[0_0_18px_rgba(239,68,68,0.75)]" /> : null}
+          {attention ? <span className="mt-1 h-3 w-3 rounded-full bg-[color:var(--emergency)] shadow-[0_0_18px_rgba(239,68,68,0.75)]" /> : null}
         </div>
 
         <div className={`${compact ? "mt-3" : "mt-4"} pointer-events-none relative z-10 grid gap-2 text-sm text-[var(--muted)]`}>
@@ -85,7 +85,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
           </div>
           {documentLinks.length > 0 ? <DocumentQuickLinks compact={compact} jobId={job.id} links={documentLinks} /> : null}
           {attention && !compact ? (
-            <p className="rounded-2xl border border-[#ef4444]/40 bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ffb3ad]">Needs attention before this gets forgotten.</p>
+            <p className="callout callout--emergency px-3 py-2 text-sm">Needs attention before this gets forgotten.</p>
           ) : null}
         </div>
 
