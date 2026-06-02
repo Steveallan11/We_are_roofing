@@ -74,11 +74,14 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
       const coords = section.points.map(project).filter(isProjectedPoint);
       if (coords.length < 3) return "";
       const label = section.label || `Section ${index + 1}`;
+      const marker = `S${index + 1}`;
       const centre = centroid(coords);
       return `
-        <polygon points="${coords.map(pointString).join(" ")}" fill="${section.color || gold}" fill-opacity="${dark ? "0.34" : "0.22"}" stroke="${section.color || gold}" stroke-width="3" />
-        <text x="${centre.x}" y="${centre.y - 8}" text-anchor="middle" class="shape-label">${escapeXml(label)}</text>
-        <text x="${centre.x}" y="${centre.y + 13}" text-anchor="middle" class="shape-sub">${Number(section.area_m2 || 0).toFixed(1)} m2</text>`;
+        <polygon points="${coords.map(pointString).join(" ")}" fill="${section.color || gold}" fill-opacity="${opts.style === "satellite" ? "0.38" : dark ? "0.34" : "0.22"}" stroke="${section.color || gold}" stroke-width="${opts.style === "satellite" ? "5" : "3"}" />
+        <circle cx="${centre.x}" cy="${centre.y - 10}" r="19" fill="${gold}" stroke="#111827" stroke-width="2" />
+        <text x="${centre.x}" y="${centre.y - 5}" text-anchor="middle" class="marker-code">${escapeXml(marker)}</text>
+        <text x="${centre.x}" y="${centre.y + 20}" text-anchor="middle" class="shape-label">${escapeXml(label)}</text>
+        <text x="${centre.x}" y="${centre.y + 38}" text-anchor="middle" class="shape-sub">${Number(section.area_m2 || 0).toFixed(1)} m2</text>`;
     })
     .join("");
 
@@ -107,9 +110,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .join("");
 
   const legendRows = [
-    ...opts.sections.map((section) => ({ color: section.color || gold, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
-    ...opts.lines.map((line) => ({ color: line.color || gold, label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
-    ...opts.features.map((feature) => ({ color: feature.color || gold, label: feature.label || feature.type, value: "1 no." }))
+    ...opts.sections.map((section, index) => ({ color: section.color || gold, code: `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
+    ...opts.lines.map((line, index) => ({ color: line.color || gold, code: `L${index + 1}`, label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
+    ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
   ];
 
   const legend = legendRows
@@ -118,11 +121,16 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
       (row, index) => `
         <g transform="translate(870 ${170 + index * 24})">
           <rect x="0" y="-10" width="12" height="12" rx="2" fill="${row.color}" />
-          <text x="20" y="0" class="legend-text">${escapeXml(row.label || "Item")}</text>
+          <text x="20" y="0" class="legend-code">${escapeXml(row.code)}</text>
+          <text x="52" y="0" class="legend-text">${escapeXml(row.label || "Item")}</text>
           <text x="250" y="0" text-anchor="end" class="legend-value">${escapeXml(row.value)}</text>
         </g>`
     )
     .join("");
+  const satelliteWarning =
+    opts.style === "satellite" && !satelliteUrl
+      ? `<text x="${DRAWING_LEFT + 28}" y="${DRAWING_TOP + 48}" class="satellite-warning">Satellite image unavailable - enable Maps Static API and check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</text>`
+      : "";
 
   const notes = wrapText(opts.notes || "No additional takeoff notes captured.", 58)
     .slice(0, 5)
@@ -136,9 +144,12 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .title{font:700 32px Georgia,serif;fill:${text}}
     .subtitle,.meta,.legend-text,.notes-text{font:500 13px Montserrat,Arial,sans-serif;fill:${muted}}
     .legend-value{font:700 13px Montserrat,Arial,sans-serif;fill:${text}}
+    .legend-code{font:800 12px Montserrat,Arial,sans-serif;fill:${gold}}
     .shape-label{font:800 13px Montserrat,Arial,sans-serif;fill:${text};paint-order:stroke;stroke:${style.background};stroke-width:5px;stroke-linejoin:round}
     .shape-sub,.line-label,.feature-label{font:700 11px Montserrat,Arial,sans-serif;fill:${text};paint-order:stroke;stroke:${style.background};stroke-width:4px;stroke-linejoin:round}
     .marker-text{font:900 9px Montserrat,Arial,sans-serif;fill:#000}
+    .marker-code{font:900 13px Montserrat,Arial,sans-serif;fill:#000}
+    .satellite-warning{font:800 14px Montserrat,Arial,sans-serif;fill:#b45309;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
     .panel-title{font:800 12px Montserrat,Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;fill:${gold}}
     .total-value{font:800 26px Montserrat,Arial,sans-serif;fill:${text}}
   </style>
@@ -158,6 +169,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   <rect x="${DRAWING_LEFT}" y="${DRAWING_TOP}" width="${DRAWING_WIDTH}" height="${DRAWING_HEIGHT}" rx="18" fill="rgba(0,0,0,0.08)" stroke="${style.soft}" />`
       : gridLines(dark)
   }
+  ${satelliteWarning}
   <g>${sectionShapes}${lineShapes}${featureShapes}</g>
   <rect x="850" y="118" width="286" height="560" rx="18" fill="${dark ? "#161616" : "#fbfaf5"}" stroke="${style.soft}" />
   <text x="870" y="148" class="panel-title">Measured Items</text>

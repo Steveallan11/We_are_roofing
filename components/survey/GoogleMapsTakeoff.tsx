@@ -901,6 +901,7 @@ function ExportButtons(props: {
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
   const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("technical");
+  const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
   function makeKml() {
     return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features });
@@ -929,23 +930,30 @@ function ExportButtons(props: {
   return (
     <div className="mt-3 space-y-2">
       <label className="block">
-        <span className="label">Drawing Style</span>
+        <span className="label">Customer drawing style</span>
         <select className="field mt-1" onChange={(event) => setDrawingStyle(event.target.value as TakeoffDrawingStyle)} value={drawingStyle}>
-          <option value="technical">Technical Takeoff</option>
-          <option value="customer">Customer Friendly</option>
-          <option value="satellite">Customer Satellite Plan</option>
-          <option value="quote">Quote Sketch</option>
+          <option value="satellite">Best: Satellite plan with measurements</option>
+          <option value="customer">Simple customer drawing</option>
+          <option value="quote">Dark quote sketch</option>
+          <option value="technical">Technical takeoff only</option>
         </select>
       </label>
+      {drawingStyle === "satellite" ? (
+        <div className={`rounded-xl border p-3 text-xs leading-5 ${staticMapsReady ? "border-[var(--gold)]/30 bg-[var(--gold)]/5 text-[var(--gold-l)]" : "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fcd88a]"}`}>
+          {staticMapsReady
+            ? "This export uses Google Static Maps for the satellite background, then overlays our measured sections and legend. If the image does not appear, enable Maps Static API in Google Cloud."
+            : "Satellite background is not available because NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing. The drawing will export as a clean measured plan instead."}
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
-        <button className="button-secondary !py-2 text-xs" onClick={() => downloadSvg(makeDrawingSvg(), `${props.jobRef}-cad-drawing`)} type="button">
-          CAD SVG
+        <button className="button-secondary !py-2 text-xs" onClick={() => printDrawing(makeDrawingSvg(), `${props.jobRef}-roof-plan`)} type="button">
+          Customer PDF
         </button>
-        <button className="button-secondary !py-2 text-xs" onClick={() => void downloadPng(makeDrawingSvg(), `${props.jobRef}-cad-drawing`)} type="button">
-          CAD PNG
+        <button className="button-secondary !py-2 text-xs" onClick={() => void downloadPng(makeDrawingSvg(), `${props.jobRef}-roof-plan`)} type="button">
+          Image PNG
         </button>
-        <button className="button-secondary !py-2 text-xs" onClick={() => printDrawing(makeDrawingSvg(), `${props.jobRef}-cad-drawing`)} type="button">
-          CAD PDF
+        <button className="button-ghost !py-2 text-xs" onClick={() => downloadSvg(makeDrawingSvg(), `${props.jobRef}-roof-plan`)} type="button">
+          Editable SVG
         </button>
         <button
           className="button-ghost !py-2 text-xs"
