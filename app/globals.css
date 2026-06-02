@@ -12,12 +12,41 @@
 
 :root {
   color-scheme: dark;
+  /* Brand colors */
   --gold: #D4AF37;
   --gold-light: #E8CB5A;
   --gold-dim: #B8960C;
   --gold-bg: rgba(212,175,55,0.08);
   --gold-border: rgba(212,175,55,0.20);
   --gold-glow: rgba(212,175,55,0.15);
+
+  /* Stage-specific colors (visual hierarchy) */
+  --stage-alert: #ef4444;      /* Red - needs attention/urgent */
+  --stage-alert-bg: rgba(239,68,68,0.10);
+  --stage-alert-border: rgba(239,68,68,0.40);
+  --stage-alert-text: #ffb3ad;
+
+  --stage-pending: #f59e0b;     /* Orange - pending/in-review */
+  --stage-pending-bg: rgba(245,158,11,0.10);
+  --stage-pending-border: rgba(245,158,11,0.35);
+  --stage-pending-text: #ffd38b;
+
+  --stage-ready: #D4AF37;       /* Gold - ready for action */
+  --stage-ready-bg: rgba(212,175,55,0.08);
+  --stage-ready-border: rgba(212,175,55,0.20);
+  --stage-ready-text: #E8CB5A;
+
+  --stage-active: #10b981;      /* Green - in progress/accepted */
+  --stage-active-bg: rgba(16,185,129,0.10);
+  --stage-active-border: rgba(16,185,129,0.35);
+  --stage-active-text: #7ce3a6;
+
+  --stage-complete: #64748b;    /* Slate - completed */
+  --stage-complete-bg: rgba(100,116,139,0.10);
+  --stage-complete-border: rgba(100,116,139,0.25);
+  --stage-complete-text: #cbd5e1;
+
+  /* Surface colors */
   --obsidian: #0a0a0a;
   --surface: #111111;
   --surface-hover: #161616;
@@ -28,11 +57,15 @@
   --border-mid: #2a2a2a;
   --border-strong: #333333;
   --border-light: #e8e4da;
+
+  /* Text colors */
   --text-primary: #ffffff;
   --text-second: #dddddd;
   --text-muted: #888888;
   --text-faint: #555555;
   --text-ghost: #333333;
+
+  /* Semantic colors */
   --success: #10b981;
   --success-bg: rgba(16,185,129,0.10);
   --warning: #f59e0b;
@@ -43,10 +76,14 @@
   --info-bg: rgba(59,130,246,0.10);
   --purple: #8b5cf6;
   --purple-bg: rgba(139,92,246,0.10);
+
+  /* Typography */
   --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
   --font-body: "Cormorant Garamond", Georgia, "Times New Roman", serif;
   --font-ui: "Montserrat", "Helvetica Neue", Helvetica, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+
+  /* Spacing scale */
   --radius-sm: 4px;
   --radius: 6px;
   --radius-md: 8px;
@@ -60,17 +97,23 @@
   --space-xl: 20px;
   --space-2xl: 24px;
   --space-3xl: 32px;
-  --emergency: #ef4444;
-  --emergency-bg: rgba(239,68,68,0.10);
-  --emergency-border: rgba(239,68,68,0.40);
-  --emergency-text: #ffb3ad;
-  --warning-border: rgba(245,158,11,0.35);
-  --warning-text: #ffd38b;
-  --success-border: rgba(16,185,129,0.35);
-  --success-text: #7ce3a6;
+
+  /* Legacy semantic aliases (for backwards compatibility) */
+  --emergency: var(--stage-alert);
+  --emergency-bg: var(--stage-alert-bg);
+  --emergency-border: var(--stage-alert-border);
+  --emergency-text: var(--stage-alert-text);
+  --warning-border: var(--stage-pending-border);
+  --warning-text: var(--stage-pending-text);
+  --success-border: var(--stage-active-border);
+  --success-text: var(--stage-active-text);
+
+  /* Shadows */
   --shadow: 0 4px 16px rgba(0,0,0,0.5);
   --shadow-lg: 0 8px 40px rgba(0,0,0,0.6);
   --shadow-gold: 0 0 20px rgba(212,175,55,0.12);
+
+  /* Layout */
   --sidebar-width: 220px;
   --sidebar-collapsed: 56px;
   --topbar-height: 52px;
@@ -85,7 +128,7 @@
   --card-radius-mobile: 12px;
   --transition-layout: all 0.2s ease;
 
-  /* Compatibility aliases for existing components. */
+  /* Compatibility aliases for existing components */
   --gold-l: var(--gold-light);
   --gold-d: var(--gold-dim);
   --black: var(--obsidian);
@@ -1072,30 +1115,86 @@ a[role="button"]:active,
 
 [data-theme="light"] {
   color-scheme: light;
-  --obsidian: #f8f7f4;
+
+  /* Surface colors - light mode */
+  --obsidian: #f9f8f5;
   --surface: #ffffff;
-  --surface-hover: #f5f4f1;
-  --surface-deep: #f0ede8;
-  --elevated: #e8e4da;
-  --raised: #e0dbd2;
-  --border: #e0dbd2;
-  --border-mid: #c8c3b8;
-  --border-strong: #aaa49a;
-  --text-primary: #0a0a0a;
-  --text-second: #1a1a1a;
-  --text-muted: #555550;
-  --text-faint: #888880;
-  --text-ghost: #aaa8a0;
-  --gold: #B8960C;
-  --gold-light: #D4AF37;
+  --surface-hover: #f5f3f0;
+  --surface-deep: #ede9e3;
+  --elevated: #e5dfd7;
+  --raised: #ddd7ce;
+  --border: #d4cbc2;
+  --border-mid: #bbb1a5;
+  --border-strong: #9e9489;
+  --border-light: #d4cbc2;
+
+  /* Text colors - light mode (high contrast) */
+  --text-primary: #0f0e0a;
+  --text-second: #2a2621;
+  --text-muted: #5a5450;
+  --text-faint: #7f7971;
+  --text-ghost: #a89f96;
+
+  /* Brand colors - light mode */
+  --gold: #8B6F0F;
+  --gold-light: #B8960C;
+  --gold-dim: #6B5509;
   --gold-bg: rgba(184,150,12,0.08);
-  --gold-border: rgba(184,150,12,0.25);
-  --gold-glow: rgba(184,150,12,0.15);
-  --success: #059669;
-  --warning: #d97706;
-  --danger: #dc2626;
-  --info: #2563eb;
-  --purple: #7c3aed;
+  --gold-border: rgba(139,111,15,0.30);
+  --gold-glow: rgba(184,150,12,0.12);
+
+  /* Stage-specific colors - light mode */
+  --stage-alert: #B91C1C;         /* Darker red for light mode */
+  --stage-alert-bg: rgba(185,28,28,0.08);
+  --stage-alert-border: rgba(185,28,28,0.35);
+  --stage-alert-text: #7F1D1D;
+
+  --stage-pending: #B45309;        /* Darker orange for light mode */
+  --stage-pending-bg: rgba(180,83,9,0.08);
+  --stage-pending-border: rgba(180,83,9,0.35);
+  --stage-pending-text: #78350F;
+
+  --stage-ready: #8B6F0F;          /* Dark gold for light mode */
+  --stage-ready-bg: rgba(184,150,12,0.08);
+  --stage-ready-border: rgba(139,111,15,0.30);
+  --stage-ready-text: #6B5509;
+
+  --stage-active: #166534;         /* Dark green for light mode */
+  --stage-active-bg: rgba(22,101,52,0.08);
+  --stage-active-border: rgba(22,101,52,0.35);
+  --stage-active-text: #15803D;
+
+  --stage-complete: #475569;       /* Slate for light mode */
+  --stage-complete-bg: rgba(71,85,105,0.08);
+  --stage-complete-border: rgba(71,85,105,0.30);
+  --stage-complete-text: #334155;
+
+  /* Semantic colors - light mode */
+  --success: #166534;
+  --success-bg: rgba(22,101,52,0.10);
+  --warning: #B45309;
+  --warning-bg: rgba(180,83,9,0.10);
+  --danger: #B91C1C;
+  --danger-bg: rgba(185,28,28,0.10);
+  --info: #1e40af;
+  --info-bg: rgba(30,64,175,0.10);
+  --purple: #6d28d9;
+  --purple-bg: rgba(109,40,217,0.10);
+
+  /* Legacy semantic aliases */
+  --emergency: var(--stage-alert);
+  --emergency-bg: var(--stage-alert-bg);
+  --emergency-border: var(--stage-alert-border);
+  --emergency-text: var(--stage-alert-text);
+  --warning-border: var(--stage-pending-border);
+  --warning-text: var(--stage-pending-text);
+  --success-border: var(--stage-active-border);
+  --success-text: var(--stage-active-text);
+
+  /* Shadows - light mode */
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-gold: 0 0 12px rgba(184,150,12,0.08);
 }
 
 html[data-theme="light"],
