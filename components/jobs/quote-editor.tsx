@@ -103,6 +103,37 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     setError(null);
   }
 
+  function addMainSectionPackage() {
+    const sectionName = window.prompt("Section name, e.g. Front elevation, Rear flat roof, Chimney stack");
+    if (!sectionName?.trim()) return;
+    const cleanSectionName = sectionName.trim();
+    const sectionSlug = slugify(cleanSectionName);
+
+    setCostBreakdown((current) => [
+      ...current,
+      {
+        item: "Roof works",
+        cost: 0,
+        vat_applicable: true,
+        notes: "",
+        pricing_category: "roof_works",
+        quote_section: cleanSectionName,
+        source_id: `${sectionSlug}-roof-works`
+      },
+      {
+        item: "Scaffold/access",
+        cost: 0,
+        vat_applicable: true,
+        notes: "",
+        pricing_category: "standard_scaffold",
+        quote_section: cleanSectionName,
+        source_id: `${sectionSlug}-scaffold`
+      }
+    ]);
+    setSuccess(`${cleanSectionName} section added with roof works and scaffold/access lines. Save changes when priced.`);
+    setError(null);
+  }
+
   function calculateOption(lines: CostLineItem[]) {
     const subtotal = calculateOptionNet({ cost_breakdown: lines });
     const vatAmount = calculateOptionVat({ cost_breakdown: lines });
@@ -677,9 +708,14 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             <p className="section-kicker text-[0.65rem] uppercase">Cost Breakdown</p>
             <p className="mt-2 text-sm text-[var(--muted)]">Rate Card matches fill £0 lines from survey quantities where possible.</p>
           </div>
-          <Link className="button-ghost" href={"/settings/rates" as Route}>
-            Open Rate Card
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button className="button-primary" onClick={addMainSectionPackage} type="button">
+              + Add section roof + scaffold
+            </button>
+            <Link className="button-ghost" href={"/settings/rates" as Route}>
+              Open Rate Card
+            </Link>
+          </div>
         </div>
         {unpricedLines.length ? (
           <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4 text-sm text-[var(--gold-l)]">
@@ -741,7 +777,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                   ) : null}
                 </div>
               ) : null}
-              <div className="grid gap-4 md:grid-cols-[1.4fr_96px_90px_110px_120px_104px]">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_120px_110px_130px_140px_120px]">
                 <div>
                   <label className="label" htmlFor={`line-item-${index}`}>
                     Item

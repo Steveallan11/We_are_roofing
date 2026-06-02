@@ -1,28 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import type { QuoteOption } from "@/lib/types";
+import type { CostLineItem, QuoteOption } from "@/lib/types";
 import { buildQuoteOptionCustomerRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 type Props = {
   quoteId: string;
+  costBreakdown?: CostLineItem[];
   options: QuoteOption[];
   token?: string | null;
 };
 
-export function PublicQuoteActions({ quoteId, options, token }: Props) {
+export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token }: Props) {
+  const sectionChoices = buildSectionChoices(costBreakdown);
   const [message, setMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
     options.find((option) => option.recommended)?.id ?? options[0]?.id ?? null
   );
+  const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>(() => sectionChoices.flatMap((section) => section.indexes));
   const [status, setStatus] = useState<string | null>(null);
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
+  const hasSelection = options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
   const hasName = customerName.trim().length >= 2;
   const hasValidEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
-  const acceptanceHelper = getAcceptanceHelper({ hasName, hasSelectedOption: !options.length || Boolean(selectedOptionId), hasValidEmail });
+  const acceptanceHelper = getAcceptanceHelper({ hasName, hasSelectedOption: hasSelection, hasValidEmail });
 
   if (!token) {
     return (
@@ -36,7 +40,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
     );
   }
   const secureToken = token;
-  const canAccept = hasName && hasValidEmail && (!options.length || selectedOptionId);
+  const canAccept = hasName && hasValidEmail && hasSelection;
 
   async function accept() {
     if (!canAccept) {
@@ -47,7 +51,7 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
     const response = await fetch(`/api/quotes/${quoteId}/accept?token=${encodeURIComponent(secureToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ option_id: selectedOptionId, customer_name: customerName.trim(), customer_email: customerEmail.trim() })
+      body: JSON.stringify({ option_id: selectedOptionId, selected_line_indexes: selectedLineIndexes, customer_name: customerName.trim(), customer_email: customerEmail.trim() })
     });
     setStatus(response.ok ? "Quote accepted. We Are Roofing will be in touch shortly." : "Sorry, acceptance could not be recorded.");
   }
@@ -122,6 +126,12 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
             </button>
           );
           })
+        ) : sectionChoices.length ? (
+          <SectionChoiceList
+            sections={sectionChoices}
+            selectedLineIndexes={selectedLineIndexes}
+            setSelectedLineIndexes={setSelectedLineIndexes}
+          />
         ) : (
           <p className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 font-ui text-base text-[var(--text-second)]">
             Ready to proceed? Confirm your details, then accept below.
@@ -169,6 +179,93 @@ export function PublicQuoteActions({ quoteId, options, token }: Props) {
   );
 }
 
+type SectionChoice = {
+  name: string;
+  indexes: number[];
+  lines: Array<CostLineItem & { originalIndex: number }>;
+  net: number;
+  vat: number;
+  total: number;
+};
+
+function SectionChoiceList({
+  sections,
+  selectedLineIndexes,
+  setSelectedLineIndexes
+}: {
+  sections: SectionChoice[];
+  selectedLineIndexes: number[];
+  setSelectedLineIndexes: (indexes: number[]) => void;
+}) {
+  function toggleSection(section: SectionChoice) {
+    const selected = section.indexes.every((index) => selectedLineIndexes.includes(index));
+    if (selected) {
+      setSelectedLineIndexes(selectedLineIndexes.filter((index) => !section.indexes.includes(index)));
+      return;
+    }
+    setSelectedLineIndexes([...new Set([...selectedLineIndexes, ...section.indexes])]);
+  }
+
+  const selectedSections = sections.filter((section) => section.indexes.every((index) => selectedLineIndexes.includes(index)));
+  const selectedNet = selectedSections.reduce((sum, section) => sum + section.net, 0);
+  const selectedVat = selectedSections.reduce((sum, section) => sum + section.vat, 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-[var(--gold)]/30 bg-[#101010] p-4">
+        <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Select the sections you want done</p>
+        <p className="mt-2 font-ui text-sm leading-6 text-[#d6d6d6]">
+          Each section includes its own roof works and scaffold/access price. You can accept all sections or only the areas you want to proceed with now.
+        </p>
+      </div>
+      {sections.map((section) => {
+        const selected = section.indexes.every((index) => selectedLineIndexes.includes(index));
+        return (
+          <button
+            className={`w-full rounded-[1.25rem] border-2 p-4 text-left transition ${
+              selected ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-[#101010] text-white hover:border-[var(--gold)]/50"
+            }`}
+            key={section.name}
+            onClick={() => toggleSection(section)}
+            type="button"
+          >
+            <span className="flex items-start justify-between gap-4">
+              <span>
+                <span className={`block font-display text-2xl ${selected ? "text-black" : "text-white"}`}>{section.name}</span>
+                <span className={`mt-1 block font-ui text-sm ${selected ? "text-black/70" : "text-[#cfcfcf]"}`}>Roof works and scaffold/access for this section</span>
+              </span>
+              <span className={`rounded-full px-3 py-1.5 font-ui text-xs font-bold ${selected ? "bg-black text-[var(--gold)]" : "bg-[var(--gold)]/12 text-[var(--gold)]"}`}>
+                {selected ? "Selected" : "Tap to select"}
+              </span>
+            </span>
+            <span className={`mt-4 block space-y-2 border-t pt-3 ${selected ? "border-black/20" : "border-white/10"}`}>
+              {section.lines.map((line) => (
+                <OptionCardPriceRow isSelected={selected} key={line.originalIndex} label={getLineDisplayLabel(line)} value={Number(line.cost || 0)} />
+              ))}
+              <OptionCardPriceRow isSelected={selected} label="VAT" value={section.vat} />
+              <OptionCardPriceRow isSelected={selected} label="Total inc VAT" strong value={section.total} />
+            </span>
+          </button>
+        );
+      })}
+      <div className="rounded-2xl border border-[var(--gold)]/30 bg-[#17130a] p-4 font-ui">
+        <div className="flex items-center justify-between gap-4 text-sm text-[#d6d6d6]">
+          <span>Selected sections before VAT</span>
+          <strong className="text-white">{currency(selectedNet)}</strong>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-4 text-sm text-[#d6d6d6]">
+          <span>VAT</span>
+          <strong className="text-white">{currency(selectedVat)}</strong>
+        </div>
+        <div className="mt-3 flex items-end justify-between gap-4 border-t border-[var(--gold)]/35 pt-3">
+          <span className="text-base font-bold text-white">Total selected</span>
+          <strong className="font-display text-3xl text-[var(--gold-l)]">{currency(selectedNet + selectedVat)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OptionCardPriceRow({ isSelected, label, strong = false, value }: { isSelected: boolean; label: string; strong?: boolean; value: number }) {
   return (
     <span className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 font-ui text-sm ${strong ? "font-extrabold" : "font-semibold"}`}>
@@ -176,6 +273,43 @@ function OptionCardPriceRow({ isSelected, label, strong = false, value }: { isSe
       <span className={`shrink-0 text-right ${isSelected ? "text-black" : "text-white"}`}>{currency(value)}</span>
     </span>
   );
+}
+
+function buildSectionChoices(lines: CostLineItem[]): SectionChoice[] {
+  const groups = new Map<string, SectionChoice>();
+
+  lines.forEach((line, originalIndex) => {
+    if (Number(line.cost || 0) <= 0) return;
+    const name = line.quote_section?.trim() || line.source_label?.trim() || line.item || "Quote section";
+    const existing =
+      groups.get(name) ??
+      ({
+        name,
+        indexes: [],
+        lines: [],
+        net: 0,
+        vat: 0,
+        total: 0
+      } satisfies SectionChoice);
+    const net = Number(line.cost || 0);
+    const vat = line.vat_applicable ? Math.round(net * 0.2 * 100) / 100 : 0;
+    existing.indexes.push(originalIndex);
+    existing.lines.push({ ...line, originalIndex });
+    existing.net += net;
+    existing.vat += vat;
+    existing.total += net + vat;
+    groups.set(name, existing);
+  });
+
+  return [...groups.values()];
+}
+
+function getLineDisplayLabel(line: CostLineItem) {
+  const identity = `${line.item ?? ""} ${line.pricing_category ?? ""}`.toLowerCase();
+  if (identity.includes("scaffold")) return "Scaffold/access";
+  if (identity.includes("temporary roof") || identity.includes("weather protection")) return "Temporary roof protection";
+  if (identity.includes("roof")) return "Roof works";
+  return line.item || "Quote item";
 }
 
 function SelectedOptionDetail({ option, selectedIndex }: { option: QuoteOption; selectedIndex: number }) {

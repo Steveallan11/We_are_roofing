@@ -52,7 +52,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
               <ReadableText value={record.scope_of_works} />
             </QuoteSection>
 
-            <PublicQuoteActions options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
+            <PublicQuoteActions costBreakdown={record.cost_breakdown ?? []} options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
           </div>
         </div>
 

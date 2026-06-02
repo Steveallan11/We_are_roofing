@@ -11,7 +11,12 @@ type Props = {
 export async function POST(request: Request, { params }: Props) {
   const { quoteId } = await params;
   const token = new URL(request.url).searchParams.get("token");
-  const body = (await request.json().catch(() => ({}))) as { option_id?: string | null; customer_name?: string | null; customer_email?: string | null };
+  const body = (await request.json().catch(() => ({}))) as {
+    option_id?: string | null;
+    selected_line_indexes?: number[];
+    customer_name?: string | null;
+    customer_email?: string | null;
+  };
 
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true });
@@ -50,6 +55,19 @@ export async function POST(request: Request, { params }: Props) {
 
   if (acceptedOption) {
     const selectedLines = (acceptedOption.cost_breakdown ?? []).map(normaliseCostLine);
+    const selectedTotals = calculateTotals(selectedLines);
+    quoteUpdates.cost_breakdown = selectedLines;
+    quoteUpdates.subtotal = selectedTotals.subtotal;
+    quoteUpdates.vat_amount = selectedTotals.vat_amount;
+    quoteUpdates.total = selectedTotals.total;
+    acceptedTotal = selectedTotals.total;
+  } else if (Array.isArray(body.selected_line_indexes) && body.selected_line_indexes.length > 0) {
+    const allLines = (quoteRecord.cost_breakdown ?? []) as CostLineItem[];
+    const selectedIndexes = new Set(body.selected_line_indexes.filter((index) => Number.isInteger(index) && index >= 0));
+    const selectedLines = allLines.filter((_, index) => selectedIndexes.has(index)).map(normaliseCostLine);
+    if (!selectedLines.length) {
+      return NextResponse.json({ ok: false, error: "Please choose at least one quote section to accept." }, { status: 400 });
+    }
     const selectedTotals = calculateTotals(selectedLines);
     quoteUpdates.cost_breakdown = selectedLines;
     quoteUpdates.subtotal = selectedTotals.subtotal;
