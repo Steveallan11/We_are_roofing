@@ -58,3 +58,6 @@ export { ToastProvider, useToast } from "./Toast";
 
 export { DataList } from "./DataList";
 export type { DataListColumn, DataListProps } from "./DataList";
+
+export { Breadcrumb } from "./Breadcrumb";
+export type { BreadcrumbItem } from "./Breadcrumb";

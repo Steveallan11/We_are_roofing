@@ -10,11 +10,22 @@ type Props = {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  breadcrumb?: React.ReactNode;
   children: React.ReactNode;
   wide?: boolean;
+  /** Disable sticky header (default on). */
+  stickyHeader?: boolean;
 };
 
-export async function AppShell({ title, subtitle, actions, children, wide = false }: Props) {
+export async function AppShell({
+  title,
+  subtitle,
+  actions,
+  breadcrumb,
+  children,
+  wide = false,
+  stickyHeader = true
+}: Props) {
   await requireAdminSession();
 
   return (
@@ -24,7 +35,13 @@ export async function AppShell({ title, subtitle, actions, children, wide = fals
         <AdminSidebar />
         <main className="min-w-0 flex-1">
           <div className={cn("app-shell", wide && "!max-w-[1600px]")}>
-            <PageHeader actions={actions} subtitle={subtitle} title={title} />
+            <PageHeader
+              actions={actions}
+              breadcrumb={breadcrumb}
+              subtitle={subtitle}
+              title={title}
+              sticky={stickyHeader}
+            />
             {children}
           </div>
         </main>
