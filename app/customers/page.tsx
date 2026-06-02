@@ -17,11 +17,11 @@ export default async function CustomersPage() {
       subtitle="Customer contacts, tap-to-call details, job history and new-job shortcuts."
       actions={
         <>
-          <Link className="button-primary" href={"/jobs/new" as Route}>
-            Add Job
+          <Link className="button-primary" href={"/customers/new" as Route}>
+            Add Customer
           </Link>
-          <Link className="button-ghost" href={"/jobs" as Route}>
-            Jobs
+          <Link className="button-ghost" href={"/jobs/new" as Route}>
+            Add Job
           </Link>
         </>
       }

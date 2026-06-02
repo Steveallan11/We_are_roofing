@@ -128,7 +128,10 @@ export default async function JobDetailPage({ params }: Props) {
               <DossierStat label="Documents" value={bundle.documents.length.toString()} hint="Uploads, reports, and PDFs" />
             </div>
 
-            <div className="grid gap-3 border-t border-[var(--border)] bg-black/10 p-5 md:grid-cols-4">
+            <div className="grid gap-3 border-t border-[var(--border)] bg-black/10 p-5 md:grid-cols-5">
+              <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/book-survey`}>
+                Book Survey
+              </Link>
               <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/survey`}>
                 Survey
               </Link>

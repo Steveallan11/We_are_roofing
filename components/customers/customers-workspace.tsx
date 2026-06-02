@@ -53,9 +53,14 @@ export function CustomersWorkspace({ customers }: Props) {
             <h2 className="mt-2 font-condensed text-3xl text-white">{customers.length} saved contacts</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">Search by name, phone, email, town or postcode. Active customers have live jobs in the pipeline.</p>
           </div>
-          <Link className="button-primary" href={"/jobs/new" as Route}>
-            Add Customer Job
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link className="button-primary" href={"/customers/new" as Route}>
+              Add Customer
+            </Link>
+            <Link className="button-ghost" href={"/jobs/new" as Route}>
+              Add Job
+            </Link>
+          </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <CustomerStat label="Active" value={activeCustomers.length.toString()} />

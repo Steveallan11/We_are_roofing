@@ -683,6 +683,101 @@ a[role="button"]:active,
   padding-inline: 5px;
 }
 
+.mobile-bottom-nav__item[type="button"] {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.mobile-more-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.mobile-more-sheet__panel {
+  width: 100%;
+  background: rgba(13,13,13,0.98);
+  border-top: 1px solid var(--gold-border);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -16px 48px rgba(0,0,0,0.6);
+  padding: 10px 16px calc(var(--bottomnav-height) + 24px + env(safe-area-inset-bottom));
+  animation: mobileMoreSheetIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-more-sheet__handle {
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 12px;
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.mobile-more-sheet__title {
+  margin: 0 0 14px;
+  color: var(--gold);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.mobile-more-sheet__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mobile-more-sheet__tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-second);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.mobile-more-sheet__tile.is-active {
+  border-color: var(--gold-border);
+  background: var(--gold-bg);
+  color: var(--gold);
+}
+
+.mobile-more-sheet__tile:active {
+  background: var(--surface-hover);
+  transform: scale(0.98);
+}
+
+.mobile-more-sheet__tile-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--surface-deep);
+  flex-shrink: 0;
+}
+
+@keyframes mobileMoreSheetIn {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 .gauge-mobile-fab {
   position: fixed;
   right: 16px;
