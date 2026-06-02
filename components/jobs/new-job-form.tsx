@@ -304,17 +304,17 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
               </div>
             ) : null}
             {duplicateCustomer ? (
-              <div className="rounded-[8px] border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-4 text-sm text-[var(--warning)]">
-                <p className="font-ui text-xs font-bold uppercase tracking-[0.12em] text-[var(--warning)]">Possible duplicate customer</p>
+              <div className="rounded-[8px] border border-[color:var(--warning-border)] bg-[color:var(--warning-bg)] p-4 text-sm text-[color:var(--warning-text)]">
+                <p className="font-ui text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--warning-text)]">Possible duplicate customer</p>
                 <p className="mt-2 text-sm text-[var(--text-second)]">
                   {(duplicateCustomer.business_name || duplicateCustomer.full_name)} already looks like an existing record. Use it to keep job history tidy.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button className="button-secondary !min-h-9 !px-3 !py-2 text-xs" onClick={() => selectCustomer(duplicateCustomer)} type="button">
+                  <button className="button-secondary button-sm" onClick={() => selectCustomer(duplicateCustomer)} type="button">
                     Use Existing Customer
                   </button>
                   <button
-                    className="button-ghost !min-h-9 !px-3 !py-2 text-xs"
+                    className="button-ghost button-sm"
                     onClick={() => {
                       setDuplicateOverride(true);
                       setDuplicateCustomer(null);
@@ -384,7 +384,12 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
                 <p className="label">Urgency</p>
                 <div className="grid gap-2 md:grid-cols-4">
                   {urgencies.map((urgency) => (
-                    <button className={`min-h-12 rounded-2xl border px-4 py-3 text-sm font-semibold ${form.urgency === urgency ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-black/20 text-[var(--text)]"}`} key={urgency} onClick={() => updateField("urgency", urgency)} type="button">
+                    <button
+                      className={`border rounded-2xl px-4 py-2.5 text-sm font-semibold transition ${form.urgency === urgency ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-black/20 text-[var(--text-second)]"}`}
+                      key={urgency}
+                      onClick={() => updateField("urgency", urgency)}
+                      type="button"
+                    >
                       {urgency}
                     </button>
                   ))}
@@ -421,22 +426,22 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
 
       <div className="sticky bottom-0 flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--card)]/95 p-5 backdrop-blur md:flex-row md:items-center md:justify-between">
         <div className="text-sm">
-          {error ? <p className="text-[#ff9a91]">{error}</p> : null}
-          {success ? <p className="text-[#7ce3a6]">{success}</p> : null}
+          {error ? <p className="text-[color:var(--emergency-text)]">{error}</p> : null}
+          {success ? <p className="text-[color:var(--success-text)]">{success}</p> : null}
           {!error && !success ? <p className="text-[var(--muted)]">Minimum tap targets, simple steps, no CRM faff.</p> : null}
         </div>
         <div className="flex gap-3">
           {step > 1 ? (
-            <button className="button-ghost min-h-11" disabled={loading || isPending} onClick={() => setStep((current) => current - 1)} type="button">
+            <button className="button-ghost button-md" disabled={loading || isPending} onClick={() => setStep((current) => current - 1)} type="button">
               Back
             </button>
           ) : null}
           {step < 4 ? (
-            <button className="button-primary min-h-11" disabled={!canContinue() || loading || isPending} onClick={handleNext} type="button">
+            <button className="button-primary button-md" disabled={!canContinue() || loading || isPending} onClick={handleNext} type="button">
               {loading ? "Processing..." : "Continue"}
             </button>
           ) : (
-            <button className="button-primary min-h-11" disabled={isPending || loading} onClick={handleNext} type="button">
+            <button className="button-primary button-md" disabled={isPending || loading} onClick={handleNext} type="button">
               {isPending || loading ? "Processing..." : "Create Job"}
             </button>
           )}

@@ -177,11 +177,11 @@ export function NewCustomerForm() {
 
       <div className="sticky bottom-0 flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--card)]/95 p-5 backdrop-blur md:flex-row md:items-center md:justify-between">
         <div className="text-sm">
-          {error ? <p className="text-[#ff9a91]">{error}</p> : null}
-          {success ? <p className="text-[#7ce3a6]">{success}</p> : null}
+          {error ? <p className="text-[color:var(--emergency-text)]">{error}</p> : null}
+          {success ? <p className="text-[color:var(--success-text)]">{success}</p> : null}
           {!error && !success ? <p className="text-[var(--muted)]">Phone is the only required field. Fill what you know.</p> : null}
         </div>
-        <button className="button-primary min-h-11" disabled={!canSubmit() || saving || isPending} onClick={handleSubmit} type="button">
+        <button className="button-primary button-md" disabled={!canSubmit() || saving || isPending} onClick={handleSubmit} type="button">
           {saving || isPending ? "Saving..." : "Save Customer"}
         </button>
       </div>

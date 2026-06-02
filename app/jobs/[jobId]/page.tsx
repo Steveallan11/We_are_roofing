@@ -102,19 +102,19 @@ export default async function JobDetailPage({ params }: Props) {
                     <span className="rounded-full border border-[var(--border)] bg-black/20 px-3 py-1">{bundle.customer.town ?? bundle.job.postcode ?? "Town TBC"}</span>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
-                    <SmartActionLink className="button-secondary min-h-12 !rounded-xl !py-2 text-sm" href={bundle.customer.phone ? `tel:${bundle.customer.phone}` : `/customers/${bundle.customer.id}`}>
+                    <SmartActionLink className="button-secondary button-md" href={bundle.customer.phone ? `tel:${bundle.customer.phone}` : `/customers/${bundle.customer.id}`}>
                       Call Customer
                     </SmartActionLink>
-                    <SmartActionLink className="button-secondary min-h-12 !rounded-xl !py-2 text-sm" href={`/comms?job=${bundle.job.id}&channel=sms`}>
+                    <SmartActionLink className="button-secondary button-md" href={`/comms?job=${bundle.job.id}&channel=sms`}>
                       Message
                     </SmartActionLink>
                   </div>
                 </div>
-                <div className="rounded-[1.25rem] border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4 lg:min-w-[260px]">
+                <div className="rounded-[1.25rem] border border-[var(--gold-border)] bg-[var(--gold-bg)] p-4 lg:min-w-[260px]">
                   <p className="section-kicker text-[0.58rem] uppercase">Next Action</p>
                   <p className="mt-2 text-lg font-semibold text-white">{nextAction.label}</p>
                   <p className="mt-1 text-sm text-[var(--muted)]">{getNextActionLabel(bundle.job)}</p>
-                  <SmartActionLink className="button-primary mt-4 min-h-[52px] w-full !rounded-xl !py-3 text-sm lg:min-h-11 lg:!py-2" href={nextAction.href}>
+                  <SmartActionLink className="button-primary button-lg w-full mt-4 lg:button-md" href={nextAction.href}>
                     {nextAction.label}
                   </SmartActionLink>
                 </div>
@@ -129,19 +129,19 @@ export default async function JobDetailPage({ params }: Props) {
             </div>
 
             <div className="grid gap-3 border-t border-[var(--border)] bg-black/10 p-5 md:grid-cols-5">
-              <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/book-survey`}>
+              <Link className="button-secondary button-sm" href={`/jobs/${bundle.job.id}/book-survey`}>
                 Book Survey
               </Link>
-              <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/survey`}>
+              <Link className="button-secondary button-sm" href={`/jobs/${bundle.job.id}/survey`}>
                 Survey
               </Link>
-              <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={`/jobs/${bundle.job.id}/quote`}>
+              <Link className="button-secondary button-sm" href={`/jobs/${bundle.job.id}/quote`}>
                 Quote
               </Link>
-              <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={materialsHref}>
+              <Link className="button-secondary button-sm" href={materialsHref}>
                 Materials
               </Link>
-              <Link className="button-secondary !min-h-11 !rounded-xl !px-3 !py-2 text-sm" href={roofSurveyHref}>
+              <Link className="button-secondary button-sm" href={roofSurveyHref}>
                 Takeoff Tool
               </Link>
             </div>
@@ -176,7 +176,7 @@ export default async function JobDetailPage({ params }: Props) {
                 <h2 className="mt-2 font-condensed text-3xl text-white">Recent activity</h2>
                 <p className="mt-2 text-sm text-[var(--muted)]">Key job milestones, emails, and filed documents in date order.</p>
               </div>
-              <Link className="button-ghost !px-4 !py-2 text-sm" href={`/jobs/${bundle.job.id}`}>
+              <Link className="button-ghost button-sm" href={`/jobs/${bundle.job.id}`}>
                 Job file
               </Link>
             </div>
