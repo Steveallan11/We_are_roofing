@@ -66,6 +66,7 @@ export default async function JobDetailPage({ params }: Props) {
   const totalDocumentCount = bundle.documents.length;
   const uploadedDocumentCount = documentGroups.Uploads.length;
   const generatedDocumentCount = totalDocumentCount - uploadedDocumentCount;
+  const materialsSummary = summarizeMaterials(bundle.materials);
 
   return (
         <AppShell
@@ -337,21 +338,15 @@ export default async function JobDetailPage({ params }: Props) {
 
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Materials</p>
-            <div className="mt-4 space-y-3">
-              {bundle.materials.length > 0 ? (
-                bundle.materials.map((material) => (
-                  <div className="rounded-2xl border p-3" key={material.id}>
-                    <p className="font-semibold text-white">{material.item_name}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      {material.quantity} {material.unit} - {material.required_status}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-[var(--muted)]">Materials will appear after the first quote draft.</p>
-              )}
+            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
+              <p className="font-semibold text-white">{bundle.materials.length > 0 ? "Materials list created" : "Materials not created yet"}</p>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                {bundle.materials.length > 0
+                  ? `${bundle.materials.length} item${bundle.materials.length === 1 ? "" : "s"} on file${materialsSummary ? ` | ${materialsSummary}` : ""}. Open the dedicated materials view to check suppliers, status, quantities, and notes.`
+                  : "Materials will appear after the first quote draft. Keep this job file clean and use the dedicated materials view for ordering."}
+              </p>
             </div>
-            <Link className="button-ghost mt-4 w-full" href={materialsHref}>
+            <Link className={bundle.materials.length > 0 ? "button-primary mt-4 w-full" : "button-ghost mt-4 w-full"} href={materialsHref}>
               Open Materials View
             </Link>
           </div>
@@ -643,4 +638,17 @@ function getDocumentDisplayType(document: JobDocumentRecord) {
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function summarizeMaterials(materials: Array<{ required_status?: string | null }>) {
+  const counts = materials.reduce<Record<string, number>>((summary, material) => {
+    const status = material.required_status || "TBC";
+    summary[status] = (summary[status] ?? 0) + 1;
+    return summary;
+  }, {});
+
+  return Object.entries(counts)
+    .slice(0, 3)
+    .map(([status, count]) => `${count} ${status}`)
+    .join(" | ");
 }

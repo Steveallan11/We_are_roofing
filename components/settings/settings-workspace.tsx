@@ -199,13 +199,13 @@ export function SettingsWorkspace({ business }: Props) {
           <p className="section-kicker text-[0.65rem] uppercase">Email & Documents</p>
           <h2 className="mt-2 font-condensed text-3xl text-white">Operational checks</h2>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <StatusCheck label="Customer email sender" status="Uses Resend environment setup" />
+            <StatusCheck label="Customer email sender" status="Uses Gmail SMTP temporarily, or Resend once a domain is verified" />
             <StatusCheck label="Quote PDFs" status="Filed into each job when generated" />
             <StatusCheck label="Invoice PDFs" status="Filed into each job from Money or job file" />
             <StatusCheck label="Knowledge retrieval" status="Uses Knowledge Base and historical quotes" />
           </div>
           <p className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4 text-sm text-[var(--muted)]">
-            Full email/domain controls can be added once the sender domain and live email address are final. For now, this page keeps the document and business details that feed the templates in one place.
+            Temporary setup: use Gmail SMTP with an app password so customer emails can send before the business domain is ready. Best long-term setup: switch back to Resend once a proper sender domain is verified. Failed provider sends are logged instead of being marked as sent.
           </p>
         </div>
       </section>

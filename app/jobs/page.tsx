@@ -28,14 +28,9 @@ export default async function JobsPage({ searchParams }: Props) {
       subtitle={`${activeJobs.length} active | ${currency(pipelineValue)} pipeline | ${urgent} urgent. One board for surveys, quotes, follow-ups, and booked work.`}
       wide
       actions={
-        <>
-          <Link className="button-primary" href="/jobs/new">
-            Add Job
-          </Link>
-          <Link className="button-ghost hidden lg:inline-flex" href="/dashboard">
-            Dashboard
-          </Link>
-        </>
+        <Link className="button-primary" href="/jobs/new">
+          Add Job
+        </Link>
       }
     >
       <section className="mb-4 hidden card p-4 lg:block">

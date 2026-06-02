@@ -14,6 +14,7 @@ export default async function KnowledgePage() {
   const missingHistoricalQuotes = Math.max(0, historicalQuotes.length - syncedHistoricalQuotes);
   const syncPercent = historicalQuotes.length > 0 ? Math.round((syncedHistoricalQuotes / historicalQuotes.length) * 100) : 100;
   const rateCardReady = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
+  const checkedAt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
 
   return (
     <AppShell
@@ -55,6 +56,11 @@ export default async function KnowledgePage() {
             <p className="mt-1 text-sm text-[var(--muted)]">
               {missingHistoricalQuotes > 0 ? `${missingHistoricalQuotes} historical quote${missingHistoricalQuotes === 1 ? "" : "s"} still need syncing.` : "Historical quote knowledge is synced."}
             </p>
+            <div className="mt-4 grid gap-2 text-sm">
+              <KnowledgeHealthRow label="Last checked" value={checkedAt} />
+              <KnowledgeHealthRow label="Retry action" value={missingHistoricalQuotes > 0 ? "Use Sync Missing Quotes" : "No retry needed"} />
+              <KnowledgeHealthRow label="Failed items" value="Shown below each upload/import result" />
+            </div>
           </div>
           <div className="card p-5">
             <p className="section-kicker text-[0.65rem] uppercase">Quote Knowledge</p>
@@ -95,6 +101,15 @@ function KnowledgeMetric({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3">
       <p className="text-[0.62rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">{label}</p>
       <p className="mt-2 text-xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function KnowledgeHealthRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-[var(--border)] bg-black/20 px-3 py-2">
+      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--dim)]">{label}</span>
+      <span className="text-right text-xs text-[var(--text)]">{value}</span>
     </div>
   );
 }

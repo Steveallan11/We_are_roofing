@@ -99,6 +99,8 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const [featureType, setFeatureType] = useState("Chimney");
   const [sectionColor, setSectionColor] = useState("#D4AF37");
   const [searchAddr, setSearchAddr] = useState(address);
+  const [propertyLocked, setPropertyLocked] = useState(true);
+  const [lockedAddress, setLockedAddress] = useState(address);
   const [surveyNotes, setSurveyNotes] = useState(initialSurvey.notes ?? "");
   const [selectedShape, setSelectedShape] = useState<{ kind: "section" | "line" | "feature"; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,16 +111,32 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-  const geocodeAddress = useCallback((addr: string, map = mapRef.current) => {
+  const geocodeAddress = useCallback((addr: string, map = mapRef.current, lockAfterSearch = false) => {
     if (!map || !window.google?.maps) return;
+    const cleanAddress = addr.trim();
+    if (!cleanAddress) return;
     const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ address: `${addr}, UK` }, (results, status) => {
+    geocoder.geocode({ address: `${cleanAddress}, UK` }, (results, status) => {
       if (status === "OK" && results?.[0]) {
         map.setCenter(results[0].geometry.location);
         map.setZoom(20);
+        if (lockAfterSearch) {
+          setLockedAddress(cleanAddress);
+          setSearchAddr(cleanAddress);
+          setPropertyLocked(true);
+          setMessage("Property locked. Use Change Property if you need to search again.");
+        }
+      } else if (lockAfterSearch) {
+        setError("Could not find that property. Check the address and try again.");
       }
     });
   }, []);
+
+  function searchAndLockProperty() {
+    setError(null);
+    setMessage(null);
+    geocodeAddress(searchAddr, mapRef.current, true);
+  }
 
   const recalcSection = useCallback((id: string, polygon: google.maps.Polygon) => {
     const area = round2(google.maps.geometry.spherical.computeArea(polygon.getPath()));
@@ -600,13 +618,37 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
           <div className="space-y-4 p-4 pb-6">
             <GoogleEarthGuide />
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-              <p className="label">Property</p>
-              <div className="mt-3 flex gap-2">
-                <input className="field" onChange={(event) => setSearchAddr(event.target.value)} onKeyDown={(event) => event.key === "Enter" && geocodeAddress(searchAddr)} value={searchAddr} />
-                <button className="button-primary !px-4" onClick={() => geocodeAddress(searchAddr)} type="button">
-                  Go
-                </button>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="label">Property</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                    {propertyLocked ? "Locked to this job address so accidental typing will not move the map." : "Search the corrected property, then lock it before measuring."}
+                  </p>
+                </div>
+                <span className={`rounded-full border px-2 py-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] ${propertyLocked ? "border-[#10b981]/35 bg-[#10b981]/10 text-[#8df0b7]" : "border-[#f59e0b]/35 bg-[#f59e0b]/10 text-[#ffd38b]"}`}>
+                  {propertyLocked ? "Locked" : "Editing"}
+                </span>
               </div>
+              {propertyLocked ? (
+                <div className="mt-3 rounded-xl border border-[var(--border)] bg-black/20 p-3">
+                  <p className="text-sm font-semibold text-white">{lockedAddress || address}</p>
+                  <button className="button-ghost mt-3 w-full !py-2 text-xs" onClick={() => setPropertyLocked(false)} type="button">
+                    Change Property
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input className="field" onChange={(event) => setSearchAddr(event.target.value)} onKeyDown={(event) => event.key === "Enter" && searchAndLockProperty()} value={searchAddr} />
+                    <button className="button-primary !px-4" onClick={searchAndLockProperty} type="button">
+                      Lock
+                    </button>
+                  </div>
+                  <button className="button-ghost w-full !py-2 text-xs" onClick={() => { setSearchAddr(lockedAddress || address); setPropertyLocked(true); }} type="button">
+                    Cancel Change
+                  </button>
+                </div>
+              )}
             </section>
 
             <section className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4">

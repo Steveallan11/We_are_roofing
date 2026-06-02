@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { requireAdminApi } from "@/lib/auth";
+import { sendEmail } from "@/lib/email/sendEmail";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildCsv } from "@/lib/survey/csvExporter";
 import { buildKml } from "@/lib/survey/kmlExporter";
@@ -93,10 +93,8 @@ export async function POST(request: Request) {
   const totalArea = sections.reduce((sum, section) => sum + (section.area_m2 || 0), 0);
   const totalLength = lines.reduce((sum, line) => sum + (line.length_lm || 0), 0);
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const { data, error } = await resend.emails.send({
-    from: `${process.env.RESEND_FROM_NAME || "Andy @ We Are Roofing"} <${process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"}>`,
-    to: [body.toEmail],
+  const emailResult = await sendEmail({
+    to: body.toEmail,
     subject: `Roof takeoff survey - ${jobRef} - ${address}`,
     html: buildEmailHtml({
       toName: customerName,
@@ -108,25 +106,13 @@ export async function POST(request: Request) {
       includeKml: Boolean(kmlString),
       includeCsv: Boolean(csvString)
     }),
-    attachments: attachments as never
+    text: `${body.message || "Please find the roof takeoff survey attached."}\n\nJob: ${jobRef}\nAddress: ${address}`,
+    attachments: attachments as never,
+    jobId: job.id,
+    templateType: "takeoff_export"
   });
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
-
-  await supabase.from("email_logs").insert({
-    job_id: job.id,
-    to_email: body.toEmail,
-    subject: `Roof takeoff survey - ${jobRef}`,
-    channel: "email",
-    template_type: "takeoff_export",
-    resend_id: data?.id,
-    status: "sent",
-    sent_at: new Date().toISOString()
-  });
-
-  return NextResponse.json({ ok: true, messageId: data?.id });
+  return NextResponse.json({ ok: true, messageId: emailResult.id });
 }
 
 function getMaxDimension(sections: Array<{ points: Array<{ x?: number; y?: number; lat?: number; lng?: number }> }>, lines: Array<{ points: Array<{ x?: number; y?: number; lat?: number; lng?: number }> }>, key: "x" | "y") {
