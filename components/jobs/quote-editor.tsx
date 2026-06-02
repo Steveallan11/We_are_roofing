@@ -643,7 +643,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
 
     if (googleMapsApiKey) {
       try {
-        satelliteImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey));
+        satelliteImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey, "building"));
       } catch {
         satelliteImageHref = null;
       }
@@ -661,6 +661,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       lines: roofSurvey.lines,
       features: roofSurvey.features,
       style: "satellite",
+      staticMapFraming: "building",
       googleMapsApiKey,
       satelliteImageHref,
       quoteSections: buildDrawingQuoteSections(costBreakdown, roofSurvey)

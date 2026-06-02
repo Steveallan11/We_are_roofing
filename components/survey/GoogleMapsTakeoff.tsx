@@ -5,7 +5,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
-import { buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
+import { buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingFraming, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
 import type { RoofSurveyRecord, SurveyPoint } from "@/lib/survey/types";
@@ -901,6 +901,7 @@ function ExportButtons(props: {
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
   const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("satellite");
+  const [drawingFraming, setDrawingFraming] = useState<TakeoffDrawingFraming>("building");
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
   function makeKml() {
@@ -923,6 +924,7 @@ function ExportButtons(props: {
       lines: props.rows.lines,
       features: props.rows.features,
       style: drawingStyle,
+      staticMapFraming: drawingFraming,
       googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     });
   }
@@ -935,7 +937,8 @@ function ExportButtons(props: {
     try {
       const staticMapUrl = buildStaticMapUrl(
         { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features },
-        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+        drawingFraming
       );
       const satelliteImageHref = await imageUrlToDataUrl(staticMapUrl);
       return buildTakeoffDrawingSvg({
@@ -949,6 +952,7 @@ function ExportButtons(props: {
         lines: props.rows.lines,
         features: props.rows.features,
         style: drawingStyle,
+        staticMapFraming: drawingFraming,
         satelliteImageHref
       });
     } catch {
@@ -968,11 +972,21 @@ function ExportButtons(props: {
         </select>
       </label>
       {drawingStyle === "satellite" ? (
-        <div className={`rounded-xl border p-3 text-xs leading-5 ${staticMapsReady ? "border-[var(--gold)]/30 bg-[var(--gold)]/5 text-[var(--gold-l)]" : "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fcd88a]"}`}>
-          {staticMapsReady
-            ? "This export uses Google Static Maps for the satellite background, then overlays our measured sections and legend. If the image does not appear, enable Maps Static API in Google Cloud."
-            : "Satellite background is not available because NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing. The drawing will export as a clean measured plan instead."}
-        </div>
+        <>
+          <label className="block">
+            <span className="label">Satellite framing</span>
+            <select className="field mt-1" onChange={(event) => setDrawingFraming(event.target.value as TakeoffDrawingFraming)} value={drawingFraming}>
+              <option value="building">Whole building (recommended)</option>
+              <option value="close">Close-up detail</option>
+              <option value="context">Wider context / access</option>
+            </select>
+          </label>
+          <div className={`rounded-xl border p-3 text-xs leading-5 ${staticMapsReady ? "border-[var(--gold)]/30 bg-[var(--gold)]/5 text-[var(--gold-l)]" : "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fcd88a]"}`}>
+            {staticMapsReady
+              ? "Use Whole building for customer quotes, Close-up for detail, or Wider context when scaffold/access surroundings matter."
+              : "Satellite background is not available because NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing. The drawing will export as a clean measured plan instead."}
+          </div>
+        </>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
         <button className="button-secondary !py-2 text-xs" onClick={() => void makeExportDrawingSvg().then((svg) => printDrawing(svg, `${props.jobRef}-roof-plan`))} type="button">

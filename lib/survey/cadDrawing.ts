@@ -1,6 +1,7 @@
 import type { RoofSurveyFeature, RoofSurveyLine, RoofSurveySection } from "@/lib/survey/types";
 
 export type TakeoffDrawingStyle = "technical" | "customer" | "quote" | "satellite";
+export type TakeoffDrawingFraming = "close" | "building" | "context";
 
 type DrawingPoint = { lat?: number; lng?: number; x?: number; y?: number };
 
@@ -25,6 +26,7 @@ export type DrawingOpts = {
   lines: RoofSurveyLine[];
   features: RoofSurveyFeature[];
   style: TakeoffDrawingStyle;
+  staticMapFraming?: TakeoffDrawingFraming;
   googleMapsApiKey?: string;
   satelliteImageHref?: string | null;
   quoteSections?: DrawingQuoteSection[];
@@ -76,7 +78,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const style = STYLE_COPY[opts.style];
   const dark = opts.style === "quote";
   const satelliteUrl =
-    opts.style === "satellite" ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey) : null) : null;
+    opts.style === "satellite" ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey, opts.staticMapFraming) : null) : null;
   const useStaticMapGeometry = Boolean(satelliteUrl);
   const text = dark ? "#f8f5e8" : "#111827";
   const muted = dark ? "#b7aa82" : "#6b7280";
@@ -338,13 +340,14 @@ function gridLines(dark: boolean) {
   return lines.join("");
 }
 
-export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
+export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string, framing: TakeoffDrawingFraming = "building") {
   const coords = allPoints(opts).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
   const cropCoords = primaryCropPoints(opts);
   const bounds = getGeoBounds(cropCoords.length ? cropCoords : coords);
-  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, 0.5) : null;
+  const crop = framingConfig(framing);
+  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, crop.paddingMeters) : null;
   const center = bounds ? geoBoundsCenter(bounds) : null;
-  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, 4) : null;
+  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, crop.zoomBoost) : null;
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
@@ -406,6 +409,12 @@ function exportLineColor(index: number, line: RoofSurveyLine) {
   if (label.includes("problem") || label.includes("repair") || label.includes("leak")) return "#EF4444";
   if (label.includes("section")) return EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length];
   return line.color || EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length];
+}
+
+function framingConfig(framing: TakeoffDrawingFraming) {
+  if (framing === "close") return { paddingMeters: 2, zoomBoost: 3 };
+  if (framing === "context") return { paddingMeters: 32, zoomBoost: -1 };
+  return { paddingMeters: 16, zoomBoost: 0 };
 }
 
 function getGeoBounds(points: Array<{ lat: number; lng: number }>) {
