@@ -821,7 +821,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
         <div className="mt-4 space-y-4">
           <TakeoffQuotePreview selectedSourceId={selectedTakeoffSourceId} survey={roofSurvey} />
           {costBreakdown.length > 0 ? costBreakdown.map((line, index) => (
-            <div className="rounded-2xl border border-[var(--border)] p-4" key={`${line.item}-${index}`}>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-deep)] p-5" key={`${line.item}-${index}`}>
               {line.source_type || line.measurement_label || line.quote_section ? (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-black/15 p-3 text-xs text-[var(--muted)]">
                   {line.source_color ? <span aria-hidden="true" className="h-3 w-3 rounded-full" style={{ background: line.source_color }} /> : null}
@@ -842,17 +842,48 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                   ) : null}
                 </div>
               ) : null}
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_120px_110px_130px_140px_120px]">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
                 <div>
                   <label className="label" htmlFor={`line-item-${index}`}>
-                    Item
+                    Item / work type
                   </label>
                   <input
                     className="field"
                     id={`line-item-${index}`}
+                    placeholder="Roof works, Scaffold/access, Chimney repairs..."
                     onChange={(event) => updateLine(index, { item: event.target.value })}
                     value={line.item}
                   />
+                </div>
+                <div>
+                  <label className="label" htmlFor={`line-quote-section-${index}`}>
+                    Section / drawing area
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-quote-section-${index}`}
+                    onChange={(event) => updateLine(index, { quote_section: event.target.value })}
+                    placeholder="Front slope, rear flat roof, chimney stack..."
+                    value={line.quote_section ?? ""}
+                  />
+                </div>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_120px_110px_130px_150px]">
+                <div>
+                  <label className="label" htmlFor={`line-pricing-category-${index}`}>
+                    Category
+                  </label>
+                  <select
+                    className="field"
+                    id={`line-pricing-category-${index}`}
+                    onChange={(event) => updateLine(index, { pricing_category: event.target.value })}
+                    value={line.pricing_category || getQuoteLineItemCategory(line)}
+                  >
+                    <option value="roof_works">Roof works</option>
+                    <option value="standard_scaffold">Scaffold/access</option>
+                    <option value="temporary_roof_protection">Temporary roof protection</option>
+                    <option value="access">Other access</option>
+                  </select>
                 </div>
                 <div>
                   <label className="label" htmlFor={`line-quantity-${index}`}>
@@ -876,13 +907,13 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                     className="field"
                     id={`line-unit-${index}`}
                     onChange={(event) => updateLine(index, { unit: event.target.value })}
-                    placeholder="lm"
+                    placeholder="m2 / lm / item"
                     value={line.unit ?? ""}
                   />
                 </div>
                 <div>
                   <label className="label" htmlFor={`line-unit-rate-${index}`}>
-                    Unit Rate
+                    Unit rate
                   </label>
                   <input
                     className="field"
@@ -896,7 +927,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                 </div>
                 <div>
                   <label className="label" htmlFor={`line-cost-${index}`}>
-                    Total
+                    Net price
                   </label>
                   <input
                     className="field"
@@ -907,52 +938,30 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                     value={line.cost}
                   />
                 </div>
-                <label className="mt-6 flex items-center gap-3 text-sm text-[var(--text)]">
-                  <input
-                    checked={line.vat_applicable}
-                    onChange={(event) => updateLine(index, { vat_applicable: event.target.checked })}
-                    type="checkbox"
-                  />
-                  VAT applies
-                </label>
-                <button className="button-ghost mt-6 !min-h-11 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteLine(index)} type="button">
-                  Delete
-                </button>
               </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor={`line-quote-section-${index}`}>
-                    Quote Section / Drawing Area
-                  </label>
-                  <input
-                    className="field"
-                    id={`line-quote-section-${index}`}
-                    onChange={(event) => updateLine(index, { quote_section: event.target.value })}
-                    placeholder="Front slope, rear flat roof, chimney stack..."
-                    value={line.quote_section ?? ""}
-                  />
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-black/15 p-3 text-sm">
+                <label className="flex items-center gap-3 text-[var(--text)]">
+                  <input checked={line.vat_applicable} onChange={(event) => updateLine(index, { vat_applicable: event.target.checked })} type="checkbox" />
+                  VAT applies to this line
+                </label>
+                <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+                  <span className="text-[var(--muted)]">Net: <strong className="text-white">{currency(Number(line.cost || 0))}</strong></span>
+                  <span className="text-[var(--muted)]">VAT: <strong className="text-white">{currency(line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0)}</strong></span>
+                  <span className="text-[var(--gold-l)]">Inc VAT: <strong>{currency(Number(line.cost || 0) + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0))}</strong></span>
                 </div>
-                <div>
-                  <label className="label" htmlFor={`line-pricing-category-${index}`}>
-                    Pricing Category
-                  </label>
-                  <input
-                    className="field"
-                    id={`line-pricing-category-${index}`}
-                    onChange={(event) => updateLine(index, { pricing_category: event.target.value })}
-                    placeholder="Pitched - Tile, Ridge, Chimney..."
-                    value={line.pricing_category ?? ""}
-                  />
-                </div>
+                <button className="button-ghost !min-h-10 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteLine(index)} type="button">
+                  Delete line
+                </button>
               </div>
               <div className="mt-4">
                 <label className="label" htmlFor={`line-notes-${index}`}>
-                  Notes
+                  Description / customer notes
                 </label>
                 <textarea
                   className="field min-h-20"
                   id={`line-notes-${index}`}
                   onChange={(event) => updateLine(index, { notes: event.target.value })}
+                  placeholder="Explain what is included for this section, access requirements, exclusions, or drawing reference."
                   value={line.notes}
                 />
               </div>
