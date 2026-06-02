@@ -5,7 +5,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
-import { buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
+import { buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
 import type { RoofSurveyRecord, SurveyPoint } from "@/lib/survey/types";
@@ -927,6 +927,35 @@ function ExportButtons(props: {
     });
   }
 
+  async function makeExportDrawingSvg() {
+    if (drawingStyle !== "satellite" || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+      return makeDrawingSvg();
+    }
+
+    try {
+      const staticMapUrl = buildStaticMapUrl(
+        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features },
+        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      );
+      const satelliteImageHref = await imageUrlToDataUrl(staticMapUrl);
+      return buildTakeoffDrawingSvg({
+        projectName: props.projectName,
+        jobRef: props.jobRef,
+        address: props.address,
+        customerName: props.customerName,
+        surveyDate: props.surveyDate,
+        notes: props.notes,
+        sections: props.rows.sections,
+        lines: props.rows.lines,
+        features: props.rows.features,
+        style: drawingStyle,
+        satelliteImageHref
+      });
+    } catch {
+      return makeDrawingSvg();
+    }
+  }
+
   return (
     <div className="mt-3 space-y-2">
       <label className="block">
@@ -946,13 +975,13 @@ function ExportButtons(props: {
         </div>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
-        <button className="button-secondary !py-2 text-xs" onClick={() => printDrawing(makeDrawingSvg(), `${props.jobRef}-roof-plan`)} type="button">
+        <button className="button-secondary !py-2 text-xs" onClick={() => void makeExportDrawingSvg().then((svg) => printDrawing(svg, `${props.jobRef}-roof-plan`))} type="button">
           Customer PDF
         </button>
-        <button className="button-secondary !py-2 text-xs" onClick={() => void downloadPng(makeDrawingSvg(), `${props.jobRef}-roof-plan`)} type="button">
+        <button className="button-secondary !py-2 text-xs" onClick={() => void makeExportDrawingSvg().then((svg) => downloadPng(svg, `${props.jobRef}-roof-plan`))} type="button">
           Image PNG
         </button>
-        <button className="button-ghost !py-2 text-xs" onClick={() => downloadSvg(makeDrawingSvg(), `${props.jobRef}-roof-plan`)} type="button">
+        <button className="button-ghost !py-2 text-xs" onClick={() => void makeExportDrawingSvg().then((svg) => downloadSvg(svg, `${props.jobRef}-roof-plan`))} type="button">
           Editable SVG
         </button>
         <button
@@ -1000,6 +1029,18 @@ function ExportButtons(props: {
 
 function svgToDataUrl(svg: string) {
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+}
+
+async function imageUrlToDataUrl(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Unable to fetch satellite image.");
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => (typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Unable to read satellite image.")));
+    reader.onerror = () => reject(new Error("Unable to read satellite image."));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function printHtml(body: string, title: string) {

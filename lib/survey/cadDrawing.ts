@@ -16,6 +16,7 @@ type DrawingOpts = {
   features: RoofSurveyFeature[];
   style: TakeoffDrawingStyle;
   googleMapsApiKey?: string;
+  satelliteImageHref?: string | null;
 };
 
 const WIDTH = 1200;
@@ -62,7 +63,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const project = makeProjector(bounds);
   const style = STYLE_COPY[opts.style];
   const dark = opts.style === "quote";
-  const satelliteUrl = opts.style === "satellite" && opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey) : null;
+  const satelliteUrl =
+    opts.style === "satellite" ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey) : null) : null;
   const text = dark ? "#f8f5e8" : "#111827";
   const muted = dark ? "#b7aa82" : "#6b7280";
   const gold = "#D4AF37";
@@ -293,7 +295,7 @@ function gridLines(dark: boolean) {
   return lines.join("");
 }
 
-function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
+export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
