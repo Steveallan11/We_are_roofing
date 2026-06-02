@@ -921,7 +921,8 @@ function ExportButtons(props: {
       sections: props.rows.sections,
       lines: props.rows.lines,
       features: props.rows.features,
-      style: drawingStyle
+      style: drawingStyle,
+      googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     });
   }
 
@@ -932,6 +933,7 @@ function ExportButtons(props: {
         <select className="field mt-1" onChange={(event) => setDrawingStyle(event.target.value as TakeoffDrawingStyle)} value={drawingStyle}>
           <option value="technical">Technical Takeoff</option>
           <option value="customer">Customer Friendly</option>
+          <option value="satellite">Customer Satellite Plan</option>
           <option value="quote">Quote Sketch</option>
         </select>
       </label>

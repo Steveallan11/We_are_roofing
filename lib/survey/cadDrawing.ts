@@ -1,6 +1,6 @@
 import type { RoofSurveyFeature, RoofSurveyLine, RoofSurveySection } from "@/lib/survey/types";
 
-export type TakeoffDrawingStyle = "technical" | "customer" | "quote";
+export type TakeoffDrawingStyle = "technical" | "customer" | "quote" | "satellite";
 
 type DrawingPoint = { lat?: number; lng?: number; x?: number; y?: number };
 
@@ -15,6 +15,7 @@ type DrawingOpts = {
   lines: RoofSurveyLine[];
   features: RoofSurveyFeature[];
   style: TakeoffDrawingStyle;
+  googleMapsApiKey?: string;
 };
 
 const WIDTH = 1200;
@@ -45,6 +46,13 @@ const STYLE_COPY: Record<TakeoffDrawingStyle, { title: string; subtitle: string;
     background: "#0b0b0b",
     stroke: "#f8f5e8",
     soft: "#2a2415"
+  },
+  satellite: {
+    title: "Customer Satellite Roof Plan",
+    subtitle: "Satellite roof plan with measured sections, runs, and roof details",
+    background: "#fffdf7",
+    stroke: "#1f2937",
+    soft: "#efe6cf"
   }
 };
 
@@ -54,6 +62,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const project = makeProjector(bounds);
   const style = STYLE_COPY[opts.style];
   const dark = opts.style === "quote";
+  const satelliteUrl = opts.style === "satellite" && opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey) : null;
   const text = dark ? "#f8f5e8" : "#111827";
   const muted = dark ? "#b7aa82" : "#6b7280";
   const gold = "#D4AF37";
@@ -133,6 +142,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .panel-title{font:800 12px Montserrat,Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;fill:${gold}}
     .total-value{font:800 26px Montserrat,Arial,sans-serif;fill:${text}}
   </style>
+  <defs>
+    <clipPath id="drawingClip"><rect x="${DRAWING_LEFT}" y="${DRAWING_TOP}" width="${DRAWING_WIDTH}" height="${DRAWING_HEIGHT}" rx="18" /></clipPath>
+  </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="${style.background}" />
   <rect x="32" y="32" width="${WIDTH - 64}" height="${HEIGHT - 64}" rx="24" fill="${dark ? "#111" : "#fff"}" stroke="${style.soft}" />
   <text x="64" y="74" class="eyebrow">We Are Roofing UK Ltd</text>
@@ -140,7 +152,12 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   <text x="64" y="136" class="subtitle">${escapeXml(style.subtitle)}</text>
   <text x="64" y="164" class="meta">${escapeXml(opts.jobRef)} - ${escapeXml(opts.address)}</text>
   <rect x="${DRAWING_LEFT}" y="${DRAWING_TOP}" width="${DRAWING_WIDTH}" height="${DRAWING_HEIGHT}" rx="18" fill="${dark ? "#161616" : "#fbfaf5"}" stroke="${style.soft}" />
-  ${gridLines(dark)}
+  ${
+    satelliteUrl
+      ? `<image href="${escapeXml(satelliteUrl)}" x="${DRAWING_LEFT}" y="${DRAWING_TOP}" width="${DRAWING_WIDTH}" height="${DRAWING_HEIGHT}" preserveAspectRatio="xMidYMid slice" clip-path="url(#drawingClip)" opacity="0.92" />
+  <rect x="${DRAWING_LEFT}" y="${DRAWING_TOP}" width="${DRAWING_WIDTH}" height="${DRAWING_HEIGHT}" rx="18" fill="rgba(0,0,0,0.08)" stroke="${style.soft}" />`
+      : gridLines(dark)
+  }
   <g>${sectionShapes}${lineShapes}${featureShapes}</g>
   <rect x="850" y="118" width="286" height="560" rx="18" fill="${dark ? "#161616" : "#fbfaf5"}" stroke="${style.soft}" />
   <text x="870" y="148" class="panel-title">Measured Items</text>
@@ -262,6 +279,50 @@ function gridLines(dark: boolean) {
     lines.push(`<line x1="${DRAWING_LEFT}" y1="${y}" x2="${DRAWING_LEFT + DRAWING_WIDTH}" y2="${y}" stroke="${stroke}" stroke-width="1" />`);
   }
   return lines.join("");
+}
+
+function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
+  const params = new URLSearchParams({
+    key: apiKey,
+    maptype: "satellite",
+    size: "640x640",
+    scale: "2",
+    format: "jpg"
+  });
+
+  const visiblePoints = allPoints(opts)
+    .map(toCoord)
+    .filter(Boolean)
+    .slice(0, 60) as Array<{ lat: number; lng: number }>;
+  visiblePoints.forEach((point) => params.append("visible", `${point.lat},${point.lng}`));
+
+  opts.sections.slice(0, 10).forEach((section) => {
+    const coords = section.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
+    if (coords.length < 3) return;
+    const color = staticMapColor(section.color || "#D4AF37");
+    const path = [`color:0x${color}ff`, `fillcolor:0x${color}44`, "weight:3", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
+    params.append("path", path);
+  });
+
+  opts.lines.slice(0, 12).forEach((line) => {
+    const coords = line.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
+    if (coords.length < 2) return;
+    const color = staticMapColor(line.color || "#D4AF37");
+    params.append("path", [`color:0x${color}ff`, "weight:4", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+  });
+
+  opts.features.slice(0, 12).forEach((feature) => {
+    const point = toCoord(feature.point);
+    if (!point) return;
+    params.append("markers", `color:yellow|label:${markerInitials(feature.type || feature.label).slice(0, 1) || "X"}|${point.lat},${point.lng}`);
+  });
+
+  return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
+}
+
+function staticMapColor(value: string) {
+  const clean = value.replace("#", "").trim();
+  return /^[0-9a-fA-F]{6}$/.test(clean) ? clean : "D4AF37";
 }
 
 function markerInitials(value: string) {
