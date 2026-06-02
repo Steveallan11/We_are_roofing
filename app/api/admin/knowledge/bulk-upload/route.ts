@@ -201,7 +201,8 @@ export async function POST(request: Request) {
 
       if (historicalQuotesForKb.length > 0) {
         const synced = await syncHistoricalQuotesToKnowledgeBase(supabase, historicalQuotesForKb);
-        result.inserted_knowledge_entries += synced;
+        result.inserted_knowledge_entries += synced.created;
+        result.updated_knowledge_entries += synced.updated;
       }
     } catch (error) {
       result.error = error instanceof Error ? error.message : "Unable to process this file.";

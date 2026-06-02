@@ -109,7 +109,7 @@ export function KnowledgeAdmin({
     setSyncMessage(null);
     setSyncError(null);
     const response = await fetch("/api/knowledge/sync");
-    const result = (await response.json().catch(() => null)) as { ok?: boolean; synced?: number; total?: number; error?: string } | null;
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; synced?: number; created?: number; updated?: number; skipped?: number; total?: number; error?: string } | null;
     setSyncingKb(false);
 
     if (!response.ok || !result?.ok) {
@@ -117,23 +117,25 @@ export function KnowledgeAdmin({
       return;
     }
 
-    setSyncMessage(`Synced ${result.synced ?? 0} of ${result.total ?? 0} historical quotes into the Knowledge Base.`);
+    setSyncMessage(
+      `Knowledge sync complete: ${result.created ?? 0} created, ${result.updated ?? 0} updated, ${result.skipped ?? 0} skipped from ${result.total ?? 0} historical quotes.`
+    );
     startTransition(() => router.refresh());
   }
 
   return (
     <div className="stack">
       <div className="card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="section-kicker text-[0.65rem] uppercase">Notion Import</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
               Pull the live `Quotes` database into historical comparables and the `Master Source Library` into reusable knowledge records. This is migration and enrichment, not day-to-day dual entry.
             </p>
-            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 px-4 py-3 text-sm">
-              <p className="text-white">
-                {historicalQuotesCount} historical quotes in database | {syncedHistoricalQuotes} already in Knowledge Base | {historicalQuotesMissing} not synced
-              </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <SyncTile label="Historical quotes" value={String(historicalQuotesCount)} />
+              <SyncTile label="Synced to KB" value={String(syncedHistoricalQuotes)} />
+              <SyncTile label="Still missing" value={String(historicalQuotesMissing)} warning={historicalQuotesMissing > 0} />
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -160,12 +162,12 @@ export function KnowledgeAdmin({
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-2xl border border-[var(--border)] p-4">
             <p className="label">Quotes Source</p>
-            <p className="text-sm text-[var(--text)]">`📋 Quotes` data source</p>
+            <p className="text-sm text-[var(--text)]">Notion Quotes data source</p>
             <p className="mt-2 text-xs text-[var(--muted)]">Imports quote title, quote ref, work description, price, stage, and comparable tags into `historical_quotes`.</p>
           </div>
           <div className="rounded-2xl border border-[var(--border)] p-4">
             <p className="label">Knowledge Source</p>
-            <p className="text-sm text-[var(--text)]">`🧠 Master Source Library` data source</p>
+            <p className="text-sm text-[var(--text)]">Notion Master Source Library data source</p>
             <p className="mt-2 text-xs text-[var(--muted)]">Imports curated pricing anchors, wording, scope, materials, and retrieval hints into `knowledge_base`.</p>
           </div>
         </div>
@@ -252,10 +254,10 @@ export function KnowledgeAdmin({
               <div className="rounded-2xl border border-[var(--border)] p-3 text-sm" key={result.file_name}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-white">{result.file_name}</p>
-                  <p className="text-xs text-[var(--dim)]">{result.parsed} parsed · {result.skipped_duplicates} skipped</p>
+                  <p className="text-xs text-[var(--dim)]">{result.parsed} parsed | {result.skipped_duplicates} skipped</p>
                 </div>
                 <p className="mt-1 text-[var(--muted)]">
-                  {result.inserted_historical_quotes} quotes filed · {result.updated_historical_quotes ?? 0} quotes updated · {result.inserted_knowledge_entries} knowledge entries filed · {result.updated_knowledge_entries ?? 0} knowledge entries updated
+                  {result.inserted_historical_quotes} quotes filed | {result.updated_historical_quotes ?? 0} quotes updated | {result.inserted_knowledge_entries} knowledge entries filed | {result.updated_knowledge_entries ?? 0} knowledge entries updated
                 </p>
                 {result.warning ? <p className="mt-1 text-xs text-[#ffd38b]">{result.warning}</p> : null}
                 {result.error ? <p className="mt-1 text-xs text-[#ff9a91]">{result.error}</p> : null}
@@ -347,6 +349,15 @@ export function KnowledgeAdmin({
         {entryMessage ? <p className="mt-4 text-sm text-[#7ce3a6]">{entryMessage}</p> : null}
         {entryError ? <p className="mt-4 text-sm text-[#ff9a91]">{entryError}</p> : null}
       </form>
+    </div>
+  );
+}
+
+function SyncTile({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
+  return (
+    <div className={`rounded-2xl border px-3 py-2 ${warning ? "border-[#f59e0b]/35 bg-[#f59e0b]/10" : "border-[var(--border)] bg-black/20"}`}>
+      <p className="text-[0.6rem] font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{label}</p>
+      <p className={`mt-1 text-lg font-semibold ${warning ? "text-[#ffd38b]" : "text-white"}`}>{value}</p>
     </div>
   );
 }
