@@ -901,7 +901,7 @@ function ExportButtons(props: {
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
   const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("satellite");
-  const [drawingFraming, setDrawingFraming] = useState<TakeoffDrawingFraming>("building");
+  const [drawingFraming, setDrawingFraming] = useState<TakeoffDrawingFraming>("close");
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
   function makeKml() {
@@ -940,7 +940,13 @@ function ExportButtons(props: {
         process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
         drawingFraming
       );
+      const staticInsetUrl = buildStaticMapUrl(
+        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features },
+        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+        "context"
+      );
       const satelliteImageHref = await imageUrlToDataUrl(staticMapUrl);
+      const satelliteInsetImageHref = await imageUrlToDataUrl(staticInsetUrl);
       return buildTakeoffDrawingSvg({
         projectName: props.projectName,
         jobRef: props.jobRef,
@@ -953,7 +959,8 @@ function ExportButtons(props: {
         features: props.rows.features,
         style: drawingStyle,
         staticMapFraming: drawingFraming,
-        satelliteImageHref
+        satelliteImageHref,
+        satelliteInsetImageHref
       });
     } catch {
       return makeDrawingSvg();
@@ -976,14 +983,14 @@ function ExportButtons(props: {
           <label className="block">
             <span className="label">Satellite framing</span>
             <select className="field mt-1" onChange={(event) => setDrawingFraming(event.target.value as TakeoffDrawingFraming)} value={drawingFraming}>
-              <option value="building">Whole building (recommended)</option>
-              <option value="close">Close-up detail</option>
+              <option value="close">Close-up detail (recommended)</option>
+              <option value="building">Whole building</option>
               <option value="context">Wider context / access</option>
             </select>
           </label>
           <div className={`rounded-xl border p-3 text-xs leading-5 ${staticMapsReady ? "border-[var(--gold)]/30 bg-[var(--gold)]/5 text-[var(--gold-l)]" : "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fcd88a]"}`}>
             {staticMapsReady
-              ? "Use Whole building for customer quotes, Close-up for detail, or Wider context when scaffold/access surroundings matter."
+              ? "Customer PDF now includes a close roof detail plus a wider context inset. Use Whole building or Wider context if you need less crop."
               : "Satellite background is not available because NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing. The drawing will export as a clean measured plan instead."}
           </div>
         </>

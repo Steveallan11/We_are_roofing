@@ -29,6 +29,7 @@ export type DrawingOpts = {
   staticMapFraming?: TakeoffDrawingFraming;
   googleMapsApiKey?: string;
   satelliteImageHref?: string | null;
+  satelliteInsetImageHref?: string | null;
   quoteSections?: DrawingQuoteSection[];
 };
 
@@ -79,12 +80,15 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const dark = opts.style === "quote";
   const satelliteUrl =
     opts.style === "satellite" ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey, opts.staticMapFraming) : null) : null;
+  const satelliteInsetUrl =
+    opts.style === "satellite" ? opts.satelliteInsetImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey, "context") : null) : null;
   const useStaticMapGeometry = Boolean(satelliteUrl);
   const text = dark ? "#f8f5e8" : "#111827";
   const muted = dark ? "#b7aa82" : "#6b7280";
   const gold = "#D4AF37";
   const totalArea = opts.sections.reduce((sum, section) => sum + Number(section.area_m2 || 0), 0);
   const totalLength = opts.lines.reduce((sum, line) => sum + Number(line.length_lm || 0), 0);
+  const customerPlan = opts.style === "satellite";
 
   const sectionShapes = useStaticMapGeometry
     ? ""
@@ -135,8 +139,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const mapCode = opts.style === "satellite" ? sectionMarkerLabel : (index: number) => `L${index + 1}`;
   const legendRows = [
     ...opts.sections.map((section, index) => ({ color: exportSectionColor(index, section.color), code: opts.style === "satellite" ? sectionMarkerLabel(index) : `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
-    ...opts.lines.map((line, index) => ({ color: exportLineColor(index, line), code: mapCode(index), label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
-    ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: opts.style === "satellite" ? markerInitials(feature.type || feature.label).slice(0, 1) || "X" : `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
+    ...opts.lines.map((line, index) => ({ color: exportLineColor(index, line), code: mapCode(opts.sections.length + index), label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
+    ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: opts.style === "satellite" ? sectionMarkerLabel(opts.sections.length + opts.lines.length + index) : `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
   ];
 
   const legend = legendRows
@@ -180,6 +184,91 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .slice(0, 3)
     .map((line, index) => `<text x="64" y="${780 + index * 18}" class="notes-text">${escapeXml(line)}</text>`)
     .join("");
+  const customerScheduleRows = legendRows
+    .slice(0, 14)
+    .map((row, index) => {
+      const y = 248 + index * 34;
+      return `
+        <g transform="translate(842 ${y})">
+          <circle cx="13" cy="-5" r="12" fill="${row.color}" stroke="#111827" stroke-width="1.5" />
+          <text x="13" y="0" text-anchor="middle" class="customer-code">${escapeXml(row.code)}</text>
+          <text x="34" y="-6" class="customer-label">${escapeXml(row.label || "Measured section")}</text>
+          <text x="264" y="-6" text-anchor="end" class="customer-value">${escapeXml(row.value)}</text>
+          <text x="34" y="12" class="customer-note">${escapeXml(customerRowDescription(row.label || "Measured item"))}</text>
+        </g>`;
+    })
+    .join("");
+
+  if (customerPlan) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
+  <style>
+    .eyebrow{font:700 11px Montserrat,Arial,sans-serif;letter-spacing:2.6px;text-transform:uppercase;fill:${gold}}
+    .title{font:700 31px Georgia,serif;fill:${text}}
+    .subtitle,.meta,.notes-text{font:500 13px Montserrat,Arial,sans-serif;fill:${muted}}
+    .panel-title{font:800 12px Montserrat,Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;fill:${gold}}
+    .panel-helper{font:600 11px Montserrat,Arial,sans-serif;fill:${muted}}
+    .customer-code{font:900 10px Montserrat,Arial,sans-serif;fill:#fff}
+    .customer-label{font:800 12px Montserrat,Arial,sans-serif;fill:${text}}
+    .customer-value{font:900 12px Montserrat,Arial,sans-serif;fill:${text}}
+    .customer-note{font:600 10px Montserrat,Arial,sans-serif;fill:${muted}}
+    .total-value{font:800 24px Montserrat,Arial,sans-serif;fill:${text}}
+    .small-label{font:800 10px Montserrat,Arial,sans-serif;letter-spacing:1.5px;text-transform:uppercase;fill:${gold}}
+    .satellite-warning{font:800 14px Montserrat,Arial,sans-serif;fill:#b45309;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+  </style>
+  <defs>
+    <clipPath id="mainClip"><rect x="64" y="154" width="742" height="520" rx="18" /></clipPath>
+    <clipPath id="insetClip"><rect x="64" y="704" width="250" height="94" rx="14" /></clipPath>
+  </defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${style.background}" />
+  <rect x="32" y="32" width="${WIDTH - 64}" height="${HEIGHT - 64}" rx="24" fill="#fff" stroke="${style.soft}" />
+  <text x="64" y="74" class="eyebrow">We Are Roofing UK Ltd</text>
+  <text x="64" y="110" class="title">Customer Roof Measurement Plan</text>
+  <text x="64" y="136" class="subtitle">Numbered roof sections used to prepare your quotation</text>
+  <text x="64" y="164" class="meta">${escapeXml(opts.jobRef)} - ${escapeXml(opts.address)}</text>
+
+  <rect x="64" y="154" width="742" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
+  ${
+    satelliteUrl
+      ? `<image href="${escapeXml(satelliteUrl)}" x="64" y="154" width="742" height="520" preserveAspectRatio="xMidYMid slice" clip-path="url(#mainClip)" opacity="0.94" />
+  <rect x="64" y="154" width="742" height="520" rx="18" fill="rgba(0,0,0,0.04)" stroke="${style.soft}" />`
+      : gridLines(false)
+  }
+  ${
+    satelliteUrl
+      ? ""
+      : `<text x="92" y="204" class="satellite-warning">Satellite image unavailable - enable Maps Static API and check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</text>`
+  }
+  <text x="84" y="642" class="small-label">Close roof detail</text>
+
+  <rect x="828" y="154" width="308" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
+  <text x="848" y="186" class="panel-title">How to read this plan</text>
+  <text x="848" y="208" class="panel-helper">Numbers on the roof match this list.</text>
+  <text x="848" y="226" class="panel-helper">Prices are shown in the quotation, not on this drawing.</text>
+  ${customerScheduleRows || `<text x="848" y="258" class="subtitle">No measured items yet.</text>`}
+
+  <rect x="64" y="704" width="250" height="94" rx="14" fill="#fbfaf5" stroke="${style.soft}" />
+  ${
+    satelliteInsetUrl
+      ? `<image href="${escapeXml(satelliteInsetUrl)}" x="64" y="704" width="250" height="94" preserveAspectRatio="xMidYMid slice" clip-path="url(#insetClip)" opacity="0.92" />
+  <rect x="64" y="704" width="250" height="94" rx="14" fill="rgba(0,0,0,0.04)" stroke="${style.soft}" />`
+      : ""
+  }
+  <text x="80" y="786" class="small-label">Wider site context</text>
+
+  <rect x="338" y="704" width="468" height="94" rx="14" fill="#fbfaf5" stroke="${style.soft}" />
+  <text x="358" y="732" class="panel-title">Customer note</text>
+  <text x="358" y="756" class="panel-helper">The numbered sections on this plan match the quotation sections.</text>
+  <text x="358" y="774" class="panel-helper">Scaffold/access and final prices are confirmed in the quote document.</text>
+
+  <rect x="828" y="704" width="308" height="94" rx="14" fill="#f8f0d8" stroke="${gold}" stroke-opacity="0.35" />
+  <text x="848" y="732" class="panel-title">Measured totals</text>
+  <text x="848" y="765" class="total-value">${totalArea.toFixed(1)} m2</text>
+  <text x="986" y="765" class="total-value">${totalLength.toFixed(1)} lm</text>
+  <text x="848" y="787" class="panel-helper">${opts.sections.length} area(s), ${opts.lines.length} line(s), ${opts.features.length} item(s)</text>
+  <text x="64" y="834" class="meta">Customer: ${escapeXml(opts.customerName || "Not set")} - Survey date: ${escapeXml(opts.surveyDate)}</text>
+</svg>`;
+  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
@@ -380,13 +469,13 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const color = staticMapColor(exportLineColor(index, line));
     params.append("path", [`color:0x${color}ff`, "weight:9", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
     const mid = geoMidpoint(coords);
-    params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${mid.lat},${mid.lng}`);
+    params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(opts.sections.length + index)}|${mid.lat},${mid.lng}`);
   });
 
-  opts.features.slice(0, 12).forEach((feature) => {
+  opts.features.slice(0, 12).forEach((feature, index) => {
     const point = toCoord(feature.point);
     if (!point) return;
-    params.append("markers", `color:yellow|label:${markerInitials(feature.type || feature.label).slice(0, 1) || "X"}|${point.lat},${point.lng}`);
+    params.append("markers", `color:yellow|label:${sectionMarkerLabel(opts.sections.length + opts.lines.length + index)}|${point.lat},${point.lng}`);
   });
 
   return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
@@ -496,6 +585,16 @@ function markerInitials(value: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function customerRowDescription(label: string) {
+  const clean = label.trim();
+  if (!clean) return "Measured quote section";
+  if (clean.toLowerCase().includes("ridge")) return "Ridge/run measurement";
+  if (clean.toLowerCase().includes("valley")) return "Valley/detail measurement";
+  if (clean.toLowerCase().includes("scaffold") || clean.toLowerCase().includes("access")) return "Access/scaffold reference";
+  if (clean.toLowerCase().includes("section")) return "Measured quote section";
+  return "Measured roof item";
 }
 
 function wrapText(value: string, max: number) {

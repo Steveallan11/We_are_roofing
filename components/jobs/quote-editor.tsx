@@ -640,12 +640,15 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     setSuccess(null);
     const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     let satelliteImageHref: string | null = null;
+    let satelliteInsetImageHref: string | null = null;
 
     if (googleMapsApiKey) {
       try {
-        satelliteImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey, "building"));
+        satelliteImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey, "close"));
+        satelliteInsetImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey, "context"));
       } catch {
         satelliteImageHref = null;
+        satelliteInsetImageHref = null;
       }
     }
 
@@ -661,9 +664,10 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       lines: roofSurvey.lines,
       features: roofSurvey.features,
       style: "satellite",
-      staticMapFraming: "building",
+      staticMapFraming: "close",
       googleMapsApiKey,
       satelliteImageHref,
+      satelliteInsetImageHref,
       quoteSections: buildDrawingQuoteSections(costBreakdown, roofSurvey)
     });
 
