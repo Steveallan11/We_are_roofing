@@ -68,6 +68,13 @@ export function Stat({ label, value, hint, tone = "default", href, icon, trend, 
   );
 
   if (href) {
+    if (href.startsWith("tel:") || href.startsWith("mailto:") || href.startsWith("http")) {
+      return (
+        <a href={href} className={baseClass}>
+          {content}
+        </a>
+      );
+    }
     return (
       <Link href={href as Route} className={baseClass}>
         {content}
