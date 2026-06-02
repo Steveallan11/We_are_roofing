@@ -129,7 +129,7 @@ async function polishWithOpenAI(opts: { bundle: NonNullable<Awaited<ReturnType<t
 
   const isBuildMode = opts.draft.mode === "build_from_context";
   const prompt = `You are Andrew Bailey's quote-writing assistant for We Are Roofing UK Ltd.
-${isBuildMode ? "Build a complete customer-ready roofing quote from Andy's pasted notes, measurements, and pricing context." : "Rewrite the saved quote wording into clear, customer-friendly British English."}
+${isBuildMode ? "Build a complete customer-ready roofing quote from Andy's pasted notes, measurements, and pricing context." : "Edit the existing quote wording using Andy's pasted instructions, while preserving the current quote structure and all pricing."}
 
 Rules:
 - Sound like Andy: practical, direct, plain-spoken, diagnostic, calm, and professional.
@@ -139,7 +139,7 @@ Rules:
 - Do not overclaim anything not evidenced.
 - If a detail is uncertain, put it in missing_info rather than pretending.
 - Pricing rule: never invent prices. Only use prices already in the existing cost breakdown or prices explicitly present in Andy's pasted context.
-- ${isBuildMode ? "If the pasted context clearly contains priced line items, return an updated cost_breakdown using those explicit prices and measurements." : "Do not change prices, quantities, VAT, totals, or the cost breakdown."}
+- ${isBuildMode ? "If the pasted context clearly contains priced line items, return an updated cost_breakdown using those explicit prices and measurements." : "Do not change prices, quantities, VAT, totals, or the cost breakdown. Treat Andy's pasted context as edit instructions for wording only."}
 - Use the measured takeoff rows as the structure for the scope.
 - Use Andy's takeoff notes as context, but do not overclaim anything not evidenced.
 - Return JSON only.

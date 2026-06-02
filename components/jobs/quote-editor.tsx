@@ -536,6 +536,81 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     }
   }
 
+  async function editQuoteWithChatGpt() {
+    const context = chatGptContext.trim();
+    if (!context) {
+      setError("Paste the edit instructions before asking ChatGPT to adjust this quote.");
+      setSuccess(null);
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setPolishing(true);
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/polish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "polish",
+          pasted_context: context,
+          style_instructions: chatGptStyle,
+          roof_report: roofReport,
+          scope_of_works: scopeOfWorks,
+          guarantee_text: guaranteeText,
+          exclusions,
+          terms,
+          customer_email_subject: emailSubject,
+          customer_email_body: emailBody,
+          cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
+          missing_info: missingInfo
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          pricing_notes: pricingNotes
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        })
+      });
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        wording?: {
+          roof_report: string;
+          scope_of_works: string;
+          guarantee_text: string;
+          exclusions: string;
+          terms: string;
+          customer_email_subject: string;
+          customer_email_body: string;
+          missing_info: string[];
+          pricing_notes: string[];
+        };
+      } | null;
+
+      if (!response.ok || !result?.ok || !result.wording) {
+        throw new Error(result?.error || "Unable to edit quote with ChatGPT.");
+      }
+
+      setRoofReport(result.wording.roof_report);
+      setScopeOfWorks(result.wording.scope_of_works);
+      setGuaranteeText(result.wording.guarantee_text);
+      setExclusions(result.wording.exclusions);
+      setTerms(result.wording.terms);
+      setEmailSubject(result.wording.customer_email_subject);
+      setEmailBody(result.wording.customer_email_body);
+      setMissingInfo(result.wording.missing_info.join("\n"));
+      setPricingNotes(result.wording.pricing_notes.join("\n"));
+      setSuccess("ChatGPT edited the existing quote wording. Prices and line items were kept unchanged.");
+      startTransition(() => router.refresh());
+    } catch (editError) {
+      setError(editError instanceof Error ? editError.message : "Unable to edit quote with ChatGPT.");
+    } finally {
+      setPolishing(false);
+    }
+  }
+
   async function sendReply() {
     if (!reply.trim()) return;
     const response = await fetch(`/api/quotes/${quoteId}/message`, {
@@ -582,18 +657,23 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       <div className="card border-[var(--gold)]/30 bg-[rgba(212,175,55,0.05)] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">ChatGPT Quote Builder</p>
+            <p className="section-kicker text-[0.65rem] uppercase text-[var(--gold)]">ChatGPT Quote Assistant</p>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Paste the full job context here: site notes, customer priorities, takeoff measurements, supplier prices, scaffold/access details, WhatsApp notes, or rough bullet points. ChatGPT will turn it into our quote structure and We Are Roofing wording.
+              Paste edit instructions, extra site context, customer priorities, takeoff notes, scaffold/access wording, WhatsApp notes, or rough bullet points. Use edit mode to improve the existing quote without changing prices, or build mode when you want ChatGPT to rebuild the quote from pasted context.
             </p>
           </div>
-          <button className="button-primary" disabled={buildingWithChatGpt || isPending} onClick={buildQuoteWithChatGpt} type="button">
-            {buildingWithChatGpt ? "Building quote..." : "Build quote with ChatGPT"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button className="button-primary" disabled={polishing || buildingWithChatGpt || isPending} onClick={editQuoteWithChatGpt} type="button">
+              {polishing ? "Editing quote..." : "Edit existing quote"}
+            </button>
+            <button className="button-secondary" disabled={buildingWithChatGpt || polishing || isPending} onClick={buildQuoteWithChatGpt} type="button">
+              {buildingWithChatGpt ? "Building quote..." : "Build full quote"}
+            </button>
+          </div>
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <label className="block">
-            <span className="label">Paste all quote context and prices</span>
+            <span className="label">Paste edit instructions, context, or prices</span>
             <textarea
               className="field min-h-72 leading-7"
               onChange={(event) => setChatGptContext(event.target.value)}
@@ -607,9 +687,10 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
               <textarea className="field min-h-40 leading-6" onChange={(event) => setChatGptStyle(event.target.value)} value={chatGptStyle} />
             </label>
             <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-4 text-sm leading-6 text-[var(--muted)]">
-              <p className="font-semibold text-white">Price safety rules</p>
-              <p className="mt-2">The AI is told not to invent prices. It can only use prices already in this quote or prices you explicitly paste in the context box.</p>
-              <p className="mt-2 text-[var(--gold-l)]">Always review totals before approving or sending.</p>
+              <p className="font-semibold text-white">Safe editing rules</p>
+              <p className="mt-2"><strong className="text-[var(--gold-l)]">Edit existing quote</strong> keeps prices, VAT, and line items unchanged. It only improves wording.</p>
+              <p className="mt-2"><strong className="text-[var(--gold-l)]">Build full quote</strong> may update line items, but only from prices already in the quote or prices you paste.</p>
+              <p className="mt-2 text-[var(--gold-l)]">Always review before approving or sending.</p>
             </div>
           </div>
         </div>
