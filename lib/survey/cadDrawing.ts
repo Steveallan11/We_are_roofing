@@ -4,7 +4,17 @@ export type TakeoffDrawingStyle = "technical" | "customer" | "quote" | "satellit
 
 type DrawingPoint = { lat?: number; lng?: number; x?: number; y?: number };
 
-type DrawingOpts = {
+export type DrawingQuoteSection = {
+  code: string;
+  label: string;
+  measurement?: string;
+  roofNet?: number;
+  accessNet?: number;
+  vat?: number;
+  total?: number;
+};
+
+export type DrawingOpts = {
   projectName: string;
   jobRef: string;
   address: string;
@@ -17,6 +27,7 @@ type DrawingOpts = {
   style: TakeoffDrawingStyle;
   googleMapsApiKey?: string;
   satelliteImageHref?: string | null;
+  quoteSections?: DrawingQuoteSection[];
 };
 
 const WIDTH = 1200;
@@ -137,6 +148,26 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
         </g>`
     )
     .join("");
+  const quoteRows = (opts.quoteSections || []).filter((row) => row.label.trim()).slice(0, 11);
+  const quoteLegend = quoteRows
+    .map((row, index) => {
+      const y = 170 + index * 44;
+      const detailParts = [
+        typeof row.roofNet === "number" ? `Roof ${formatMoney(row.roofNet)}` : null,
+        typeof row.accessNet === "number" ? `Access ${formatMoney(row.accessNet)}` : null,
+        typeof row.vat === "number" ? `VAT ${formatMoney(row.vat)}` : null
+      ].filter(Boolean);
+      const detail = detailParts.length ? detailParts.join(" | ") : row.measurement || "Quote-linked takeoff section";
+      return `
+        <g transform="translate(870 ${y})">
+          <rect x="0" y="-13" width="34" height="22" rx="7" fill="${gold}" />
+          <text x="17" y="1" text-anchor="middle" class="quote-code">${escapeXml(row.code)}</text>
+          <text x="44" y="-1" class="quote-label">${escapeXml(row.label)}</text>
+          <text x="44" y="17" class="quote-detail">${escapeXml(detail)}</text>
+          ${typeof row.total === "number" ? `<text x="250" y="-1" text-anchor="end" class="quote-total">${escapeXml(formatMoney(row.total))}</text>` : ""}
+        </g>`;
+    })
+    .join("");
   const satelliteWarning =
     opts.style === "satellite" && !satelliteUrl
       ? `<text x="${DRAWING_LEFT + 28}" y="${DRAWING_TOP + 48}" class="satellite-warning">Satellite image unavailable - enable Maps Static API and check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</text>`
@@ -155,6 +186,10 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .subtitle,.meta,.legend-text,.notes-text{font:500 13px Montserrat,Arial,sans-serif;fill:${muted}}
     .legend-value{font:700 13px Montserrat,Arial,sans-serif;fill:${text}}
     .legend-code{font:800 12px Montserrat,Arial,sans-serif;fill:${gold}}
+    .quote-code{font:900 10px Montserrat,Arial,sans-serif;fill:#000}
+    .quote-label{font:800 12px Montserrat,Arial,sans-serif;fill:${text}}
+    .quote-detail{font:600 10px Montserrat,Arial,sans-serif;fill:${muted}}
+    .quote-total{font:900 12px Montserrat,Arial,sans-serif;fill:${gold}}
     .shape-label{font:800 13px Montserrat,Arial,sans-serif;fill:${text};paint-order:stroke;stroke:${style.background};stroke-width:5px;stroke-linejoin:round}
     .shape-sub,.line-label,.feature-label{font:700 11px Montserrat,Arial,sans-serif;fill:${text};paint-order:stroke;stroke:${style.background};stroke-width:4px;stroke-linejoin:round}
     .marker-text{font:900 9px Montserrat,Arial,sans-serif;fill:#000}
@@ -182,8 +217,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   ${satelliteWarning}
   <g>${sectionShapes}${lineShapes}${featureShapes}</g>
   <rect x="850" y="118" width="286" height="560" rx="18" fill="${dark ? "#161616" : "#fbfaf5"}" stroke="${style.soft}" />
-  <text x="870" y="148" class="panel-title">Measured Items</text>
-  ${legend || `<text x="870" y="178" class="subtitle">No measured items yet.</text>`}
+  <text x="870" y="148" class="panel-title">${quoteRows.length ? "Quote Sections" : "Measured Items"}</text>
+  ${quoteRows.length ? quoteLegend : legend || `<text x="870" y="178" class="subtitle">No measured items yet.</text>`}
   <rect x="850" y="704" width="286" height="74" rx="18" fill="${dark ? "#201b0f" : "#f8f0d8"}" stroke="${gold}" stroke-opacity="0.35" />
   <text x="870" y="733" class="panel-title">Totals</text>
   <text x="870" y="764" class="total-value">${totalArea.toFixed(1)} m2</text>
@@ -424,6 +459,10 @@ function wrapText(value: string, max: number) {
   });
   if (current) lines.push(current);
   return lines.length ? lines : [value];
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
 }
 
 function loadImage(url: string) {

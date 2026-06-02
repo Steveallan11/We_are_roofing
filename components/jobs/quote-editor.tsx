@@ -16,6 +16,7 @@ import {
   normaliseQuoteOption
 } from "@/lib/quotes/value";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
+import { buildStaticMapUrl, buildTakeoffDrawingSvg, printDrawing, type DrawingQuoteSection } from "@/lib/survey/cadDrawing";
 import { currency } from "@/lib/utils";
 import { TakeoffQuotePreview } from "@/components/jobs/takeoff-quote-preview";
 
@@ -91,6 +92,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     );
   }
 
+  const currentQuote = quote;
   const quoteId = quote.id;
 
   function updateLine(index: number, updates: Partial<CostLineItem>) {
@@ -627,6 +629,47 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     setReply("");
   }
 
+  async function exportQuoteLinkedRoofPlan() {
+    if (!roofSurvey) {
+      setError("No saved roof takeoff found for this quote yet.");
+      setSuccess(null);
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    let satelliteImageHref: string | null = null;
+
+    if (googleMapsApiKey) {
+      try {
+        satelliteImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey));
+      } catch {
+        satelliteImageHref = null;
+      }
+    }
+
+    const quoteMeta = currentQuote as QuoteRecord & Partial<{ job_ref: string; job_title: string; property_address: string; customer_name: string }>;
+    const svg = buildTakeoffDrawingSvg({
+      projectName: roofSurvey.project_name || quoteMeta.job_title || currentQuote.quote_ref,
+      jobRef: quoteMeta.job_ref || currentQuote.quote_ref,
+      address: quoteMeta.property_address || "",
+      customerName: quoteMeta.customer_name || "",
+      surveyDate: roofSurvey.created_at ? new Date(roofSurvey.created_at).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB"),
+      notes: [roofSurvey.notes, pricingNotes.trim()].filter(Boolean).join(" "),
+      sections: roofSurvey.sections,
+      lines: roofSurvey.lines,
+      features: roofSurvey.features,
+      style: "satellite",
+      googleMapsApiKey,
+      satelliteImageHref,
+      quoteSections: buildDrawingQuoteSections(costBreakdown, roofSurvey)
+    });
+
+    printDrawing(svg, `${currentQuote.quote_ref}-quote-linked-roof-plan`);
+    setSuccess("Quote-linked roof plan opened. Use the print dialog to save or send as PDF.");
+  }
+
   return (
     <div className="stack">
       <div className="card p-5">
@@ -883,6 +926,11 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             {roofSurvey?.sections.length ? (
               <button className="button-secondary" onClick={addTakeoffSectionPackages} type="button">
                 + Add all drawing sections
+              </button>
+            ) : null}
+            {roofSurvey ? (
+              <button className="button-secondary" onClick={() => void exportQuoteLinkedRoofPlan()} type="button">
+                Export quote-linked roof plan
               </button>
             ) : null}
             <Link className="button-ghost" href={"/settings/rates" as Route}>
@@ -1222,6 +1270,78 @@ function groupQuoteSections(lines: CostLineItem[]) {
   });
 
   return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function buildDrawingQuoteSections(lines: CostLineItem[], survey: RoofSurveyRecord): DrawingQuoteSection[] {
+  const groups = new Map<
+    string,
+    {
+      label: string;
+      roofNet: number;
+      accessNet: number;
+      vat: number;
+      total: number;
+      measurement?: string;
+      sourceId?: string;
+    }
+  >();
+
+  lines.forEach((line) => {
+    const label = line.quote_section?.trim() || line.source_label?.trim() || "General Works";
+    const existing = groups.get(label) ?? { label, roofNet: 0, accessNet: 0, vat: 0, total: 0, measurement: line.measurement_label, sourceId: line.source_id };
+    const net = Number(line.cost || 0);
+    const vat = line.vat_applicable ? net * 0.2 : 0;
+    const category = getQuoteLineItemCategory(line);
+
+    if (category === "roof_works") {
+      existing.roofNet += net;
+    } else {
+      existing.accessNet += net;
+    }
+
+    existing.vat += vat;
+    existing.total += net + vat;
+    existing.measurement ||= line.measurement_label;
+    existing.sourceId ||= line.source_id;
+    groups.set(label, existing);
+  });
+
+  return [...groups.values()]
+    .sort((left, right) => drawingSectionIndex(left, survey) - drawingSectionIndex(right, survey))
+    .map((group, index) => {
+      const sectionIndex = drawingSectionIndex(group, survey);
+      return {
+        code: sectionIndex >= 0 && sectionIndex < 999 ? `S${sectionIndex + 1}` : `Q${index + 1}`,
+        label: group.label,
+        measurement: group.measurement,
+        roofNet: Math.round(group.roofNet * 100) / 100,
+        accessNet: Math.round(group.accessNet * 100) / 100,
+        vat: Math.round(group.vat * 100) / 100,
+        total: Math.round(group.total * 100) / 100
+      };
+    });
+}
+
+function drawingSectionIndex(group: { label: string; sourceId?: string }, survey: RoofSurveyRecord) {
+  const index = survey.sections.findIndex((section) => {
+    const labelMatches = section.label?.trim().toLowerCase() === group.label.trim().toLowerCase();
+    const idMatches = Boolean(group.sourceId && section.id === group.sourceId);
+    return labelMatches || idMatches;
+  });
+
+  return index >= 0 ? index : 1000;
+}
+
+async function imageUrlToDataUrl(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Image could not be loaded.");
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 function slugify(value: string) {
