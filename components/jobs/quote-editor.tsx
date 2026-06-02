@@ -134,6 +134,66 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     setError(null);
   }
 
+  function addTakeoffSectionPackages() {
+    if (!roofSurvey?.sections.length) {
+      setError("No roof drawing sections found yet. Draw and save roof sections in the takeoff tool first.");
+      setSuccess(null);
+      return;
+    }
+
+    setCostBreakdown((current) => {
+      const nextLines: CostLineItem[] = [];
+
+      roofSurvey.sections.forEach((section, index) => {
+        const sectionName = section.label?.trim() || `Drawing section ${index + 1}`;
+        const sectionId = section.id || slugify(sectionName);
+        const measurement = section.area_m2 ? `${section.area_m2.toFixed(1)} m2` : "";
+        const hasRoofLine = current.some((line) => line.quote_section === sectionName && line.pricing_category === "roof_works");
+        const hasScaffoldLine = current.some((line) => line.quote_section === sectionName && line.pricing_category === "standard_scaffold");
+        const common = {
+          quote_section: sectionName,
+          source_id: sectionId,
+          source_type: "section",
+          source_label: sectionName,
+          source_color: section.color,
+          measurement_label: measurement,
+          takeoff_notes: section.notes || ""
+        };
+
+        if (!hasRoofLine) {
+          nextLines.push({
+            ...common,
+            item: "Roof works",
+            cost: 0,
+            vat_applicable: true,
+            notes: [`Drawing section: ${sectionName}`, measurement ? `Measured area: ${measurement}` : null, section.notes ? `Notes: ${section.notes}` : null]
+              .filter(Boolean)
+              .join("\n"),
+            quantity: section.area_m2 ? Number(section.area_m2.toFixed(2)) : undefined,
+            unit: section.area_m2 ? "m2" : undefined,
+            unit_rate: 0,
+            pricing_category: "roof_works"
+          });
+        }
+
+        if (!hasScaffoldLine) {
+          nextLines.push({
+            ...common,
+            item: "Scaffold/access",
+            cost: 0,
+            vat_applicable: true,
+            notes: [`Scaffold/access for drawing section: ${sectionName}`, section.notes ? `Notes: ${section.notes}` : null].filter(Boolean).join("\n"),
+            pricing_category: "standard_scaffold"
+          });
+        }
+      });
+
+      return [...current, ...nextLines];
+    });
+    setSuccess("Drawing sections added to the quote with roof works and scaffold/access lines.");
+    setError(null);
+  }
+
   function calculateOption(lines: CostLineItem[]) {
     const subtotal = calculateOptionNet({ cost_breakdown: lines });
     const vatAmount = calculateOptionVat({ cost_breakdown: lines });
@@ -712,6 +772,11 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             <button className="button-primary" onClick={addMainSectionPackage} type="button">
               + Add section roof + scaffold
             </button>
+            {roofSurvey?.sections.length ? (
+              <button className="button-secondary" onClick={addTakeoffSectionPackages} type="button">
+                + Add all drawing sections
+              </button>
+            ) : null}
             <Link className="button-ghost" href={"/settings/rates" as Route}>
               Open Rate Card
             </Link>
