@@ -132,7 +132,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
 
   const legendRows = [
     ...opts.sections.map((section, index) => ({ color: exportSectionColor(index, section.color), code: `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
-    ...opts.lines.map((line, index) => ({ color: line.color || gold, code: `L${index + 1}`, label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
+    ...opts.lines.map((line, index) => ({ color: exportLineColor(index, line), code: `L${index + 1}`, label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
     ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
   ];
 
@@ -173,9 +173,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
       ? `<text x="${DRAWING_LEFT + 28}" y="${DRAWING_TOP + 48}" class="satellite-warning">Satellite image unavailable - enable Maps Static API and check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</text>`
       : "";
 
-  const notes = wrapText(opts.notes || "No additional takeoff notes captured.", 58)
-    .slice(0, 5)
-    .map((line, index) => `<text x="870" y="${690 + index * 18}" class="notes-text">${escapeXml(line)}</text>`)
+  const notes = wrapText(opts.notes || "No additional takeoff notes captured.", 92)
+    .slice(0, 3)
+    .map((line, index) => `<text x="64" y="${780 + index * 18}" class="notes-text">${escapeXml(line)}</text>`)
     .join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -223,9 +223,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   <text x="870" y="733" class="panel-title">Totals</text>
   <text x="870" y="764" class="total-value">${totalArea.toFixed(1)} m2</text>
   <text x="1010" y="764" class="total-value">${totalLength.toFixed(1)} lm</text>
-  <text x="64" y="760" class="panel-title">Takeoff Notes</text>
+  <text x="64" y="758" class="panel-title">Takeoff Notes</text>
   ${notes}
-  <text x="64" y="812" class="meta">Customer: ${escapeXml(opts.customerName || "Not set")} - Survey date: ${escapeXml(opts.surveyDate)}</text>
+  <text x="64" y="834" class="meta">Customer: ${escapeXml(opts.customerName || "Not set")} - Survey date: ${escapeXml(opts.surveyDate)}</text>
 </svg>`;
 }
 
@@ -342,9 +342,9 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
   const coords = allPoints(opts).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
   const cropCoords = primaryCropPoints(opts);
   const bounds = getGeoBounds(cropCoords.length ? cropCoords : coords);
-  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, 3) : null;
+  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, 0.5) : null;
   const center = bounds ? geoBoundsCenter(bounds) : null;
-  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, 1) : null;
+  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, 4) : null;
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
@@ -368,11 +368,13 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
   });
 
-  opts.lines.slice(0, 12).forEach((line) => {
+  opts.lines.slice(0, 16).forEach((line, index) => {
     const coords = line.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 2) return;
-    const color = staticMapColor(line.color || "#D4AF37");
-    params.append("path", [`color:0x${color}ff`, "weight:6", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    const color = staticMapColor(exportLineColor(index, line));
+    params.append("path", [`color:0x${color}ff`, "weight:9", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    const mid = geoMidpoint(coords);
+    params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${mid.lat},${mid.lng}`);
   });
 
   opts.features.slice(0, 12).forEach((feature) => {
@@ -394,6 +396,16 @@ function exportSectionColor(index: number, fallback?: string | null) {
   const clean = fallback?.replace("#", "").trim();
   if (!clean || clean.toUpperCase() === "D4AF37") return paletteColor;
   return /^[0-9a-fA-F]{6}$/.test(clean) ? `#${clean}` : paletteColor;
+}
+
+function exportLineColor(index: number, line: RoofSurveyLine) {
+  const label = `${line.label || ""} ${line.type || ""}`.toLowerCase();
+  if (label.includes("ridge")) return "#3B82F6";
+  if (label.includes("valley")) return "#8B5CF6";
+  if (label.includes("scaffold") || label.includes("access")) return "#10B981";
+  if (label.includes("problem") || label.includes("repair") || label.includes("leak")) return "#EF4444";
+  if (label.includes("section")) return EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length];
+  return line.color || EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length];
 }
 
 function getGeoBounds(points: Array<{ lat: number; lng: number }>) {
@@ -454,6 +466,10 @@ function geoCentroid(points: Array<{ lat: number; lng: number }>) {
     lat: points.reduce((sum, point) => sum + point.lat, 0) / points.length,
     lng: points.reduce((sum, point) => sum + point.lng, 0) / points.length
   };
+}
+
+function geoMidpoint(points: Array<{ lat: number; lng: number }>) {
+  return points[Math.floor(points.length / 2)] ?? points[0];
 }
 
 function sectionMarkerLabel(index: number) {
