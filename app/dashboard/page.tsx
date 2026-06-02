@@ -73,7 +73,7 @@ export default async function DashboardPage() {
 
       <section className="mt-6 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="stack">
-          <div className={`card p-5 ${attentionJobs.length ? "border-l-4 border-l-[#ef4444] bg-[#ef4444]/10" : ""}`}>
+          <div className={`card p-5 ${attentionJobs.length ? "border-l-4 border-l-[color:var(--emergency)] bg-[color:var(--emergency-bg)]" : ""}`}>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="section-kicker text-[0.65rem] uppercase">Needs Attention</p>
@@ -110,7 +110,7 @@ export default async function DashboardPage() {
               <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
                 <p className="font-semibold text-white">{nextSurvey.job_ref ?? "WR-J-TBC"} | {nextSurvey.customer?.full_name ?? nextSurvey.job_title}</p>
                 <p className="mt-2 text-sm text-[var(--muted)]">{formatDate(nextSurvey.survey_date)}</p>
-                <Link className="button-secondary mt-4 !w-full !py-2 text-sm" href={`/jobs/${nextSurvey.id}/survey` as Route}>
+                <Link className="button-secondary button-sm w-full mt-4" href={`/jobs/${nextSurvey.id}/survey` as Route}>
                   Open survey
                 </Link>
               </div>
@@ -125,7 +125,7 @@ export default async function DashboardPage() {
                 <p className="section-kicker text-[0.65rem] uppercase">Pipeline</p>
                 <h2 className="mt-2 font-condensed text-3xl text-white">Where the work sits</h2>
               </div>
-              <Link className="button-ghost !px-4 !py-2 text-sm" href={"/jobs" as Route}>
+              <Link className="button-ghost button-sm" href={"/jobs" as Route}>
                 Full board
               </Link>
             </div>
@@ -150,7 +150,7 @@ export default async function DashboardPage() {
                 <p className="section-kicker text-[0.65rem] uppercase">Recent Jobs</p>
                 <h2 className="mt-2 font-condensed text-3xl text-white">Last updated</h2>
               </div>
-              <Link className="button-ghost !px-4 !py-2 text-sm" href={"/jobs" as Route}>
+              <Link className="button-ghost button-sm" href={"/jobs" as Route}>
                 See all
               </Link>
             </div>
@@ -180,7 +180,7 @@ export default async function DashboardPage() {
               <div className="mt-4 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
                 <p className="font-semibold text-white">{nextSurvey.job_ref ?? "WR-J-TBC"} | {nextSurvey.customer?.full_name ?? nextSurvey.job_title}</p>
                 <p className="mt-2 text-sm text-[var(--muted)]">{formatDate(nextSurvey.survey_date)}</p>
-                <Link className="button-secondary mt-4 !w-full !py-2 text-sm" href={`/jobs/${nextSurvey.id}/survey` as Route}>
+                <Link className="button-secondary button-sm w-full mt-4" href={`/jobs/${nextSurvey.id}/survey` as Route}>
                   Open survey
                 </Link>
               </div>

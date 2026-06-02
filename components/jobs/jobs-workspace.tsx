@@ -74,7 +74,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
           <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${view === "board" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"}`} onClick={() => setView("board")} type="button">
             Board
           </button>
-          <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${view === "list" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"}`} onClick={() => setView("list")} type="button">
+          <button className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${view === "list" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"}`} onClick={() => setView("list")} type="button">
             List
           </button>
         </div>
@@ -221,9 +221,9 @@ function PipelineTotalsBar({ jobs }: { jobs: JobForAction[] }) {
 
 function SummaryTile({ label, value, hint, danger = false }: { label: string; value: string; hint: string; danger?: boolean }) {
   return (
-    <div className={`card p-4 ${danger ? "border-[#ef4444]/60 bg-[#ef4444]/10" : ""}`}>
+    <div className={`card p-4 ${danger ? "border-[color:var(--emergency-border)] bg-[color:var(--emergency-bg)]" : ""}`}>
       <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[var(--dim)]">{label}</p>
-      <p className={`mt-2 font-display text-4xl leading-none ${danger ? "text-[#ffb3ad]" : "text-[var(--gold-l)]"}`}>{value}</p>
+      <p className={`mt-2 font-display text-4xl leading-none ${danger ? "text-[color:var(--emergency-text)]" : "text-[var(--gold-l)]"}`}>{value}</p>
       <p className="mt-2 text-xs text-[var(--muted)]">{hint}</p>
     </div>
   );
