@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { JobsWorkspace } from "@/components/jobs/jobs-workspace";
 import { WeatherStrip } from "@/components/weather/WeatherStrip";
+import { Button, Card } from "@/components/ui/primitives";
 import { getBusiness, getJobs } from "@/lib/data";
 import { needsAttention } from "@/lib/jobs/nextAction";
 import type { PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
@@ -28,14 +29,14 @@ export default async function JobsPage({ searchParams }: Props) {
       subtitle={`${activeJobs.length} active | ${currency(pipelineValue)} pipeline | ${urgent} urgent. One board for surveys, quotes, follow-ups, and booked work.`}
       wide
       actions={
-        <Link className="button-primary" href="/jobs/new">
-          Add Job
-        </Link>
+        <Button variant="primary" size="md" asChild>
+          <Link href="/jobs/new">Add Job</Link>
+        </Button>
       }
     >
-      <section className="mb-4 hidden card p-4 lg:block">
+      <Card padding="md" className="mb-4 hidden lg:block">
         <WeatherStrip location={business.weather_location ?? "Yateley"} />
-      </section>
+      </Card>
       <JobsWorkspace initialFilter={initialFilter} jobs={jobs} />
     </AppShell>
   );

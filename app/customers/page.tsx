@@ -1,7 +1,7 @@
 import Link from "next/link";
-import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { CustomersWorkspace } from "@/components/customers/customers-workspace";
+import { Button } from "@/components/ui/primitives";
 import { getCustomers, getJobs } from "@/lib/data";
 
 export default async function CustomersPage() {
@@ -17,12 +17,12 @@ export default async function CustomersPage() {
       subtitle="Customer contacts, tap-to-call details, job history and new-job shortcuts."
       actions={
         <>
-          <Link className="button-primary" href={"/customers/new" as Route}>
-            Add Customer
-          </Link>
-          <Link className="button-ghost" href={"/jobs/new" as Route}>
-            Add Job
-          </Link>
+          <Button variant="primary" size="md" asChild>
+            <Link href="/customers/new">Add Customer</Link>
+          </Button>
+          <Button variant="ghost" size="md" asChild>
+            <Link href="/jobs/new">Add Job</Link>
+          </Button>
         </>
       }
     >
