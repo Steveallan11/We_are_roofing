@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
+import { Badge, Button, Card, PageSection, Stat } from "@/components/ui/primitives";
 import { getBookings, getJobs } from "@/lib/data";
 import { googleCalendarLink } from "@/lib/calendar/generateICS";
 import { formatDate } from "@/lib/utils";
@@ -28,9 +29,13 @@ const FILTERS = [
 ] as const;
 
 export default async function CalendarPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
-  const [params, bookings, jobs] = await Promise.all([searchParams ?? Promise.resolve({ view: undefined as string | undefined }), getBookings(), getJobs()]);
+  const [params, bookings, jobs] = await Promise.all([
+    searchParams ?? Promise.resolve({ view: undefined as string | undefined }),
+    getBookings(),
+    getJobs()
+  ]);
   const view = params.view;
-  const activeView = FILTERS.some((filter) => filter.id === view) ? view : "all";
+  const activeView: string = FILTERS.some((filter) => filter.id === view) && view ? view : "all";
 
   const startDates: CalendarEvent[] = jobs
     .filter((job) => job.start_date)
@@ -81,53 +86,77 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
   });
 
   const now = new Date();
-  const events = [...bookingEvents, ...startDates, ...followUps].sort((left, right) => `${left.date}${left.time ?? ""}`.localeCompare(`${right.date}${right.time ?? ""}`));
-  const upcomingEvents = events.filter((event) => new Date(`${event.date}T${event.time ?? "23:59"}`).getTime() >= now.getTime());
-  const visibleEvents = activeView === "all" ? upcomingEvents : upcomingEvents.filter((event) => event.kind === activeView);
+  const events = [...bookingEvents, ...startDates, ...followUps].sort((left, right) =>
+    `${left.date}${left.time ?? ""}`.localeCompare(`${right.date}${right.time ?? ""}`)
+  );
+  const upcomingEvents = events.filter(
+    (event) => new Date(`${event.date}T${event.time ?? "23:59"}`).getTime() >= now.getTime()
+  );
+  const visibleEvents =
+    activeView === "all" ? upcomingEvents : upcomingEvents.filter((event) => event.kind === activeView);
   const groupedEvents = groupEventsByDate(visibleEvents);
   const nextEvent = upcomingEvents[0] ?? null;
 
   return (
     <AppShell title="Calendar" subtitle="Survey bookings, works starts, follow-ups, and operational diary in one place.">
       <div className="stack">
-        <section className="grid gap-3 md:grid-cols-4">
-          <CalendarStat label="Next event" value={nextEvent ? formatDate(nextEvent.date) : "None booked"} hint={nextEvent?.title ?? "No upcoming dated work"} />
-          <CalendarStat label="Surveys" value={String(upcomingEvents.filter((event) => event.kind === "survey").length)} hint="Upcoming survey visits" />
-          <CalendarStat label="Works starts" value={String(upcomingEvents.filter((event) => event.kind === "works").length)} hint="Jobs with start dates" />
-          <CalendarStat label="Follow-ups" value={String(upcomingEvents.filter((event) => event.kind === "follow-up").length)} hint="Customer chase dates" />
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat
+            label="Next event"
+            value={nextEvent ? formatDate(nextEvent.date) : "None"}
+            hint={nextEvent?.title ?? "No upcoming dated work"}
+          />
+          <Stat
+            label="Surveys"
+            value={String(upcomingEvents.filter((event) => event.kind === "survey").length)}
+            hint="Upcoming visits"
+            tone="pending"
+          />
+          <Stat
+            label="Works starts"
+            value={String(upcomingEvents.filter((event) => event.kind === "works").length)}
+            hint="Jobs starting"
+            tone="active"
+          />
+          <Stat
+            label="Follow-ups"
+            value={String(upcomingEvents.filter((event) => event.kind === "follow-up").length)}
+            hint="Customer chases"
+            tone="alert"
+          />
         </section>
 
-        <section className="card p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="section-kicker text-[0.65rem] uppercase">Diary View</p>
-              <h2 className="mt-2 font-condensed text-3xl text-white">Upcoming schedule</h2>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+        <PageSection
+          kicker="Diary View"
+          title="Upcoming schedule"
+          actions={
+            <div className="flex gap-1 overflow-x-auto pb-1">
               {FILTERS.map((filter) => {
                 const active = activeView === filter.id;
                 return (
-                  <Link
-                    className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${
-                      active ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-black/20 text-[var(--muted)] hover:border-[var(--gold)]/60"
-                    }`}
-                    href={`/calendar?view=${filter.id}` as Route}
+                  <Button
                     key={filter.id}
+                    variant={active ? "primary" : "subtle"}
+                    size="sm"
+                    asChild
+                    className="rounded-full shrink-0"
                   >
-                    {filter.label}
-                  </Link>
+                    <Link href={`/calendar?view=${filter.id}` as Route}>{filter.label}</Link>
+                  </Button>
                 );
               })}
             </div>
-          </div>
-
-          <div className="mt-5 grid gap-5">
+          }
+        >
+          <div className="grid gap-5">
             {groupedEvents.length ? (
               groupedEvents.map((group) => (
                 <div key={group.date}>
                   <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--border)] pb-2">
-                    <p className="font-semibold text-white">{formatDate(group.date)}</p>
-                    <p className="text-xs text-[var(--muted)]">{group.events.length} event{group.events.length === 1 ? "" : "s"}</p>
+                    <p className="text-sm font-semibold text-[var(--text)]">{formatDate(group.date)}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {group.events.length} event{group.events.length === 1 ? "" : "s"}
+                    </p>
                   </div>
                   <div className="grid gap-3">
                     {group.events.map((event) => (
@@ -137,10 +166,12 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
                 </div>
               ))
             ) : (
-              <p className="rounded-2xl border border-[var(--border)] bg-black/20 p-5 text-sm text-[var(--muted)]">No upcoming events for this view.</p>
+              <p className="rounded-lg border border-dashed border-[var(--border-mid)] p-5 text-center text-sm text-[var(--text-muted)]">
+                No upcoming events for this view.
+              </p>
             )}
           </div>
-        </section>
+        </PageSection>
       </div>
     </AppShell>
   );
@@ -149,57 +180,56 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
 function CalendarEventCard({ event }: { event: CalendarEvent }) {
   const timeLabel = event.time ? event.time : event.kind === "follow-up" ? "Any time" : "08:00";
   const calendarTitle = event.kind === "survey" ? `Roof Survey - ${event.title}` : event.title;
+  const badgeVariant = getBadgeVariant(event.kind);
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-black/20 p-4 md:grid-cols-[10px_1fr_auto]">
-      <span className="h-full min-h-12 rounded-full" style={{ background: event.color }} />
+    <Card variant="outlined" padding="md" className="grid gap-3 md:grid-cols-[6px_1fr_auto]">
+      <span className="hidden md:block rounded-full min-h-12" style={{ background: event.color }} aria-hidden />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-[var(--border)] bg-black/20 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--dim)]">{event.badge}</span>
-          {event.status ? <span className="text-xs text-[var(--muted)]">{event.status}</span> : null}
+          <Badge variant={badgeVariant} size="sm">{event.badge}</Badge>
+          {event.status ? <span className="text-xs text-[var(--text-muted)]">{event.status}</span> : null}
         </div>
-        <p className="mt-2 font-semibold text-white">{event.title}</p>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          {timeLabel} | {event.address || "Address not set"}
+        <p className="mt-2 text-sm font-semibold text-[var(--text)]">{event.title}</p>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+          {timeLabel} · {event.address || "Address not set"}
         </p>
-        {event.notes ? <p className="mt-2 text-sm text-[var(--text)]">{event.notes}</p> : null}
+        {event.notes ? <p className="mt-2 text-sm text-[var(--text-second)]">{event.notes}</p> : null}
       </div>
       <div className="flex flex-wrap gap-2 md:justify-end">
         {event.jobId ? (
-          <Link className="button-secondary !px-3 !py-2 text-xs" href={`/jobs/${event.jobId}` as Route}>
-            Open Job
-          </Link>
+          <Button variant="secondary" size="sm" asChild>
+            <Link href={`/jobs/${event.jobId}` as Route}>Open Job</Link>
+          </Button>
         ) : null}
-        <a
-          className="button-ghost !px-3 !py-2 text-xs"
-          href={googleCalendarLink({
-            title: event.title,
-            calendarTitle,
-            date: event.date,
-            timeStart: event.time || (event.kind === "follow-up" ? "09:00" : "08:00"),
-            duration: event.duration,
-            address: event.address,
-            notes: event.notes ?? "",
-            jobRef: event.title
-          })}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Google Calendar
-        </a>
+        <Button variant="ghost" size="sm" asChild>
+          <a
+            href={googleCalendarLink({
+              title: event.title,
+              calendarTitle,
+              date: event.date,
+              timeStart: event.time || (event.kind === "follow-up" ? "09:00" : "08:00"),
+              duration: event.duration,
+              address: event.address,
+              notes: event.notes ?? "",
+              jobRef: event.title
+            })}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Calendar
+          </a>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
-function CalendarStat({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-4">
-      <p className="text-[0.62rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-white">{value}</p>
-      <p className="mt-1 truncate text-xs text-[var(--muted)]">{hint}</p>
-    </div>
-  );
+function getBadgeVariant(kind: CalendarEvent["kind"]) {
+  if (kind === "survey") return "pending" as const;
+  if (kind === "works") return "active" as const;
+  if (kind === "follow-up") return "alert" as const;
+  return "neutral" as const;
 }
 
 function groupEventsByDate(events: CalendarEvent[]) {
