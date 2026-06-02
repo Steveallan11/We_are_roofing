@@ -340,13 +340,15 @@ function gridLines(dark: boolean) {
 
 export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
   const coords = allPoints(opts).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
-  const bounds = getGeoBounds(coords);
+  const roofCoords = measuredRoofPoints(opts);
+  const bounds = getGeoBounds(roofCoords.length ? roofCoords : coords);
+  const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, 8) : null;
   const center = bounds ? geoBoundsCenter(bounds) : null;
-  const zoom = bounds ? getStaticMapZoom(bounds, 640, 640) : null;
+  const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514) : null;
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
-    size: "640x640",
+    size: "640x514",
     scale: "2",
     format: "jpg"
   });
@@ -404,6 +406,26 @@ function getGeoBounds(points: Array<{ lat: number; lng: number }>) {
   };
 }
 
+function measuredRoofPoints(opts: Pick<DrawingOpts, "sections" | "lines">) {
+  return [
+    ...opts.sections.flatMap((section) => section.points),
+    ...opts.lines.flatMap((line) => line.points)
+  ].map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
+}
+
+function expandGeoBoundsByMeters(bounds: NonNullable<ReturnType<typeof getGeoBounds>>, metres: number) {
+  const center = geoBoundsCenter(bounds);
+  const latPadding = metres / 111_320;
+  const lngPadding = metres / Math.max(111_320 * Math.cos((center.lat * Math.PI) / 180), 1);
+
+  return {
+    north: bounds.north + latPadding,
+    south: bounds.south - latPadding,
+    east: bounds.east + lngPadding,
+    west: bounds.west - lngPadding
+  };
+}
+
 function geoBoundsCenter(bounds: NonNullable<ReturnType<typeof getGeoBounds>>) {
   return {
     lat: (bounds.north + bounds.south) / 2,
@@ -412,11 +434,11 @@ function geoBoundsCenter(bounds: NonNullable<ReturnType<typeof getGeoBounds>>) {
 }
 
 function getStaticMapZoom(bounds: NonNullable<ReturnType<typeof getGeoBounds>>, width: number, height: number) {
-  const lngSpan = Math.max(Math.abs(bounds.east - bounds.west), 0.00001) * 1.28;
-  const latFraction = Math.max(Math.abs(latRad(bounds.north) - latRad(bounds.south)), 0.00001) * 1.28;
+  const lngSpan = Math.max(Math.abs(bounds.east - bounds.west), 0.00001);
+  const latFraction = Math.max(Math.abs(latRad(bounds.north) - latRad(bounds.south)), 0.00001);
   const lngZoom = Math.floor(Math.log2(width / 256 / (lngSpan / 360)));
   const latZoom = Math.floor(Math.log2(height / 256 / latFraction));
-  return Math.max(18, Math.min(21, Math.min(lngZoom, latZoom)));
+  return Math.max(18, Math.min(22, Math.min(lngZoom, latZoom)));
 }
 
 function latRad(lat: number) {
