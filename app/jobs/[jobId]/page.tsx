@@ -17,6 +17,7 @@ import { getJobBundle, getPaymentSchedule } from "@/lib/data";
 import { getJobDocumentHref } from "@/lib/documents";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
+import { getJobStage, getStageColor } from "@/lib/jobs/statusColors";
 import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate } from "@/lib/utils";
@@ -53,6 +54,8 @@ export default async function JobDetailPage({ params }: Props) {
     customer: bundle.customer,
     quote: bundle.quote ?? null
   });
+  const jobStage = getJobStage(bundle.job.status);
+  const stageColors = getStageColor(jobStage);
   const commercialValue = getJobPipelineValue({ ...bundle.job, quote: bundle.quote ?? null });
   const commercialLabel = commercialValue ? `${isFromOptionValue({ ...bundle.job, quote: bundle.quote ?? null }) ? "From " : ""}${currency(commercialValue)}` : "TBC";
   const quoteDisplayValue = getQuotePipelineValue(bundle.quote ?? null);
@@ -110,7 +113,13 @@ export default async function JobDetailPage({ params }: Props) {
                     </SmartActionLink>
                   </div>
                 </div>
-                <div className="rounded-[1.25rem] border border-[var(--gold-border)] bg-[var(--gold-bg)] p-4 lg:min-w-[260px]">
+                <div
+                  className="rounded-[1.25rem] border p-4 lg:min-w-[260px]"
+                  style={{
+                    backgroundColor: stageColors.bg,
+                    borderColor: stageColors.border
+                  }}
+                >
                   <p className="section-kicker text-[0.58rem] uppercase">Next Action</p>
                   <p className="mt-2 text-lg font-semibold text-white">{nextAction.label}</p>
                   <p className="mt-1 text-sm text-[var(--muted)]">{getNextActionLabel(bundle.job)}</p>
