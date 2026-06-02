@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/primitives";
 import { AttentionBanner } from "@/components/jobs/AttentionBanner";
 import { JobCard } from "@/components/jobs/job-card";
 import { JobFilters } from "@/components/jobs/JobFilters";
@@ -67,16 +68,16 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
       <div className="hidden flex-col gap-3 md:flex-row md:items-center md:justify-between lg:flex">
         <div>
-          <p className="section-kicker text-[0.65rem] uppercase">Roofing Pipeline</p>
+          <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">Roofing Pipeline</p>
           <p className="mt-1 text-sm text-[var(--muted)]">Board for the day-to-day flow. List view is for quick scanning.</p>
         </div>
-        <div className="hidden rounded-2xl border border-[var(--border)] bg-black/20 p-1 lg:flex">
-          <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${view === "board" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"}`} onClick={() => setView("board")} type="button">
+        <div className="hidden gap-2 lg:flex">
+          <Button variant={view === "board" ? "primary" : "secondary"} size="sm" onClick={() => setView("board")}>
             Board
-          </button>
-          <button className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${view === "list" ? "bg-[var(--gold)] text-black" : "text-[var(--muted)]"}`} onClick={() => setView("list")} type="button">
+          </Button>
+          <Button variant={view === "list" ? "primary" : "secondary"} size="sm" onClick={() => setView("list")}>
             List
-          </button>
+          </Button>
         </div>
       </div>
 
