@@ -900,7 +900,7 @@ function ExportButtons(props: {
   notes: string;
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
-  const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("technical");
+  const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("satellite");
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
   function makeKml() {

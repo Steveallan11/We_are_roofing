@@ -65,13 +65,16 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const dark = opts.style === "quote";
   const satelliteUrl =
     opts.style === "satellite" ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey) : null) : null;
+  const useStaticMapGeometry = Boolean(satelliteUrl);
   const text = dark ? "#f8f5e8" : "#111827";
   const muted = dark ? "#b7aa82" : "#6b7280";
   const gold = "#D4AF37";
   const totalArea = opts.sections.reduce((sum, section) => sum + Number(section.area_m2 || 0), 0);
   const totalLength = opts.lines.reduce((sum, line) => sum + Number(line.length_lm || 0), 0);
 
-  const sectionShapes = opts.sections
+  const sectionShapes = useStaticMapGeometry
+    ? ""
+    : opts.sections
     .map((section, index) => {
       const coords = section.points.map(project).filter(isProjectedPoint);
       if (coords.length < 3) return "";
@@ -87,7 +90,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     })
     .join("");
 
-  const lineShapes = opts.lines
+  const lineShapes = useStaticMapGeometry
+    ? ""
+    : opts.lines
     .map((line, index) => {
       const coords = line.points.map(project).filter(isProjectedPoint);
       if (coords.length < 2) return "";
@@ -99,7 +104,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     })
     .join("");
 
-  const featureShapes = opts.features
+  const featureShapes = useStaticMapGeometry
+    ? ""
+    : opts.features
     .map((feature, index) => {
       const point = project(feature.point);
       if (!point) return "";
@@ -310,12 +317,14 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     .slice(0, 60) as Array<{ lat: number; lng: number }>;
   visiblePoints.forEach((point) => params.append("visible", `${point.lat},${point.lng}`));
 
-  opts.sections.slice(0, 10).forEach((section) => {
+  opts.sections.slice(0, 10).forEach((section, index) => {
     const coords = section.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 3) return;
     const color = staticMapColor(section.color || "#D4AF37");
     const path = [`color:0x${color}ff`, `fillcolor:0x${color}44`, "weight:3", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
     params.append("path", path);
+    const centre = geoCentroid(coords);
+    params.append("markers", `color:yellow|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
   });
 
   opts.lines.slice(0, 12).forEach((line) => {
@@ -337,6 +346,17 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
 function staticMapColor(value: string) {
   const clean = value.replace("#", "").trim();
   return /^[0-9a-fA-F]{6}$/.test(clean) ? clean : "D4AF37";
+}
+
+function geoCentroid(points: Array<{ lat: number; lng: number }>) {
+  return {
+    lat: points.reduce((sum, point) => sum + point.lat, 0) / points.length,
+    lng: points.reduce((sum, point) => sum + point.lng, 0) / points.length
+  };
+}
+
+function sectionMarkerLabel(index: number) {
+  return index < 9 ? String(index + 1) : String.fromCharCode(65 + Math.min(index - 9, 25));
 }
 
 function markerInitials(value: string) {
