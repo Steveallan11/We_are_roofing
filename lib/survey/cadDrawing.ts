@@ -25,6 +25,7 @@ const DRAWING_LEFT = 64;
 const DRAWING_TOP = 118;
 const DRAWING_WIDTH = 760;
 const DRAWING_HEIGHT = 610;
+const EXPORT_SECTION_COLORS = ["#D4AF37", "#3B82F6", "#10B981", "#F97316", "#8B5CF6", "#EF4444", "#06B6D4", "#EC4899", "#84CC16", "#F59E0B"] as const;
 
 const STYLE_COPY: Record<TakeoffDrawingStyle, { title: string; subtitle: string; background: string; stroke: string; soft: string }> = {
   technical: {
@@ -119,7 +120,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .join("");
 
   const legendRows = [
-    ...opts.sections.map((section, index) => ({ color: section.color || gold, code: `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
+    ...opts.sections.map((section, index) => ({ color: exportSectionColor(index, section.color), code: `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
     ...opts.lines.map((line, index) => ({ color: line.color || gold, code: `L${index + 1}`, label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
     ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
   ];
@@ -303,6 +304,10 @@ function gridLines(dark: boolean) {
 }
 
 export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string) {
+  const coords = allPoints(opts).map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
+  const bounds = getGeoBounds(coords);
+  const center = bounds ? geoBoundsCenter(bounds) : null;
+  const zoom = bounds ? getStaticMapZoom(bounds, 640, 640) : null;
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
@@ -311,20 +316,19 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     format: "jpg"
   });
 
-  const visiblePoints = allPoints(opts)
-    .map(toCoord)
-    .filter(Boolean)
-    .slice(0, 60) as Array<{ lat: number; lng: number }>;
-  visiblePoints.forEach((point) => params.append("visible", `${point.lat},${point.lng}`));
+  if (center && zoom != null) {
+    params.set("center", `${center.lat},${center.lng}`);
+    params.set("zoom", String(zoom));
+  }
 
   opts.sections.slice(0, 10).forEach((section, index) => {
     const coords = section.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 3) return;
-    const color = staticMapColor(section.color || "#D4AF37");
-    const path = [`color:0x${color}ff`, `fillcolor:0x${color}44`, "weight:3", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
+    const color = staticMapColor(exportSectionColor(index, section.color));
+    const path = [`color:0x${color}ff`, `fillcolor:0x${color}66`, "weight:5", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
     params.append("path", path);
     const centre = geoCentroid(coords);
-    params.append("markers", `color:yellow|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
+    params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
   });
 
   opts.lines.slice(0, 12).forEach((line) => {
@@ -346,6 +350,43 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
 function staticMapColor(value: string) {
   const clean = value.replace("#", "").trim();
   return /^[0-9a-fA-F]{6}$/.test(clean) ? clean : "D4AF37";
+}
+
+function exportSectionColor(index: number, fallback?: string | null) {
+  const paletteColor = EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length];
+  const clean = fallback?.replace("#", "").trim();
+  if (!clean || clean.toUpperCase() === "D4AF37") return paletteColor;
+  return /^[0-9a-fA-F]{6}$/.test(clean) ? `#${clean}` : paletteColor;
+}
+
+function getGeoBounds(points: Array<{ lat: number; lng: number }>) {
+  if (!points.length) return null;
+  return {
+    north: Math.max(...points.map((point) => point.lat)),
+    south: Math.min(...points.map((point) => point.lat)),
+    east: Math.max(...points.map((point) => point.lng)),
+    west: Math.min(...points.map((point) => point.lng))
+  };
+}
+
+function geoBoundsCenter(bounds: NonNullable<ReturnType<typeof getGeoBounds>>) {
+  return {
+    lat: (bounds.north + bounds.south) / 2,
+    lng: (bounds.east + bounds.west) / 2
+  };
+}
+
+function getStaticMapZoom(bounds: NonNullable<ReturnType<typeof getGeoBounds>>, width: number, height: number) {
+  const lngSpan = Math.max(Math.abs(bounds.east - bounds.west), 0.00001) * 1.28;
+  const latFraction = Math.max(Math.abs(latRad(bounds.north) - latRad(bounds.south)), 0.00001) * 1.28;
+  const lngZoom = Math.floor(Math.log2(width / 256 / (lngSpan / 360)));
+  const latZoom = Math.floor(Math.log2(height / 256 / latFraction));
+  return Math.max(18, Math.min(21, Math.min(lngZoom, latZoom)));
+}
+
+function latRad(lat: number) {
+  const sin = Math.sin((lat * Math.PI) / 180);
+  return Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
 }
 
 function geoCentroid(points: Array<{ lat: number; lng: number }>) {
