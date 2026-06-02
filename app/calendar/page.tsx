@@ -32,7 +32,7 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
   const [params, bookings, jobs] = await Promise.all([searchParams ?? Promise.resolve({ view: undefined as string | undefined, display: "month" as string | undefined }), getBookings(), getJobs()]);
   const view = params.view;
   const display = params.display ?? "month";
-  const activeView = FILTERS.some((filter) => filter.id === view) ? view : "all";
+  const activeView: string = FILTERS.some((filter) => filter.id === view) && view ? view : "all";
 
   const startDates: CalendarEvent[] = jobs
     .filter((job) => job.start_date)
