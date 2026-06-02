@@ -44,7 +44,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
   const [costBreakdown, setCostBreakdown] = useState<CostLineItem[]>(() => {
     const initial = quote?.cost_breakdown?.length
       ? quote.cost_breakdown
-      : [{ item: "Main works", cost: 0, vat_applicable: true, notes: "Draft pricing line item" }];
+      : [{ item: "Main works", cost: 0, vat_applicable: false, notes: "Draft pricing line item" }];
     return rateCard.length ? applyRateCardToCostBreakdown(initial, rateCard).updated : initial;
   });
   const [options, setOptions] = useState<QuoteOption[]>(() => quote?.options ?? []);
@@ -114,7 +114,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       {
         item: "Roof works",
         cost: 0,
-        vat_applicable: true,
+        vat_applicable: false,
         notes: "",
         pricing_category: "roof_works",
         quote_section: cleanSectionName,
@@ -124,7 +124,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
         item: "Scaffold/access",
         cost: 0,
         vat_applicable: true,
-        notes: "",
+        notes: "Scaffold/access supplier cost. VAT applies where charged by the scaffolder.",
         pricing_category: "standard_scaffold",
         quote_section: cleanSectionName,
         source_id: `${sectionSlug}-scaffold`
@@ -165,7 +165,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             ...common,
             item: "Roof works",
             cost: 0,
-            vat_applicable: true,
+            vat_applicable: false,
             notes: [`Drawing section: ${sectionName}`, measurement ? `Measured area: ${measurement}` : null, section.notes ? `Notes: ${section.notes}` : null]
               .filter(Boolean)
               .join("\n"),
@@ -182,7 +182,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             item: "Scaffold/access",
             cost: 0,
             vat_applicable: true,
-            notes: [`Scaffold/access for drawing section: ${sectionName}`, section.notes ? `Notes: ${section.notes}` : null].filter(Boolean).join("\n"),
+            notes: [`Scaffold/access for drawing section: ${sectionName}`, "VAT applies where charged by the scaffolder.", section.notes ? `Notes: ${section.notes}` : null].filter(Boolean).join("\n"),
             pricing_category: "standard_scaffold"
           });
         }
@@ -191,6 +191,33 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       return [...current, ...nextLines];
     });
     setSuccess("Drawing sections added to the quote with roof works and scaffold/access lines.");
+    setError(null);
+  }
+
+  function addScaffoldLineForTakeoff(index: number) {
+    const source = costBreakdown[index];
+    if (!source) return;
+    const sectionName = source.quote_section || source.source_label || source.item || "Takeoff item";
+    const rawPrice = window.prompt(`Scaffold/access net price for ${sectionName} (before VAT)`, "0");
+    if (rawPrice === null) return;
+    const scaffoldCost = Number(rawPrice || 0);
+    const scaffoldLine: CostLineItem = {
+      item: "Scaffold/access",
+      cost: Number.isFinite(scaffoldCost) ? scaffoldCost : 0,
+      vat_applicable: true,
+      notes: `Scaffold/access for ${sectionName}. VAT applies where charged by the scaffolder.`,
+      pricing_category: "standard_scaffold",
+      quote_section: sectionName,
+      source_id: source.source_id,
+      source_type: source.source_type,
+      source_label: source.source_label || sectionName,
+      source_color: source.source_color,
+      measurement_label: source.measurement_label,
+      takeoff_notes: source.takeoff_notes
+    };
+
+    setCostBreakdown((current) => [...current.slice(0, index + 1), scaffoldLine, ...current.slice(index + 1)]);
+    setSuccess(`Scaffold/access VAT line added for ${sectionName}.`);
     setError(null);
   }
 
@@ -239,7 +266,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     setOptions((current) =>
       current.map((option) => {
         if (option.id !== optionId) return option;
-        const cost_breakdown = [...option.cost_breakdown, { item: "Additional works", cost: 0, vat_applicable: true, notes: "" }];
+        const cost_breakdown = [...option.cost_breakdown, { item: "Additional works", cost: 0, vat_applicable: false, notes: "" }];
         return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
       })
     );
@@ -259,7 +286,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
           {
             item: "Roof works",
             cost: 0,
-            vat_applicable: true,
+            vat_applicable: false,
             notes: "",
             pricing_category: "roof_works",
             quote_section: cleanSectionName,
@@ -269,7 +296,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
             item: "Scaffold/access",
             cost: 0,
             vat_applicable: true,
-            notes: "",
+            notes: "Scaffold/access supplier cost. VAT applies where charged by the scaffolder.",
             pricing_category: "standard_scaffold",
             quote_section: cleanSectionName,
             source_id: `${sectionSlug}-scaffold`
@@ -820,7 +847,10 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
         ) : null}
         <div className="mt-4 space-y-4">
           <TakeoffQuotePreview selectedSourceId={selectedTakeoffSourceId} survey={roofSurvey} />
-          {costBreakdown.length > 0 ? costBreakdown.map((line, index) => (
+          {costBreakdown.length > 0 ? costBreakdown.map((line, index) => {
+            const isScaffoldLine = (line.pricing_category || "").includes("scaffold") || line.item.toLowerCase().includes("scaffold");
+            const canAddScaffoldLine = Boolean(line.source_id || line.quote_section) && !isScaffoldLine;
+            return (
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-deep)] p-5" key={`${line.item}-${index}`}>
               {line.source_type || line.measurement_label || line.quote_section ? (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-black/15 p-3 text-xs text-[var(--muted)]">
@@ -833,11 +863,20 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                   {line.pricing_category ? <span className="rounded-full border border-[var(--border)] px-2 py-1">Rate: {line.pricing_category}</span> : null}
                   {line.source_id ? (
                     <button
-                      className="ml-auto rounded-full border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-3 py-1 font-semibold text-[var(--gold-l)] transition hover:border-[var(--gold)]"
+                      className="rounded-full border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-3 py-1 font-semibold text-[var(--gold-l)] transition hover:border-[var(--gold)]"
                       onClick={() => setSelectedTakeoffSourceId(line.source_id ?? null)}
                       type="button"
                     >
                       View on drawing
+                    </button>
+                  ) : null}
+                  {canAddScaffoldLine ? (
+                    <button
+                      className="rounded-full border border-[var(--gold)]/35 bg-[var(--gold)] px-3 py-1 font-semibold text-black transition hover:opacity-90"
+                      onClick={() => addScaffoldLineForTakeoff(index)}
+                      type="button"
+                    >
+                      + Scaffold VAT line
                     </button>
                   ) : null}
                 </div>
@@ -966,7 +1005,8 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                 />
               </div>
             </div>
-          )) : (
+          );
+          }) : (
             <div className="rounded-2xl border border-dashed border-[var(--border)] bg-black/10 p-4 text-sm text-[var(--muted)]">
               No line items in this quote yet. Add one below before saving if the quote needs pricing.
             </div>
@@ -974,7 +1014,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
           <button
             className="button-ghost"
             onClick={() =>
-              setCostBreakdown((current) => [...current, { item: "Additional works", cost: 0, vat_applicable: true, notes: "" }])
+              setCostBreakdown((current) => [...current, { item: "Additional works", cost: 0, vat_applicable: false, notes: "" }])
             }
             type="button"
           >
