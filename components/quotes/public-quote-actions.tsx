@@ -14,16 +14,17 @@ type Props = {
 
 export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token }: Props) {
   const sectionChoices = buildSectionChoices(costBreakdown);
+  const useSectionSelection = shouldUseSectionSelection(sectionChoices, options);
   const [message, setMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
-    options.find((option) => option.recommended)?.id ?? options[0]?.id ?? null
+    useSectionSelection ? null : options.find((option) => option.recommended)?.id ?? options[0]?.id ?? null
   );
   const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>(() => sectionChoices.flatMap((section) => section.indexes));
   const [status, setStatus] = useState<string | null>(null);
-  const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
-  const hasSelection = options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
+  const selectedOption = useSectionSelection ? null : options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
+  const hasSelection = useSectionSelection ? selectedLineIndexes.length > 0 : options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
   const hasName = customerName.trim().length >= 2;
   const hasValidEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
   const acceptanceHelper = getAcceptanceHelper({ hasName, hasSelectedOption: hasSelection, hasValidEmail });
@@ -51,7 +52,12 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
     const response = await fetch(`/api/quotes/${quoteId}/accept?token=${encodeURIComponent(secureToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ option_id: selectedOptionId, selected_line_indexes: selectedLineIndexes, customer_name: customerName.trim(), customer_email: customerEmail.trim() })
+      body: JSON.stringify({
+        option_id: useSectionSelection ? null : selectedOptionId,
+        selected_line_indexes: useSectionSelection ? selectedLineIndexes : [],
+        customer_name: customerName.trim(),
+        customer_email: customerEmail.trim()
+      })
     });
     setStatus(response.ok ? "Quote accepted. We Are Roofing will be in touch shortly." : "Sorry, acceptance could not be recorded.");
   }
@@ -70,15 +76,23 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
   return (
     <div className="mt-6 space-y-5">
       <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#f8f3e3] p-5 shadow-2xl md:p-7">
-        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">Choose your preferred option</p>
-        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-5xl">Choose the option that suits you best</h2>
+        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">{useSectionSelection ? "Choose your roof sections" : "Choose your preferred option"}</p>
+        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-5xl">{useSectionSelection ? "Choose the sections you want done" : "Choose the option that suits you best"}</h2>
         <p className="mt-3 font-ui text-base leading-7 text-[#4a4a4a] md:text-lg md:leading-8">
-          Below are your two quote options. Option B is our recommended choice if you want the best weather protection during the works.
+          {useSectionSelection
+            ? "Select the roof sections you would like us to carry out now. Each section shows the roof works price and any scaffold/access cost separately."
+            : "Below are your two quote options. Option B is our recommended choice if you want the best weather protection during the works."}
         </p>
       </section>
 
       <section className="grid gap-3 md:grid-cols-2" aria-label="Quote options">
-        {options.length ? (
+        {useSectionSelection ? (
+          <SectionChoiceList
+            sections={sectionChoices}
+            selectedLineIndexes={selectedLineIndexes}
+            setSelectedLineIndexes={setSelectedLineIndexes}
+          />
+        ) : options.length ? (
           options.map((option, index) => {
             const meta = getQuoteOptionPresentation(option, index);
             const isSelected = selectedOptionId === option.id;
@@ -211,7 +225,7 @@ function SectionChoiceList({
   const selectedVat = selectedSections.reduce((sum, section) => sum + section.vat, 0);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 md:col-span-2">
       <div className="rounded-2xl border border-[var(--gold)]/30 bg-[#101010] p-4">
         <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Select the sections you want done</p>
         <p className="mt-2 font-ui text-sm leading-6 text-[#d6d6d6]">
@@ -301,15 +315,35 @@ function buildSectionChoices(lines: CostLineItem[]): SectionChoice[] {
     groups.set(name, existing);
   });
 
-  return [...groups.values()];
+  return [...groups.values()]
+    .map((section) => ({ ...section, lines: sortSectionLines(section.lines) }))
+    .sort((left, right) => Math.min(...left.indexes) - Math.min(...right.indexes));
 }
 
 function getLineDisplayLabel(line: CostLineItem) {
-  const identity = `${line.item ?? ""} ${line.pricing_category ?? ""}`.toLowerCase();
-  if (identity.includes("scaffold")) return "Scaffold/access";
+  const identity = `${line.item ?? ""} ${line.pricing_category ?? ""} ${line.notes ?? ""}`.toLowerCase();
+  if (identity.includes("scaffold") || identity.includes("access")) return "Scaffold/access";
   if (identity.includes("temporary roof") || identity.includes("weather protection")) return "Temporary roof protection";
-  if (identity.includes("roof")) return "Roof works";
-  return line.item || "Quote item";
+  return "Roof works";
+}
+
+function shouldUseSectionSelection(sections: SectionChoice[], options: QuoteOption[]) {
+  if (!sections.length) return false;
+  const hasTakeoffLinkedSections = sections.some((section) =>
+    section.lines.some((line) => Boolean(line.quote_section || line.source_label || line.measurement_label || line.source_id || line.source_type))
+  );
+  return hasTakeoffLinkedSections && (sections.length > 1 || options.length > 0);
+}
+
+function sortSectionLines(lines: Array<CostLineItem & { originalIndex: number }>) {
+  return [...lines].sort((left, right) => lineSortOrder(left) - lineSortOrder(right) || left.originalIndex - right.originalIndex);
+}
+
+function lineSortOrder(line: CostLineItem) {
+  const identity = `${line.item ?? ""} ${line.pricing_category ?? ""} ${line.notes ?? ""}`.toLowerCase();
+  if (identity.includes("scaffold") || identity.includes("access")) return 2;
+  if (identity.includes("temporary roof") || identity.includes("weather protection")) return 3;
+  return 1;
 }
 
 function SelectedOptionDetail({ option, selectedIndex }: { option: QuoteOption; selectedIndex: number }) {

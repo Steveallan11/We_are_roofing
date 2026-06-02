@@ -42,7 +42,8 @@ export async function POST(request: Request, { params }: Props) {
 
   const quoteOptions = (quoteRecord.options ?? []) as QuoteOption[];
   const acceptedOption = quoteOptions.find((option) => option.id === body.option_id) ?? null;
-  if (quoteOptions.length > 0 && !acceptedOption) {
+  const hasSelectedLineIndexes = Array.isArray(body.selected_line_indexes) && body.selected_line_indexes.length > 0;
+  if (quoteOptions.length > 0 && !acceptedOption && !hasSelectedLineIndexes) {
     return NextResponse.json({ ok: false, error: "Please choose the quote option you want to accept." }, { status: 400 });
   }
 
@@ -53,21 +54,21 @@ export async function POST(request: Request, { params }: Props) {
     updated_at: new Date().toISOString()
   };
 
-  if (acceptedOption) {
-    const selectedLines = (acceptedOption.cost_breakdown ?? []).map(normaliseCostLine);
+  if (hasSelectedLineIndexes) {
+    const allLines = (quoteRecord.cost_breakdown ?? []) as CostLineItem[];
+    const selectedIndexes = new Set((body.selected_line_indexes ?? []).filter((index) => Number.isInteger(index) && index >= 0));
+    const selectedLines = allLines.filter((_, index) => selectedIndexes.has(index)).map(normaliseCostLine);
+    if (!selectedLines.length) {
+      return NextResponse.json({ ok: false, error: "Please choose at least one quote section to accept." }, { status: 400 });
+    }
     const selectedTotals = calculateTotals(selectedLines);
     quoteUpdates.cost_breakdown = selectedLines;
     quoteUpdates.subtotal = selectedTotals.subtotal;
     quoteUpdates.vat_amount = selectedTotals.vat_amount;
     quoteUpdates.total = selectedTotals.total;
     acceptedTotal = selectedTotals.total;
-  } else if (Array.isArray(body.selected_line_indexes) && body.selected_line_indexes.length > 0) {
-    const allLines = (quoteRecord.cost_breakdown ?? []) as CostLineItem[];
-    const selectedIndexes = new Set(body.selected_line_indexes.filter((index) => Number.isInteger(index) && index >= 0));
-    const selectedLines = allLines.filter((_, index) => selectedIndexes.has(index)).map(normaliseCostLine);
-    if (!selectedLines.length) {
-      return NextResponse.json({ ok: false, error: "Please choose at least one quote section to accept." }, { status: 400 });
-    }
+  } else if (acceptedOption) {
+    const selectedLines = (acceptedOption.cost_breakdown ?? []).map(normaliseCostLine);
     const selectedTotals = calculateTotals(selectedLines);
     quoteUpdates.cost_breakdown = selectedLines;
     quoteUpdates.subtotal = selectedTotals.subtotal;
