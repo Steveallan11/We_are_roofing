@@ -132,17 +132,18 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     })
     .join("");
 
+  const mapCode = opts.style === "satellite" ? sectionMarkerLabel : (index: number) => `L${index + 1}`;
   const legendRows = [
-    ...opts.sections.map((section, index) => ({ color: exportSectionColor(index, section.color), code: `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
-    ...opts.lines.map((line, index) => ({ color: exportLineColor(index, line), code: `L${index + 1}`, label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
-    ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
+    ...opts.sections.map((section, index) => ({ color: exportSectionColor(index, section.color), code: opts.style === "satellite" ? sectionMarkerLabel(index) : `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
+    ...opts.lines.map((line, index) => ({ color: exportLineColor(index, line), code: mapCode(index), label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
+    ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: opts.style === "satellite" ? markerInitials(feature.type || feature.label).slice(0, 1) || "X" : `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
   ];
 
   const legend = legendRows
     .slice(0, 20)
     .map(
       (row, index) => `
-        <g transform="translate(870 ${170 + index * 24})">
+        <g transform="translate(870 ${188 + index * 24})">
           <rect x="0" y="-10" width="12" height="12" rx="2" fill="${row.color}" />
           <text x="20" y="0" class="legend-code">${escapeXml(row.code)}</text>
           <text x="52" y="0" class="legend-text">${escapeXml(row.label || "Item")}</text>
@@ -192,6 +193,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .quote-label{font:800 12px Montserrat,Arial,sans-serif;fill:${text}}
     .quote-detail{font:600 10px Montserrat,Arial,sans-serif;fill:${muted}}
     .quote-total{font:900 12px Montserrat,Arial,sans-serif;fill:${gold}}
+    .panel-helper{font:600 10px Montserrat,Arial,sans-serif;fill:${muted}}
     .shape-label{font:800 13px Montserrat,Arial,sans-serif;fill:${text};paint-order:stroke;stroke:${style.background};stroke-width:5px;stroke-linejoin:round}
     .shape-sub,.line-label,.feature-label{font:700 11px Montserrat,Arial,sans-serif;fill:${text};paint-order:stroke;stroke:${style.background};stroke-width:4px;stroke-linejoin:round}
     .marker-text{font:900 9px Montserrat,Arial,sans-serif;fill:#000}
@@ -219,7 +221,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   ${satelliteWarning}
   <g>${sectionShapes}${lineShapes}${featureShapes}</g>
   <rect x="850" y="118" width="286" height="560" rx="18" fill="${dark ? "#161616" : "#fbfaf5"}" stroke="${style.soft}" />
-  <text x="870" y="148" class="panel-title">${quoteRows.length ? "Quote Sections" : "Measured Items"}</text>
+  <text x="870" y="148" class="panel-title">${quoteRows.length ? "Quote Sections" : "Colour Key"}</text>
+  ${quoteRows.length ? "" : `<text x="870" y="166" class="panel-helper">Numbers on the roof match this list.</text>`}
   ${quoteRows.length ? quoteLegend : legend || `<text x="870" y="178" class="subtitle">No measured items yet.</text>`}
   <rect x="850" y="704" width="286" height="74" rx="18" fill="${dark ? "#201b0f" : "#f8f0d8"}" stroke="${gold}" stroke-opacity="0.35" />
   <text x="870" y="733" class="panel-title">Totals</text>
@@ -412,9 +415,9 @@ function exportLineColor(index: number, line: RoofSurveyLine) {
 }
 
 function framingConfig(framing: TakeoffDrawingFraming) {
-  if (framing === "close") return { paddingMeters: 2, zoomBoost: 3 };
-  if (framing === "context") return { paddingMeters: 32, zoomBoost: -1 };
-  return { paddingMeters: 16, zoomBoost: 0 };
+  if (framing === "close") return { paddingMeters: 4, zoomBoost: 2 };
+  if (framing === "context") return { paddingMeters: 28, zoomBoost: -1 };
+  return { paddingMeters: 8, zoomBoost: 1 };
 }
 
 function getGeoBounds(points: Array<{ lat: number; lng: number }>) {
