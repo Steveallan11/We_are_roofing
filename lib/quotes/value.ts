@@ -297,7 +297,7 @@ export function normaliseQuoteCostLine(line: CostLineItem): CostLineItem {
       quantity,
       unit_rate: unitRate,
       pricing_category: "temporary_roof_protection",
-      quote_section: "access",
+      quote_section: line.quote_section || "access",
       source_id: line.source_id || "temporary-roof-protection"
     };
   }
@@ -312,7 +312,7 @@ export function normaliseQuoteCostLine(line: CostLineItem): CostLineItem {
       quantity,
       unit_rate: unitRate,
       pricing_category: "standard_scaffold",
-      quote_section: "access",
+      quote_section: line.quote_section || "access",
       source_id: line.source_id || "standard-scaffold"
     };
   }
@@ -378,7 +378,7 @@ function normaliseQuoteOptionCostLine(line: CostLineItem): CostLineItem {
   return {
     ...normalised,
     pricing_category: "roof_works",
-    quote_section: "roof_works",
+    quote_section: normalised.quote_section || "roof_works",
     source_id: normalised.source_id || "roof-works"
   };
 }
@@ -424,10 +424,13 @@ function getDetailedLineItemLabel(item: CostLineItem, category: QuotePriceSummar
 function getCustomerLineItemLabel(item: CostLineItem) {
   const identity = `${item.source_id ?? ""} ${item.item ?? ""} ${item.pricing_category ?? ""} ${item.quote_section ?? ""} ${item.source_label ?? ""}`.toLowerCase();
   const category = getQuoteLineItemCategory(item);
+  const section = item.quote_section && !["roof_works", "access"].includes(item.quote_section) ? item.quote_section : "";
 
-  if (category === "roof_works") return "Roof works";
-  if (identity.includes("temporary roof") || identity.includes("weather protection") || identity.includes("temp roof")) return "Temporary roof protection";
-  if (identity.includes("scaffold")) return "Standard scaffold";
+  if (category === "roof_works") return section ? `${section} roof works` : "Roof works";
+  if (identity.includes("temporary roof") || identity.includes("weather protection") || identity.includes("temp roof")) {
+    return section ? `${section} temporary roof protection` : "Temporary roof protection";
+  }
+  if (identity.includes("scaffold")) return section ? `${section} scaffold` : "Standard scaffold";
   return item.item || "Quote item";
 }
 

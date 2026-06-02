@@ -154,6 +154,41 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     );
   }
 
+  function addSectionPackage(optionId: string) {
+    const sectionName = window.prompt("Section name, e.g. Front elevation, Rear flat roof, Chimney stack");
+    if (!sectionName?.trim()) return;
+    const cleanSectionName = sectionName.trim();
+
+    setOptions((current) =>
+      current.map((option) => {
+        if (option.id !== optionId) return option;
+        const sectionSlug = slugify(cleanSectionName);
+        const cost_breakdown = [
+          ...option.cost_breakdown,
+          {
+            item: "Roof works",
+            cost: 0,
+            vat_applicable: true,
+            notes: "",
+            pricing_category: "roof_works",
+            quote_section: cleanSectionName,
+            source_id: `${sectionSlug}-roof-works`
+          },
+          {
+            item: "Scaffold/access",
+            cost: 0,
+            vat_applicable: true,
+            notes: "",
+            pricing_category: "standard_scaffold",
+            quote_section: cleanSectionName,
+            source_id: `${sectionSlug}-scaffold`
+          }
+        ];
+        return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
+      })
+    );
+  }
+
   function deleteOptionLine(optionId: string, index: number) {
     setOptions((current) =>
       current.map((option) => {
@@ -500,10 +535,14 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
                       <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px_120px] xl:grid-cols-[minmax(0,1fr)_150px_120px_92px_96px]">
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px_150px_120px] xl:grid-cols-[minmax(0,1fr)_150px_150px_120px_92px_96px]">
                           <label className="block">
                             <span className="label">Item</span>
                             <input className="field" onChange={(event) => updateOptionLine(option.id, index, { item: event.target.value })} value={line.item} />
+                          </label>
+                          <label className="block">
+                            <span className="label">Section</span>
+                            <input className="field" onChange={(event) => updateOptionLine(option.id, index, { quote_section: event.target.value })} placeholder="Front slope" value={line.quote_section ?? ""} />
                           </label>
                           <label className="block">
                             <span className="label">Category</span>
@@ -513,7 +552,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                               value={line.pricing_category || getQuoteLineItemCategory(line)}
                             >
                               <option value="roof_works">Roof works</option>
-                              <option value="access">Access / scaffold</option>
+                              <option value="standard_scaffold">Standard scaffold</option>
+                              <option value="temporary_roof_protection">Temporary roof protection</option>
+                              <option value="access">Other access</option>
                             </select>
                           </label>
                           <label className="block">
@@ -534,9 +575,14 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                       </label>
                     </div>
                   ))}
-                  <button className="button-ghost !px-3 !py-2 text-xs" onClick={() => addOptionLine(option.id)} type="button">
-                    + Add line to {option.label}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button className="button-secondary !px-3 !py-2 text-xs" onClick={() => addSectionPackage(option.id)} type="button">
+                      + Add section roof + scaffold
+                    </button>
+                    <button className="button-ghost !px-3 !py-2 text-xs" onClick={() => addOptionLine(option.id)} type="button">
+                      + Add single line
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 grid gap-2 rounded-xl border border-[var(--border)] bg-black/10 p-3 text-sm">
                   {buildQuoteOptionPriceSummary(option).map((row) => (
@@ -930,4 +976,12 @@ function groupQuoteSections(lines: CostLineItem[]) {
   });
 
   return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "section";
 }
