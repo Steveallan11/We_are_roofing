@@ -8,9 +8,11 @@ type DrawingPoint = { lat?: number; lng?: number; x?: number; y?: number };
 type CustomerQuoteDrawingSection = {
   code: string;
   label: string;
+  areaM2: number;
   measurementLm: number;
   roofWorksLm: number;
   scaffoldLm: number;
+  detailLm: number;
   hasRoofWorks: boolean;
   hasScaffold: boolean;
   points: DrawingPoint[];
@@ -227,8 +229,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const customerTitle = customerQuotePlan ? "Customer Quote Roof Plan" : "Customer Roof Measurement Plan";
   const customerSubtitle = customerQuotePlan ? "Lettered sections match the quotation" : "Numbered roof sections used to prepare your quotation";
   const customerPanelTitle = customerQuotePlan ? "Your quoted roof sections" : "How to read this plan";
-  const customerPanelLine1 = customerQuotePlan ? "Each marker is one quoted work section." : "Markers on the roof match the groups below.";
-  const customerPanelLine2 = customerQuotePlan ? "Roof works and scaffold/access are grouped together." : "Prices are shown in the quotation, not on this drawing.";
+  const customerPanelLine1 = customerQuotePlan ? "Letters on the roof match the measured items below." : "Markers on the roof match the groups below.";
+  const customerPanelLine2 = customerQuotePlan ? "Areas show m2. Ridges, valleys, eaves and access show lm." : "Prices are shown in the quotation, not on this drawing.";
 
   if (customerPlan) {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -685,9 +687,11 @@ function buildCustomerQuoteScheduleRows(sections: CustomerQuoteDrawingSection[])
   const rows = visibleSections
     .map((section, index) => {
       const y = 256 + index * 32;
+      const areaMeasurement = section.areaM2 > 0 ? `Area ${formatSquareMetres(section.areaM2)}` : section.points.length >= 3 ? "Area not measured" : null;
       const roofMeasurement = section.roofWorksLm > 0 ? `Roof works ${formatLinearMetres(section.roofWorksLm)}` : null;
       const scaffoldMeasurement = section.scaffoldLm > 0 ? `Scaffold/access ${formatLinearMetres(section.scaffoldLm)}` : null;
-      const scope = [roofMeasurement, scaffoldMeasurement].filter(Boolean).join("  |  ") || "No drawing marker yet";
+      const detailMeasurement = section.detailLm > 0 ? `${linearMeasurementLabel(section.label)} ${formatLinearMetres(section.detailLm)}` : section.lineSegments.length > 0 && !roofMeasurement && !scaffoldMeasurement ? "Linear not measured" : null;
+      const scope = [areaMeasurement, roofMeasurement, scaffoldMeasurement, detailMeasurement].filter(Boolean).join("  |  ") || "No drawing marker yet";
 
       return `
         <g transform="translate(842 ${y})">
@@ -710,9 +714,11 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     const label = customerQuoteSectionLabel(line.label || line.type || `Section ${index + 1}`);
     const existing = groups.get(label) ?? {
       label,
+      areaM2: 0,
       measurementLm: 0,
       roofWorksLm: 0,
       scaffoldLm: 0,
+      detailLm: 0,
       hasRoofWorks: false,
       hasScaffold: false,
       points: [] as DrawingPoint[],
@@ -728,6 +734,8 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
       existing.scaffoldLm += Number(line.length_lm || 0);
     } else if (identity.includes("roof work") || identity.includes("roof works") || identity.includes("section")) {
       existing.roofWorksLm += Number(line.length_lm || 0);
+    } else {
+      existing.detailLm += Number(line.length_lm || 0);
     }
     existing.points.push(...line.points);
     if (line.points.length >= 2) existing.lineSegments.push(line.points);
@@ -739,9 +747,11 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     const label = customerQuoteSectionLabel(section.label || section.type || "Roof Section");
     const existing = groups.get(label) ?? {
       label,
+      areaM2: 0,
       measurementLm: 0,
       roofWorksLm: 0,
       scaffoldLm: 0,
+      detailLm: 0,
       hasRoofWorks: true,
       hasScaffold: false,
       points: [] as DrawingPoint[],
@@ -750,6 +760,7 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
       notes: [] as string[]
     };
     existing.hasRoofWorks = true;
+    existing.areaM2 += Number(section.area_m2 || 0);
     existing.points.push(...section.points);
     if (section.notes) existing.notes.push(section.notes);
     groups.set(label, existing);
@@ -760,9 +771,11 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     if (groups.has(label)) return;
     groups.set(label, {
       label,
+      areaM2: 0,
       measurementLm: 0,
       roofWorksLm: 0,
       scaffoldLm: 0,
+      detailLm: 0,
       hasRoofWorks: typeof quoteSection.roofNet === "number" && quoteSection.roofNet > 0,
       hasScaffold: typeof quoteSection.accessNet === "number" && quoteSection.accessNet > 0,
       points: [],
@@ -835,6 +848,21 @@ function truncateText(value: string, max: number) {
 
 function formatLinearMetres(value: number) {
   return `${value.toFixed(value >= 10 ? 0 : 1)} lm`;
+}
+
+function formatSquareMetres(value: number) {
+  return `${value.toFixed(value >= 10 ? 0 : 1)} m2`;
+}
+
+function linearMeasurementLabel(label: string) {
+  const clean = label.toLowerCase();
+  if (clean.includes("ridge")) return "Ridge";
+  if (clean.includes("valley")) return "Valley";
+  if (clean.includes("hip")) return "Hip";
+  if (clean.includes("eaves")) return "Eaves";
+  if (clean.includes("verge")) return "Verge";
+  if (clean.includes("gutter")) return "Gutter";
+  return "Linear";
 }
 
 function customerRowGroup(label: string) {
