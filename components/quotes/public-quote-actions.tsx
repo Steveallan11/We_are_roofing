@@ -234,6 +234,7 @@ function SectionChoiceList({
       </div>
       {sections.map((section) => {
         const selected = section.indexes.every((index) => selectedLineIndexes.includes(index));
+        const packageSummary = getSectionPackageSummary(section);
         return (
           <button
             className={`w-full rounded-[1.25rem] border-2 p-4 text-left transition ${
@@ -246,18 +247,22 @@ function SectionChoiceList({
             <span className="flex items-start justify-between gap-4">
               <span>
                 <span className={`block font-display text-2xl ${selected ? "text-black" : "text-white"}`}>{section.name}</span>
-                <span className={`mt-1 block font-ui text-sm ${selected ? "text-black/70" : "text-[#cfcfcf]"}`}>Roof works and scaffold/access for this section</span>
+                <span className={`mt-1 block font-ui text-sm ${selected ? "text-black/70" : "text-[#cfcfcf]"}`}>{packageSummary.description}</span>
               </span>
               <span className={`rounded-full px-3 py-1.5 font-ui text-xs font-bold ${selected ? "bg-black text-[var(--gold)]" : "bg-[var(--gold)]/12 text-[var(--gold)]"}`}>
                 {selected ? "Selected" : "Tap to select"}
               </span>
             </span>
-            <span className={`mt-4 block space-y-2 border-t pt-3 ${selected ? "border-black/20" : "border-white/10"}`}>
-              {section.lines.map((line) => (
-                <OptionCardPriceRow isSelected={selected} key={line.originalIndex} label={getLineDisplayLabel(line)} value={Number(line.cost || 0)} />
-              ))}
-              <OptionCardPriceRow isSelected={selected} label="VAT" value={section.vat} />
-              <OptionCardPriceRow isSelected={selected} label="Total inc VAT" strong value={section.total} />
+            <span className={`mt-4 block border-t pt-3 ${selected ? "border-black/20" : "border-white/10"}`}>
+              <span className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-4">
+                <span>
+                  <span className={`block font-ui text-base font-extrabold ${selected ? "text-black" : "text-white"}`}>{section.name} roof works + scaffold/access</span>
+                  <span className={`mt-1 block font-ui text-xs leading-5 ${selected ? "text-black/65" : "text-[#cfcfcf]"}`}>
+                    Includes roof works {currency(packageSummary.roofNet)}{packageSummary.accessNet > 0 ? ` + scaffold/access ${currency(packageSummary.accessNet)}` : ""}{section.vat > 0 ? ` + VAT ${currency(section.vat)}` : ""}
+                  </span>
+                </span>
+                <span className={`shrink-0 text-right font-display text-3xl font-bold ${selected ? "text-black" : "text-[var(--gold-l)]"}`}>{currency(section.total)}</span>
+              </span>
             </span>
           </button>
         );
@@ -325,6 +330,20 @@ function getLineDisplayLabel(line: CostLineItem) {
   if (identity.includes("scaffold") || identity.includes("access")) return "Scaffold/access";
   if (identity.includes("temporary roof") || identity.includes("weather protection")) return "Temporary roof protection";
   return "Roof works";
+}
+
+function getSectionPackageSummary(section: SectionChoice) {
+  const roofNet = section.lines.filter((line) => lineSortOrder(line) === 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const accessNet = section.lines.filter((line) => lineSortOrder(line) > 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const hasRoof = roofNet > 0;
+  const hasAccess = accessNet > 0;
+  const description = hasRoof && hasAccess ? "Roof works and scaffold/access combined for this section" : hasAccess ? "Scaffold/access for this section" : "Roof works for this section";
+
+  return {
+    roofNet: Math.round(roofNet * 100) / 100,
+    accessNet: Math.round(accessNet * 100) / 100,
+    description
+  };
 }
 
 function shouldUseSectionSelection(sections: SectionChoice[], options: QuoteOption[]) {
