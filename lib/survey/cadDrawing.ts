@@ -502,8 +502,8 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
   orderedLines.slice(0, 16).forEach((line, index) => {
     const coords = line.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 2) return;
-    const color = staticMapColor(exportLineColor(index, line));
     const isCustomerQuoteLine = line.type === "Customer Quote Section";
+    const color = staticMapColor(isCustomerQuoteLine ? line.color || EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length] : exportLineColor(index, line));
     params.append("path", [`color:0x${color}${isCustomerQuoteLine ? "aa" : "ff"}`, `weight:${isCustomerQuoteLine ? 2 : 5}`, ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
     if (customerQuoteMap) return;
     const mid = geoMidpoint(coords);
@@ -789,7 +789,11 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
 
   return [...groups.values()]
     .sort((left, right) => naturalLabelCompare(left.label, right.label))
-    .map((section, index) => ({ ...section, code: quoteSectionMarkerLabel(index) }));
+    .map((section, index) => ({
+      ...section,
+      code: quoteSectionMarkerLabel(index),
+      color: EXPORT_SECTION_COLORS[index % EXPORT_SECTION_COLORS.length]
+    }));
 }
 
 function customerQuoteSectionsToMapData(sections: CustomerQuoteDrawingSection[]): Pick<DrawingOpts, "sections" | "lines" | "features"> {
