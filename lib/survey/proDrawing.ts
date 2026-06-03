@@ -382,6 +382,21 @@ function lineColor(line: RoofSurveyLine, fallbackIndex: number) {
   return line.color || PALETTE[fallbackIndex % PALETTE.length];
 }
 
+function isCustomerChoiceLine(line: RoofSurveyLine) {
+  return /\b(ridge|hip)\b/i.test(`${line.type || ""} ${line.label || ""}`);
+}
+
+function customerAreaLabel(index: number) {
+  return `Area ${markerCode(index)}`;
+}
+
+function customerLineLabel(line: RoofSurveyLine, index: number) {
+  const key = `${line.type || ""} ${line.label || ""}`.toLowerCase();
+  const type = key.includes("hip") ? "Hip" : "Ridge";
+  const length = Number(line.length_lm || 0);
+  return `${type} ${markerCode(index)}${length > 0 ? ` - ${length.toFixed(1)} lm` : ""}`;
+}
+
 function markerCode(index: number) {
   let n = index;
   let code = "";
@@ -454,6 +469,7 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
     body: () => {
       const overlay: string[] = [];
       const sectionMarkers: Marker[] = [];
+      const lineMarkers: Marker[] = [];
       const totalArea = opts.sections.reduce((s, x) => s + Number(x.area_m2 || 0), 0);
       const totalLength = opts.lines.reduce((s, x) => s + Number(x.length_lm || 0), 0);
 
@@ -489,19 +505,27 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         sectionMarkers.push({ x: cx, y: cy, code: markerCode(idx), color });
       });
 
-      // Lines are shown as context only on the customer plan. Technical drawings carry the line refs and dimensions.
-      opts.lines.forEach((line, idx) => {
+      // Customer plan only shows ridge/hip choice lines. Everything else belongs on the technical drawing.
+      const customerLines = opts.lines.filter(isCustomerChoiceLine);
+      customerLines.forEach((line, idx) => {
         const ll = line.points.map(toLatLng).filter(Boolean) as LatLng[];
         if (ll.length < 2) return;
         const pts = ll.map(project);
         const color = lineColor(line, idx);
         overlay.push(`
-          <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.70"/>
-          <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="3.5" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>`);
+          <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.86"/>
+          <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="4.8" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>`);
+        const midIdx = Math.floor(pts.length / 2);
+        lineMarkers.push({
+          x: pts[midIdx].x,
+          y: pts[midIdx].y,
+          code: markerCode(opts.sections.length + idx),
+          color
+        });
       });
 
-      // Distribute section markers to avoid overlap.
-      const allMarkers = distributeMarkers(sectionMarkers, 28);
+      // Distribute choice markers to avoid overlap.
+      const allMarkers = distributeMarkers([...sectionMarkers, ...lineMarkers], 28);
       allMarkers.forEach((m) => {
         overlay.push(`
           <g transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})">
@@ -847,7 +871,7 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
     sections.forEach((s, idx) => {
       const color = sectionColor(idx, s.color);
       const area = Number(s.area_m2 || 0);
-      const label = s.label || s.type || `Area ${idx + 1}`;
+      const label = customerSummary ? customerAreaLabel(idx) : s.label || s.type || `Area ${idx + 1}`;
       const conditionText = s.condition ? ` · ${s.condition}` : "";
       parts.push(`
         <g transform="translate(${layout.legendX + 20} ${y})">
@@ -862,15 +886,37 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
     y += 8;
   }
 
-  if (customerSummary && (lines.length || features.length)) {
-    const hiddenCount = lines.length + features.length;
+  if (customerSummary) {
+    const customerLines = lines.filter(isCustomerChoiceLine);
+    if (customerLines.length) {
+      parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="10" font-weight="800" letter-spacing="1.6" fill="#D4AF37">RIDGES &amp; HIPS</text>`);
+      y += 18;
+      customerLines.forEach((line, idx) => {
+        const color = lineColor(line, idx);
+        const codeIndex = sections.length + idx;
+        const code = markerCode(codeIndex);
+        parts.push(`
+          <g transform="translate(${layout.legendX + 20} ${y})">
+            <circle cx="11" cy="-5" r="10" fill="#ffffff" stroke="${color}" stroke-width="2"/>
+            <text x="11" y="-1" text-anchor="middle" font-size="9" font-weight="900" fill="${color}">${escapeXml(code)}</text>
+            <rect x="28" y="-9" width="20" height="6" rx="3" fill="${color}"/>
+            <text x="56" y="-3" font-size="12" font-weight="700" fill="#111827">${escapeXml(customerLineLabel(line, codeIndex))}</text>
+          </g>`);
+        y += 24;
+      });
+      y += 8;
+    }
+
+    const hiddenCount = lines.length - customerLines.length + features.length;
+    if (hiddenCount > 0) {
     parts.push(`
       <g transform="translate(${layout.legendX + 20} ${y})">
         <rect x="0" y="-12" width="${layout.legendW - 40}" height="58" rx="9" fill="#fff7df" stroke="#D4AF37" stroke-opacity="0.35"/>
         <text x="14" y="6" font-size="11" font-weight="800" fill="#111827">Technical details available</text>
-        <text x="14" y="24" font-size="10" fill="#6b7280">${hiddenCount} line/feature item${hiddenCount === 1 ? "" : "s"} are shown on the Technical Takeoff Plan.</text>
+        <text x="14" y="24" font-size="10" fill="#6b7280">${hiddenCount} extra item${hiddenCount === 1 ? "" : "s"} are shown on the Technical Takeoff Plan.</text>
       </g>`);
     y += 78;
+    }
   }
 
   // Lines group
