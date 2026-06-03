@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { MoneyWorkspace } from "@/components/money/money-workspace";
+import { MoneyTabs } from "@/components/money/MoneyTabs";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { getJobs, getPricingRules } from "@/lib/data";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
@@ -18,11 +18,11 @@ export default async function MoneyPage() {
   return (
     <AppShell
       title="Money"
-      subtitle={`${currency(quotePipeline)} quoted | ${currency(outstanding)} outstanding. Quotes, invoices, and money actions in one place.`}
+      subtitle={`${currency(quotePipeline)} pipeline | ${currency(outstanding)} outstanding. Revenue, expenses, invoices, and forecast.`}
       wide
     >
       {!hasRateCard ? <RateCardNudge /> : null}
-      <MoneyWorkspace jobs={jobs} />
+      <MoneyTabs jobs={jobs} />
     </AppShell>
   );
 }
