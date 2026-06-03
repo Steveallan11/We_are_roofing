@@ -542,7 +542,7 @@ function exportLineColor(index: number, line: RoofSurveyLine) {
 }
 
 function framingConfig(framing: TakeoffDrawingFraming) {
-  if (framing === "detail") return { paddingMeters: 1.5, zoomBoost: 3 };
+  if (framing === "detail") return { paddingMeters: 5, zoomBoost: 2 };
   if (framing === "close") return { paddingMeters: 4, zoomBoost: 2 };
   if (framing === "context") return { paddingMeters: 28, zoomBoost: -1 };
   return { paddingMeters: 8, zoomBoost: 1 };
