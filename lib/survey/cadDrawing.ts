@@ -12,6 +12,7 @@ type CustomerQuoteDrawingSection = {
   hasRoofWorks: boolean;
   hasScaffold: boolean;
   points: DrawingPoint[];
+  lineSegments: DrawingPoint[][];
   color: string;
   notes: string[];
 };
@@ -699,6 +700,7 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
       hasRoofWorks: false,
       hasScaffold: false,
       points: [] as DrawingPoint[],
+      lineSegments: [] as DrawingPoint[][],
       color: exportLineColor(groups.size, line),
       notes: [] as string[]
     };
@@ -707,6 +709,7 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     existing.hasRoofWorks ||= identity.includes("roof work") || identity.includes("roof works") || identity.includes("section");
     existing.measurementLm += Number(line.length_lm || 0);
     existing.points.push(...line.points);
+    if (line.points.length >= 2) existing.lineSegments.push(line.points);
     if (line.notes) existing.notes.push(line.notes);
     groups.set(label, existing);
   });
@@ -719,6 +722,7 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
       hasRoofWorks: true,
       hasScaffold: false,
       points: [] as DrawingPoint[],
+      lineSegments: [] as DrawingPoint[][],
       color: section.color || EXPORT_SECTION_COLORS[groups.size % EXPORT_SECTION_COLORS.length],
       notes: [] as string[]
     };
@@ -737,6 +741,7 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
       hasRoofWorks: typeof quoteSection.roofNet === "number" && quoteSection.roofNet > 0,
       hasScaffold: typeof quoteSection.accessNet === "number" && quoteSection.accessNet > 0,
       points: [],
+      lineSegments: [],
       color: EXPORT_SECTION_COLORS[groups.size % EXPORT_SECTION_COLORS.length],
       notes: []
     });
@@ -751,18 +756,34 @@ function customerQuoteSectionsToMapData(sections: CustomerQuoteDrawingSection[])
   return {
     sections: [],
     lines: sections
-      .filter((section) => section.points.length >= 2)
-      .map((section) => ({
-        id: section.label,
-        label: section.label,
-        type: "Customer Quote Section",
-        color: section.color,
-        points: section.points.map(toSurveyPoint),
-        length_lm: section.measurementLm,
-        notes: section.notes.join("\n")
-      })),
+      .map((section) => ({ section, anchor: customerQuoteAnchorSegment(section) }))
+      .filter((item) => item.anchor.length >= 2)
+      .map(({ section, anchor }) => ({
+          id: section.label,
+          label: section.label,
+          type: "Customer Quote Section",
+          color: section.color,
+          points: anchor.map(toSurveyPoint),
+          length_lm: section.measurementLm,
+          notes: section.notes.join("\n")
+        })),
     features: []
   };
+}
+
+function customerQuoteAnchorSegment(section: CustomerQuoteDrawingSection) {
+  if (section.lineSegments.length) {
+    return [...section.lineSegments].sort((left, right) => drawingPointSpan(right) - drawingPointSpan(left))[0];
+  }
+  return section.points;
+}
+
+function drawingPointSpan(points: DrawingPoint[]) {
+  const coords = points.map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
+  if (coords.length < 2) return 0;
+  const bounds = getGeoBounds(coords);
+  if (!bounds) return 0;
+  return Math.abs(bounds.north - bounds.south) + Math.abs(bounds.east - bounds.west);
 }
 
 function toSurveyPoint(point: DrawingPoint) {
