@@ -251,6 +251,15 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .satellite-warning{font:800 14px Montserrat,Arial,sans-serif;fill:#b45309;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
   </style>
   <defs>
+    <filter id="satelliteEnhance">
+      <feColorMatrix type="saturate" values="1.16" />
+      <feComponentTransfer>
+        <feFuncR type="linear" slope="1.08" intercept="-0.02" />
+        <feFuncG type="linear" slope="1.08" intercept="-0.02" />
+        <feFuncB type="linear" slope="1.08" intercept="-0.02" />
+      </feComponentTransfer>
+      <feConvolveMatrix order="3" kernelMatrix="0 -0.45 0 -0.45 2.8 -0.45 0 -0.45 0" preserveAlpha="true" />
+    </filter>
     <clipPath id="mainClip"><rect x="64" y="154" width="742" height="520" rx="18" /></clipPath>
     <clipPath id="insetClip"><rect x="64" y="704" width="250" height="94" rx="14" /></clipPath>
   </defs>
@@ -264,8 +273,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   <rect x="64" y="154" width="742" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
   ${
     satelliteUrl
-      ? `<image href="${escapeXml(satelliteUrl)}" x="64" y="154" width="742" height="520" preserveAspectRatio="xMidYMid slice" clip-path="url(#mainClip)" opacity="0.94" />
-  <rect x="64" y="154" width="742" height="520" rx="18" fill="rgba(0,0,0,0.04)" stroke="${style.soft}" />`
+      ? `<image href="${escapeXml(satelliteUrl)}" x="64" y="154" width="742" height="520" preserveAspectRatio="xMidYMid slice" clip-path="url(#mainClip)" filter="url(#satelliteEnhance)" opacity="0.98" />
+  <rect x="64" y="154" width="742" height="520" rx="18" fill="rgba(0,0,0,0.02)" stroke="${style.soft}" />`
       : gridLines(false)
   }
   ${
@@ -284,7 +293,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   <rect x="64" y="704" width="250" height="94" rx="14" fill="#fbfaf5" stroke="${style.soft}" />
   ${
     satelliteInsetUrl
-      ? `<image href="${escapeXml(satelliteInsetUrl)}" x="64" y="704" width="250" height="94" preserveAspectRatio="xMidYMid slice" clip-path="url(#insetClip)" opacity="0.92" />
+      ? `<image href="${escapeXml(satelliteInsetUrl)}" x="64" y="704" width="250" height="94" preserveAspectRatio="xMidYMid slice" clip-path="url(#insetClip)" filter="url(#satelliteEnhance)" opacity="0.94" />
   <rect x="64" y="704" width="250" height="94" rx="14" fill="rgba(0,0,0,0.04)" stroke="${style.soft}" />`
       : ""
   }
@@ -495,6 +504,7 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const color = staticMapColor(exportSectionColor(index, section.color));
     const path = [`color:0x${color}ff`, `fillcolor:0x${color}88`, "weight:5", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
     params.append("path", path);
+    if (customerQuoteMap) return;
     const centre = geoCentroid(coords);
     params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
   });
@@ -798,16 +808,27 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
 
 function customerQuoteSectionsToMapData(sections: CustomerQuoteDrawingSection[]): Pick<DrawingOpts, "sections" | "lines" | "features"> {
   return {
-    sections: [],
+    sections: sections
+      .filter((section) => section.areaM2 > 0 && section.points.length >= 3)
+      .map((section) => ({
+        id: section.label,
+        label: section.label,
+        type: "Customer Quote Area",
+        condition: "Fair" as const,
+        color: section.color,
+        points: section.points.map(toSurveyPoint),
+        area_m2: section.areaM2,
+        notes: section.notes.join("\n")
+      })),
     lines: sections
       .map((section) => ({ section, anchor: customerQuoteAnchorSegment(section) }))
-      .filter((item) => item.anchor.length >= 2)
+      .filter((item) => item.section.lineSegments.length > 0 && item.anchor.length >= 2)
       .map(({ section, anchor }) => ({
           id: section.label,
           label: section.label,
           type: "Customer Quote Section",
           color: section.color,
-          points: anchor.map(toSurveyPoint),
+          points: straightenDrawingPath(anchor).map(toSurveyPoint),
           length_lm: section.measurementLm,
           notes: section.notes.join("\n")
         })),
@@ -820,6 +841,11 @@ function customerQuoteAnchorSegment(section: CustomerQuoteDrawingSection) {
     return [...section.lineSegments].sort((left, right) => drawingPointSpan(right) - drawingPointSpan(left))[0];
   }
   return section.points;
+}
+
+function straightenDrawingPath(points: DrawingPoint[]) {
+  if (points.length <= 2) return points;
+  return [points[0], points[points.length - 1]].filter(Boolean);
 }
 
 function drawingPointSpan(points: DrawingPoint[]) {
