@@ -18,7 +18,7 @@ export function LoginForm({ defaultEmail, authEnabled }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const next = (searchParams.get("next") || "/dashboard") as Route;
+  const next = (searchParams.get("next") || "/today") as Route;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

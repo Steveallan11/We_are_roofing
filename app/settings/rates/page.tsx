@@ -17,8 +17,8 @@ export default async function RateCardPage() {
       title="Rate Card"
       subtitle="Set the unit rates Gauge and the quote builder use to price survey takeoffs. Without this, imported BOM lines stay at £0."
       actions={
-        <Link className="button-ghost" href="/dashboard">
-          Back to Dashboard
+        <Link className="button-ghost" href="/settings">
+          Back to Settings
         </Link>
       }
     >

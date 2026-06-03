@@ -18,7 +18,7 @@ export default async function NewJobPage({ searchParams }: Props) {
       subtitle="Every lead becomes a job file straight away. Save the customer and property details here, create the permanent job number, then go straight into survey capture."
       actions={
         <Button variant="ghost" size="md" asChild>
-          <Link href={"/dashboard" as Route}>Back to Dashboard</Link>
+          <Link href={"/today" as Route}>Back to Today</Link>
         </Button>
       }
     >

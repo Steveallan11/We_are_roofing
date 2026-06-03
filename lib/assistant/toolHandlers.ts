@@ -566,7 +566,7 @@ async function navigateTo(input: Record<string, unknown>, routeContext?: Assista
   const jobId = job?.id ?? routeContext?.jobId ?? null;
 
   if (!path && destination) {
-    if (destination === "dashboard") path = "/dashboard";
+    if (destination === "dashboard" || destination === "today") path = "/today";
     if (destination === "jobs") path = "/jobs";
     if (destination === "new_job") path = "/jobs/new";
     if (destination === "knowledge") path = "/knowledge";

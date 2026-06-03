@@ -15,10 +15,10 @@ function NavIcon({ path, size = 18, color = "currentColor" }: { path: string; si
 
 const MOBILE_NAV = [
   {
-    id: "home",
-    label: "Home",
-    href: "/dashboard",
-    icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+    id: "today",
+    label: "Today",
+    href: "/today",
+    icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
   },
   {
     id: "jobs",
@@ -27,20 +27,26 @@ const MOBILE_NAV = [
     icon: "M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
   },
   {
+    id: "diary",
+    label: "Diary",
+    href: "/diary",
+    icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+  },
+  {
     id: "money",
     label: "Money",
     href: "/money",
     icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-  },
+  }
+];
+
+const MORE_ITEMS = [
   {
     id: "comms",
     label: "Comms",
     href: "/comms",
     icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-  }
-];
-
-const MORE_ITEMS = [
+  },
   {
     id: "customers",
     label: "Customers",
@@ -52,12 +58,6 @@ const MORE_ITEMS = [
     label: "Calendar",
     href: "/calendar",
     icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
-  },
-  {
-    id: "knowledge",
-    label: "Knowledge",
-    href: "/knowledge",
-    icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
   },
   {
     id: "settings",
@@ -106,13 +106,11 @@ export function MobileBottomNav() {
       <nav aria-label="Primary mobile navigation" className="mobile-bottom-nav no-print lg:hidden">
         <div className="mobile-bottom-nav__inner">
           {MOBILE_NAV.map((item) => {
-            const active = item.href === "/dashboard" ? pathname === "/dashboard" || pathname === "/" : pathname.startsWith(item.href);
-            const isComms = item.id === "comms";
+            const active = item.href === "/today" ? pathname === "/today" || pathname === "/dashboard" || pathname === "/" : pathname.startsWith(item.href);
             return (
               <Link aria-current={active ? "page" : undefined} className={`mobile-bottom-nav__item ${active ? "is-active" : ""}`} href={item.href as Route} key={item.id}>
                 <span className="mobile-bottom-nav__icon">
                   <NavIcon color={active ? "var(--gold)" : "var(--text-faint)"} path={item.icon} />
-                  {isComms && unreadCount > 0 ? <span className="mobile-bottom-nav__badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
                 </span>
                 <span>{item.label}</span>
               </Link>
@@ -127,6 +125,7 @@ export function MobileBottomNav() {
           >
             <span className="mobile-bottom-nav__icon">
               <NavIcon color={moreActive ? "var(--gold)" : "var(--text-faint)"} path={MORE_ICON} />
+              {unreadCount > 0 ? <span className="mobile-bottom-nav__badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
             </span>
             <span>More</span>
           </button>
@@ -140,10 +139,12 @@ export function MobileBottomNav() {
             <div className="mobile-more-sheet__grid">
               {MORE_ITEMS.map((item) => {
                 const active = pathname.startsWith(item.href);
+                const isComms = item.id === "comms";
                 return (
                   <Link className={`mobile-more-sheet__tile ${active ? "is-active" : ""}`} href={item.href as Route} key={item.id} onClick={() => setMoreOpen(false)}>
                     <span className="mobile-more-sheet__tile-icon">
                       <NavIcon color={active ? "var(--gold)" : "var(--text-faint)"} path={item.icon} size={20} />
+                      {isComms && unreadCount > 0 ? <span className="mobile-bottom-nav__badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
                     </span>
                     <span>{item.label}</span>
                   </Link>

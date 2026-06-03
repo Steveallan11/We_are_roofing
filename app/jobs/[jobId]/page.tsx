@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { JobDetailView } from "@/components/jobs/JobDetailView";
@@ -33,7 +34,7 @@ export default async function JobDetailPage({ params }: Props) {
             quote={bundle.quote ?? null}
           />
           <Button variant="ghost" size="md" asChild className="hidden lg:inline-flex">
-            <Link href="/dashboard">Back</Link>
+            <Link href={"/today" as Route}>Back</Link>
           </Button>
         </>
       }

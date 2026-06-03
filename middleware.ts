@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import type { CookieOptions } from "@supabase/ssr";
 import { createServerClient } from "@supabase/ssr";
 
-const protectedPrefixes = ["/dashboard", "/crm", "/jobs", "/customers", "/comms", "/money", "/surveys", "/calendar", "/knowledge", "/settings"];
+const protectedPrefixes = ["/today", "/dashboard", "/diary", "/crm", "/jobs", "/customers", "/comms", "/money", "/surveys", "/calendar", "/knowledge", "/settings"];
 const publicApiPrefixes = ["/api/auth/logout", "/api/weather", "/api/comms/webhooks"];
 
 function isPublicApi(pathname: string) {
@@ -81,11 +81,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname === "/") {
-    return NextResponse.redirect(new URL(session ? "/dashboard" : "/login", request.url));
+    return NextResponse.redirect(new URL(session ? "/today" : "/login", request.url));
   }
 
   if (pathname === "/login" && session) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/today", request.url));
   }
 
   if (isProtectedApi && !session) {
@@ -106,7 +106,9 @@ export const config = {
     "/",
     "/login",
     "/api/:path*",
+    "/today/:path*",
     "/dashboard/:path*",
+    "/diary/:path*",
     "/crm/:path*",
     "/jobs/:path*",
     "/customers/:path*",

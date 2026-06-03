@@ -12,8 +12,11 @@ function getQuickPrompts(pathname: string) {
   if (/^\/jobs\/[^/]+\/quote$/.test(pathname)) {
     return ["What quotes are waiting to be sent?", "Summarise this draft", "What is missing before approval?"];
   }
-  if (pathname === "/dashboard") {
+  if (pathname === "/dashboard" || pathname === "/today") {
     return ["What jobs need following up?", "How many quotes are still waiting?", "What should we move next?"];
+  }
+  if (pathname === "/diary") {
+    return ["Show today's notes", "What did I say about Bedford?", "Summarise today's expenses"];
   }
   return [];
 }
