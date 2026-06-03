@@ -9,9 +9,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 import { createQuotePublicToken } from "@/lib/public-quote";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
-import { getLatestRoofSurvey } from "@/lib/roof-surveys";
-import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
-import { buildTakeoffDrawingSvg } from "@/lib/survey/cadDrawing";
 import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
@@ -26,6 +23,7 @@ export async function POST(request: Request, { params }: Props) {
     body?: string;
     attachment_document_ids?: string[];
     include_roof_plan?: boolean;
+    roof_plan_document_id?: string | null;
   };
 
   if (!canPersistToSupabase()) {
@@ -65,13 +63,20 @@ export async function POST(request: Request, { params }: Props) {
   const messageBody = body.body?.trim() || quote.customer_email_body || "Please find our quotation below.";
 
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);
-  const roofPlanResult = body.include_roof_plan
-    ? await createInlineQuoteRoofPlan(supabase, { bundle, quote }).catch((roofPlanError) => ({
-        error: roofPlanError instanceof Error ? roofPlanError.message : "Could not generate the customer roof plan."
-      }))
-    : null;
-  if (roofPlanResult && "error" in roofPlanResult) {
-    return NextResponse.json({ ok: false, error: roofPlanResult.error }, { status: 400 });
+  const selectedRoofPlanDocumentId = body.roof_plan_document_id?.trim() || null;
+  if (body.include_roof_plan) {
+    if (!selectedRoofPlanDocumentId) {
+      return NextResponse.json({ ok: false, error: "Choose the roof plan document you want linked inside the quote." }, { status: 400 });
+    }
+
+    const roofPlanResult = await linkExistingRoofPlanDocument(supabase, quote.job_id, quoteId, selectedRoofPlanDocumentId).catch((roofPlanError) => ({
+      error: roofPlanError instanceof Error ? roofPlanError.message : "Could not link the selected roof plan document."
+    }));
+    if ("error" in roofPlanResult) {
+      return NextResponse.json({ ok: false, error: roofPlanResult.error }, { status: 400 });
+    }
+  } else {
+    await supabase.from("quote_attachments").delete().eq("quote_id", quoteId).eq("attachment_type", "inline_quote_roof_plan");
   }
 
   const extraAttachmentsResult = await buildDocumentAttachments(supabase, quote.job_id, body.attachment_document_ids ?? []).catch((attachmentError) => ({
@@ -252,94 +257,35 @@ async function buildDocumentAttachments(
   return attachments;
 }
 
-async function createInlineQuoteRoofPlan(
+async function linkExistingRoofPlanDocument(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
-  {
-    bundle,
-    quote
-  }: {
-    bundle: NonNullable<Awaited<ReturnType<typeof getJobBundle>>>;
-    quote: Record<string, any>;
-  }
+  jobId: string,
+  quoteId: string,
+  documentId: string
 ) {
-  const survey = await getLatestRoofSurvey(bundle.job.id, bundle.job.job_title);
-  if (!survey || (!survey.sections.length && !survey.lines.length && !survey.features.length)) {
-    throw new Error("No saved roof takeoff is available for this job yet. Save the takeoff first, then send the quote with the roof plan included.");
-  }
-
-  const svg = buildTakeoffDrawingSvg({
-    projectName: survey.project_name || bundle.job.job_title || quote.quote_ref,
-    jobRef: bundle.job.job_ref || quote.quote_ref,
-    address: bundle.job.property_address || "",
-    customerName: bundle.customer.full_name || "",
-    surveyDate: survey.created_at ? new Date(survey.created_at).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB"),
-    notes: [survey.notes, quote.pricing_notes].filter(Boolean).join(" "),
-    sections: survey.sections,
-    lines: survey.lines,
-    features: survey.features,
-    style: "customer_quote",
-    staticMapFraming: "detail",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-  });
-
-  const bucket = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
-  if (!bucket.ok) throw new Error(bucket.error);
-
-  const safeRef = String(quote.quote_ref || quote.id).replace(/[^a-zA-Z0-9-_]/g, "-");
-  const storagePath = `quotes/${quote.id}/${safeRef}-customer-roof-plan.svg`;
-  const upload = await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(storagePath, Buffer.from(svg, "utf8"), {
-    contentType: "image/svg+xml; charset=utf-8",
-    upsert: true
-  });
-  if (upload.error) throw new Error(upload.error.message);
-
-  const { data: existingDocument } = await supabase
+  const { data: document, error } = await supabase
     .from("job_documents")
-    .select("id")
-    .eq("quote_id", quote.id)
-    .eq("document_type", "quote_roof_plan_svg")
-    .limit(1)
-    .maybeSingle();
+    .select("id, job_id, storage_bucket, storage_path, display_name, mime_type, document_type")
+    .eq("id", documentId)
+    .eq("job_id", jobId)
+    .single();
 
-  const payload = {
-    job_id: bundle.job.id,
-    quote_id: quote.id,
-    document_type: "quote_roof_plan_svg",
-    display_name: `${quote.quote_ref} Customer Roof Plan.svg`,
-    storage_bucket: JOB_DOCUMENTS_BUCKET,
-    storage_path: storagePath,
-    public_url: null,
-    source_type: "generated",
-    mime_type: "image/svg+xml",
-    file_size: Buffer.byteLength(svg, "utf8"),
-    content_html: null
-  };
-
-  const documentResult = existingDocument?.id
-    ? await supabase.from("job_documents").update(payload).eq("id", existingDocument.id).select("id").single()
-    : await supabase.from("job_documents").insert(payload).select("id").single();
-
-  if (documentResult.error || !documentResult.data?.id) {
-    throw new Error(documentResult.error?.message ?? "Could not save the customer roof plan document.");
+  if (error || !document) {
+    throw new Error(error?.message ?? "The selected roof plan document could not be found on this job.");
   }
 
-  const documentId = documentResult.data.id as string;
-  const { data: existingAttachment } = await supabase
-    .from("quote_attachments")
-    .select("id")
-    .eq("quote_id", quote.id)
-    .eq("job_document_id", documentId)
-    .eq("attachment_type", "inline_quote_roof_plan")
-    .limit(1)
-    .maybeSingle();
-
-  if (!existingAttachment?.id) {
-    await supabase.from("quote_attachments").insert({
-      quote_id: quote.id,
-      job_document_id: documentId,
-      attachment_type: "inline_quote_roof_plan"
-    });
+  if (!document.storage_bucket || !document.storage_path) {
+    throw new Error("The selected roof plan document is not stored correctly yet.");
   }
+
+  await supabase.from("quote_attachments").delete().eq("quote_id", quoteId).eq("attachment_type", "inline_quote_roof_plan");
+
+  const insertResult = await supabase.from("quote_attachments").insert({
+    quote_id: quoteId,
+    job_document_id: documentId,
+    attachment_type: "inline_quote_roof_plan"
+  });
+  if (insertResult.error) throw new Error(insertResult.error.message);
 
   return { documentId };
 }

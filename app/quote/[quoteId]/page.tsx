@@ -55,9 +55,20 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
             {roofPlan ? (
               <QuoteSection title="Your Roof Plan" intro="The lettered sections on this plan match the quote sections below.">
-                <div className="overflow-hidden rounded-2xl border border-[var(--gold)]/25 bg-white">
-                  <img alt="Customer roof plan with lettered quote sections" className="h-auto w-full" src={roofPlan.href} />
-                </div>
+                {roofPlan.mimeType?.startsWith("image/") || roofPlan.mimeType === "image/svg+xml" ? (
+                  <div className="overflow-hidden rounded-2xl border border-[var(--gold)]/25 bg-white">
+                    <img alt="Customer roof plan with lettered quote sections" className="h-auto w-full" src={roofPlan.href} />
+                  </div>
+                ) : (
+                  <a
+                    className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[var(--gold)] px-5 py-3 font-ui text-base font-extrabold text-black transition hover:opacity-90"
+                    href={roofPlan.href}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    View roof plan
+                  </a>
+                )}
                 <p className="font-ui text-base leading-7 text-[var(--text-muted)]">
                   Prices stay in the quote section, so this drawing stays clean and easy to follow.
                 </p>
@@ -117,7 +128,7 @@ async function getInlineRoofPlanHref(supabase: ReturnType<typeof createSupabaseA
 
   const signed = await supabase.storage.from(document.storage_bucket).createSignedUrl(document.storage_path, 60 * 60);
   const href = signed.data?.signedUrl;
-  return href ? { href, displayName: document.display_name ?? "Customer roof plan" } : null;
+  return href ? { href, displayName: document.display_name ?? "Customer roof plan", mimeType: document.mime_type ?? null } : null;
 }
 
 function QuoteSection({ children, intro, title }: { children: ReactNode; intro?: string; title: string }) {

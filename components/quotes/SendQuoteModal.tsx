@@ -21,10 +21,12 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
   const [email, setEmail] = useState(customerEmail ?? "");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [includeRoofPlan, setIncludeRoofPlan] = useState(false);
+  const [roofPlanDocumentId, setRoofPlanDocumentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const attachableDocuments = documents.filter(isAttachableDocument);
+  const roofPlanDocuments = documents.filter(isRoofPlanDocument);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -49,7 +51,12 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
     const response = await fetch(`/api/quotes/${quoteId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: nextEmail, attachment_document_ids: selectedDocumentIds, include_roof_plan: includeRoofPlan })
+      body: JSON.stringify({
+        to_email: nextEmail,
+        attachment_document_ids: selectedDocumentIds,
+        include_roof_plan: includeRoofPlan,
+        roof_plan_document_id: includeRoofPlan ? roofPlanDocumentId || null : null
+      })
     });
 
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
@@ -190,20 +197,49 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
           )}
         </div>
 
-        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-5">
-          <input
-            checked={includeRoofPlan}
-            className="mt-1"
-            onChange={(event) => setIncludeRoofPlan(event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <span className="block text-sm font-bold text-white">Show customer roof plan inside quote</span>
-            <span className="mt-1 block text-sm leading-6 text-[var(--muted)]">
-              Optional. If this job has a saved roof takeoff, we&apos;ll generate the clean lettered customer plan and show it on the secure quote page before the prices.
+        <div className="mt-5 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-5">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              checked={includeRoofPlan}
+              className="mt-1"
+              onChange={(event) => {
+                setIncludeRoofPlan(event.target.checked);
+                if (!event.target.checked) setRoofPlanDocumentId("");
+                if (event.target.checked && !roofPlanDocumentId && roofPlanDocuments[0]?.id) {
+                  setRoofPlanDocumentId(roofPlanDocuments[0].id);
+                }
+              }}
+              type="checkbox"
+            />
+            <span>
+              <span className="block text-sm font-bold text-white">Link an existing roof plan inside the quote</span>
+              <span className="mt-1 block text-sm leading-6 text-[var(--muted)]">
+                Optional. Choose a roof plan document you have already created and we&apos;ll show a clean link to it on the secure quote page.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+          {includeRoofPlan ? (
+            roofPlanDocuments.length > 0 ? (
+              <label className="mt-4 block">
+                <span className="label">Roof plan document</span>
+                <select
+                  className="field mt-2"
+                  onChange={(event) => setRoofPlanDocumentId(event.target.value)}
+                  value={roofPlanDocumentId}
+                >
+                  <option value="">Choose a roof plan</option>
+                  {roofPlanDocuments.map((document) => (
+                    <option key={document.id} value={document.id}>
+                      {document.display_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="mt-4 text-sm text-[var(--muted)]">No existing roof plan documents were found on this job yet. Add one to the job documents first, then send the quote with it linked.</p>
+            )
+          ) : null}
+        </div>
 
         {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
         {success ? <p className="mt-4 text-sm text-[#7ce3a6]">{success}</p> : null}
@@ -236,6 +272,20 @@ function getDocumentTypeLabel(document: JobDocumentRecord) {
   if (document.document_type === "invoice_pdf") return "Invoice PDF";
   if (document.document_type === "survey_snapshot") return "Survey snapshot";
   return document.document_type.replace(/_/g, " ");
+}
+
+function isRoofPlanDocument(document: JobDocumentRecord) {
+  if (!document.storage_bucket || !document.storage_path) return false;
+  const name = `${document.display_name || ""} ${document.document_type || ""} ${document.mime_type || ""}`.toLowerCase();
+  return (
+    name.includes("roof plan") ||
+    name.includes("quote_roof_plan") ||
+    name.includes("survey_snapshot") ||
+    name.includes("takeoff") ||
+    document.mime_type === "image/svg+xml" ||
+    document.mime_type === "application/pdf" ||
+    document.mime_type?.startsWith("image/")
+  );
 }
 
 function formatFileSize(size: number) {
