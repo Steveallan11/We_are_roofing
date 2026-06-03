@@ -199,6 +199,8 @@ function QuotesTab({ quotes, onInvoiceCreated }: { quotes: Array<{ job: MoneyJob
         <SendQuoteModal
           customerEmail={quoteToSend.job.customer?.email}
           customerName={quoteToSend.job.customer?.full_name ?? "Customer"}
+          defaultEmailBody={quoteToSend.quote.customer_email_body}
+          defaultEmailSubject={quoteToSend.quote.customer_email_subject}
           documents={quoteToSend.job.documents ?? []}
           jobTitle={quoteToSend.job.job_title}
           isFromPrice={isQuoteFromOptionValue(quoteToSend.quote)}

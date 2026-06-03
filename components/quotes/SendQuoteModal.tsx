@@ -12,13 +12,31 @@ type Props = {
   isFromPrice?: boolean;
   customerName: string;
   customerEmail: string | null | undefined;
+  defaultEmailSubject?: string | null;
+  defaultEmailBody?: string | null;
   documents?: JobDocumentRecord[];
   onClose: () => void;
   onSent: (message: string) => void;
 };
 
-export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice = false, customerName, customerEmail, documents = [], onClose, onSent }: Props) {
+export function SendQuoteModal({
+  quoteId,
+  quoteRef,
+  jobTitle,
+  total,
+  isFromPrice = false,
+  customerName,
+  customerEmail,
+  defaultEmailSubject,
+  defaultEmailBody,
+  documents = [],
+  onClose,
+  onSent
+}: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
+  const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
+  const [emailSubject, setEmailSubject] = useState(defaultEmailSubject || `Your We Are Roofing quotation - ${quoteRef}`);
+  const [emailBody, setEmailBody] = useState(defaultEmailBody || "Your roofing quotation is ready to review. Please use the button below to view the quote online.");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [includeRoofPlan, setIncludeRoofPlan] = useState(false);
   const [roofPlanDocumentId, setRoofPlanDocumentId] = useState("");
@@ -53,6 +71,9 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to_email: nextEmail,
+        subject: emailSubject.trim(),
+        body: emailBody.trim(),
+        email_customer_name: emailGreetingName.trim(),
         attachment_document_ids: selectedDocumentIds,
         include_roof_plan: includeRoofPlan,
         roof_plan_document_id: includeRoofPlan ? roofPlanDocumentId || null : null
@@ -125,6 +146,42 @@ export function SendQuoteModal({ quoteId, quoteRef, jobTitle, total, isFromPrice
             type="email"
             value={email}
           />
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-black/20 p-5">
+          <div>
+            <p className="label">Draft email</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">Edit the greeting, subject, and message before sending the secure quote link.</p>
+          </div>
+          <div className="mt-4 grid gap-4">
+            <label className="block">
+              <span className="label">Greeting name</span>
+              <input
+                className="field mt-2"
+                onChange={(event) => setEmailGreetingName(event.target.value)}
+                placeholder="Mr and Mrs Smith"
+                value={emailGreetingName}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Email subject</span>
+              <input
+                className="field mt-2"
+                onChange={(event) => setEmailSubject(event.target.value)}
+                placeholder="Your roofing quotation"
+                value={emailSubject}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Email message</span>
+              <textarea
+                className="field mt-2 min-h-40 leading-7"
+                onChange={(event) => setEmailBody(event.target.value)}
+                placeholder="Write the email message customers will see above the View Quote button."
+                value={emailBody}
+              />
+            </label>
+          </div>
         </div>
 
         <div className="mt-5 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-5">

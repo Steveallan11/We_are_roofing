@@ -21,6 +21,7 @@ export async function POST(request: Request, { params }: Props) {
     to_email?: string;
     subject?: string;
     body?: string;
+    email_customer_name?: string;
     attachment_document_ids?: string[];
     include_roof_plan?: boolean;
     roof_plan_document_id?: string | null;
@@ -61,6 +62,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const subject = body.subject?.trim() || quote.customer_email_subject || `Your We Are Roofing quotation - ${quote.quote_ref}`;
   const messageBody = body.body?.trim() || quote.customer_email_body || "Please find our quotation below.";
+  const emailCustomerName = body.email_customer_name?.trim() || bundle.customer.full_name;
 
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);
   const selectedRoofPlanDocumentId = body.roof_plan_document_id?.trim() || null;
@@ -112,7 +114,8 @@ export async function POST(request: Request, { params }: Props) {
     to: toEmail,
     subject,
     html: quoteSentEmail({
-      customerName: bundle.customer.full_name,
+      customerName: emailCustomerName,
+      messageBody,
       quote,
       quoteUrl,
       businessPhone: bundle.business.phone,

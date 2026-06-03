@@ -208,6 +208,8 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
         <SendQuoteModal
           customerEmail={customerEmail}
           customerName={customerName}
+          defaultEmailBody={quote.customer_email_body}
+          defaultEmailSubject={quote.customer_email_subject}
           documents={documents}
           jobTitle={jobTitle}
           isFromPrice={isQuoteFromOptionValue(quote)}
