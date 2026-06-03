@@ -23,6 +23,15 @@ function buildFooterText({ businessEmail, businessPhone }: BusinessFooter) {
   return ["We Are Roofing UK Ltd", "Yateley, Hampshire", businessPhone, businessEmail].filter(Boolean).join(" - ");
 }
 
+function greetingName(customerName: string) {
+  const clean = customerName.replace(/\s+/g, " ").trim();
+  if (!clean) return "there";
+  const lower = clean.toLowerCase();
+  const formalOrJoint = /^(mr|mrs|ms|miss|dr|prof|sir|lady|lord)\b/.test(lower) || /\b(and|&)\b/.test(lower);
+  if (formalOrJoint) return clean;
+  return clean.split(" ")[0] || clean;
+}
+
 export function surveyConfirmationEmail(props: {
   customerName: string;
   surveyDate: string;
@@ -35,11 +44,11 @@ export function surveyConfirmationEmail(props: {
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
-  const firstName = props.customerName.split(" ")[0] || props.customerName;
+  const helloName = greetingName(props.customerName);
   return shell(
     "Survey Confirmed",
     `
-      <p style="font-size:16px;margin-top:0">Hi ${firstName},</p>
+      <p style="font-size:16px;margin-top:0">Hi ${helloName},</p>
       <p style="font-size:14px;line-height:1.6;color:#555">Your roof survey has been confirmed. Here are the details:</p>
       <div style="background:#faf9f6;border:1px solid #e8e4da;border-left:3px solid #D4AF37;border-radius:6px;padding:16px 20px;margin:20px 0">
         <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;font-weight:700">Survey details</div>
@@ -68,10 +77,11 @@ export function quoteSentEmail(props: {
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
+  const helloName = greetingName(props.customerName);
   return shell(
     "Your Roofing Quote Is Ready",
     `
-      <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${props.customerName.split(" ")[0] || props.customerName},</p>
+      <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${helloName},</p>
       <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
         Your roofing quotation is ready to review. We have laid it out in clear sections so you can read the roof report, understand the proposed works, and choose the next step without digging through small print.
       </p>
@@ -105,7 +115,7 @@ export function invoiceSentEmail(props: {
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
-  const firstName = props.customerName.split(" ")[0] || props.customerName;
+  const helloName = greetingName(props.customerName);
   return shell(
     "Your Roofing Invoice",
     `
@@ -113,7 +123,7 @@ export function invoiceSentEmail(props: {
         <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00">Payment Due</div>
         <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-top:6px">Please pay by ${props.dueDate}</div>
       </div>
-      <p style="font-size:16px;margin-top:0">Hi ${firstName},</p>
+      <p style="font-size:16px;margin-top:0">Hi ${helloName},</p>
       <p style="font-size:14px;line-height:1.6;color:#555">
         Please find your invoice for ${props.jobTitle} at ${props.propertyAddress}.
       </p>
@@ -150,20 +160,20 @@ export function nurtureEmail(
   day: number,
   props: { customerName: string; town?: string | null; quoteUrl: string; quoteRef: string; businessPhone?: string | null; businessEmail?: string | null }
 ) {
-  const firstName = props.customerName.split(" ")[0] || props.customerName;
+  const helloName = greetingName(props.customerName);
   const copy: Record<number, { title: string; body: string }> = {
-    2: { title: `Any questions about your quote, ${firstName}?`, body: `Just checking in to see if you had any questions about quote ${props.quoteRef}. Happy to talk through any aspect of it on the phone.` },
+    2: { title: `Any questions about your quote, ${helloName}?`, body: `Just checking in to see if you had any questions about quote ${props.quoteRef}. Happy to talk through any aspect of it on the phone.` },
     5: { title: `A similar job near ${props.town || "you"}`, body: "We recently helped a homeowner with a similar roofing issue. The main thing is making sure the scope is clear, safe, and properly guaranteed before any work starts." },
     10: { title: "What to look for when choosing a roofer", body: "A good quote should clearly explain access, scaffold, materials, waste, guarantees, and exactly what is excluded. If anything is vague, ask before you commit." },
     14: { title: "Your quote is still valid", body: "Just a reminder that material and scaffold pricing can move, but your quote is still here for review if you would like to proceed." },
-    21: { title: `Still here if you need us, ${firstName}`, body: "If now is not the right time, no problem at all. When you are ready, we are still here to help." }
+    21: { title: `Still here if you need us, ${helloName}`, body: "If now is not the right time, no problem at all. When you are ready, we are still here to help." }
   };
   const item = copy[day] ?? copy[2];
   return {
     subject: item.title,
     html: shell(
       `Quote Follow-up Day ${day}`,
-      `<p style="font-size:16px;margin-top:0">Hi ${firstName},</p><p style="font-size:14px;line-height:1.7;color:#555">${item.body}</p><p style="text-align:center;margin:24px 0"><a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:10px 20px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none">View quote</a></p>`,
+      `<p style="font-size:16px;margin-top:0">Hi ${helloName},</p><p style="font-size:14px;line-height:1.7;color:#555">${item.body}</p><p style="text-align:center;margin:24px 0"><a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:10px 20px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none">View quote</a></p>`,
       { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
     )
   };

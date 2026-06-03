@@ -68,6 +68,7 @@ async function generateSurveyReport(bundle: Awaited<ReturnType<typeof getJobBund
 function buildSurveyReportHtml(customerName: string, jobRef: string, report: any) {
   const findings = Array.isArray(report.findings) ? report.findings : [];
   const recommendations = Array.isArray(report.recommendations) ? report.recommendations : [];
+  const helloName = greetingName(customerName);
   return `
     <div style="background:#f8f7f4;padding:40px 20px;font-family:Helvetica,Arial,sans-serif">
       <div style="max-width:620px;margin:0 auto;background:white;border:1px solid #e8e4da">
@@ -76,7 +77,7 @@ function buildSurveyReportHtml(customerName: string, jobRef: string, report: any
           <div style="color:#777;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-top:4px">Survey Report ${jobRef}</div>
         </div>
         <div style="padding:32px">
-          <p>Hi ${customerName.split(" ")[0] || customerName},</p>
+          <p>Hi ${helloName},</p>
           <div style="border-left:3px solid #D4AF37;background:#faf9f6;padding:16px;margin:18px 0;color:#333">${report.executiveSummary || ""}</div>
           <p><strong>Overall condition:</strong> ${report.conditionOverall || "Fair"}</p>
           <h3>Findings</h3>
@@ -89,4 +90,12 @@ function buildSurveyReportHtml(customerName: string, jobRef: string, report: any
       </div>
     </div>
   `;
+}
+
+function greetingName(customerName: string) {
+  const clean = customerName.replace(/\s+/g, " ").trim();
+  if (!clean) return "there";
+  const lower = clean.toLowerCase();
+  if (/^(mr|mrs|ms|miss|dr|prof|sir|lady|lord)\b/.test(lower) || /\b(and|&)\b/.test(lower)) return clean;
+  return clean.split(" ")[0] || clean;
 }
