@@ -96,6 +96,9 @@ function greetingName(customerName: string) {
   const clean = customerName.replace(/\s+/g, " ").trim();
   if (!clean) return "there";
   const lower = clean.toLowerCase();
-  if (/^(mr|mrs|ms|miss|dr|prof|sir|lady|lord)\b/.test(lower) || /\b(and|&)\b/.test(lower)) return clean;
-  return clean.split(" ")[0] || clean;
+  const parts = clean.split(" ");
+  const startsWithInitials = parts.length >= 2 && parts.slice(0, 2).every((part) => /^[a-z]\.?$/i.test(part));
+  const looksLikeBusiness = /\b(ltd|limited|llp|plc|company|co\.?|group|holdings|maintenance|management|properties|property|contractors?|builders?|services?|roofing)\b/i.test(clean);
+  if (/^(mr|mrs|ms|miss|dr|prof|sir|lady|lord)\b/.test(lower) || /\b(and|&)\b/.test(lower) || startsWithInitials || looksLikeBusiness) return clean;
+  return parts[0] || clean;
 }
