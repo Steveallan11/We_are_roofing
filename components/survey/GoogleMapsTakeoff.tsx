@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
 import { buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingFraming, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
+import { buildCleanSatellite, buildProDrawingSvg, downloadProPng, downloadProSvg, printProDrawing, type ProDrawingStyle } from "@/lib/survey/proDrawing";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
 import type { RoofSurveyRecord, SurveyPoint } from "@/lib/survey/types";
@@ -1091,6 +1092,109 @@ function ExportButtons(props: {
         ZIP
       </button>
       </div>
+
+      <ProDrawingExports {...props} />
+    </div>
+  );
+}
+
+function ProDrawingExports(props: {
+  projectName: string;
+  jobRef: string;
+  address: string;
+  customerName: string;
+  surveyDate: string;
+  notes: string;
+  rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
+}) {
+  const [proStyle, setProStyle] = useState<ProDrawingStyle>("satellite-pro");
+  const [proFraming, setProFraming] = useState<"close" | "building" | "context">("building");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function makeProSvg() {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    let satelliteImageHref: string | null = null;
+    let satelliteMeta = null;
+
+    if (proStyle === "satellite-pro" && apiKey) {
+      const built = buildCleanSatellite(
+        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features, framing: proFraming },
+        apiKey,
+        proFraming
+      );
+      if (built) {
+        satelliteImageHref = await imageUrlToDataUrl(built.url);
+        satelliteMeta = built.meta;
+      }
+    }
+
+    return buildProDrawingSvg({
+      projectName: props.projectName,
+      jobRef: props.jobRef,
+      address: props.address,
+      customerName: props.customerName,
+      surveyDate: props.surveyDate,
+      notes: props.notes,
+      sections: props.rows.sections,
+      lines: props.rows.lines,
+      features: props.rows.features,
+      style: proStyle,
+      framing: proFraming,
+      satelliteImageHref,
+      satelliteMeta
+    });
+  }
+
+  async function run(action: (svg: string) => void | Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      const svg = await makeProSvg();
+      await action(svg);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to build drawing.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-5 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-l)]">Pro drawings (test)</p>
+        <span className="text-[10px] text-[var(--muted)]">A3 landscape · dimensioned</span>
+      </div>
+      <label className="block">
+        <span className="label">Style</span>
+        <select className="field mt-1" onChange={(e) => setProStyle(e.target.value as ProDrawingStyle)} value={proStyle}>
+          <option value="satellite-pro">Satellite plan + dimensions (recommended for customer)</option>
+          <option value="schematic-cad">Schematic CAD drawing (hatched materials)</option>
+          <option value="dimensioned-bw">Dimensioned B&amp;W technical drawing</option>
+        </select>
+      </label>
+      {proStyle === "satellite-pro" ? (
+        <label className="block">
+          <span className="label">Framing</span>
+          <select className="field mt-1" onChange={(e) => setProFraming(e.target.value as "close" | "building" | "context")} value={proFraming}>
+            <option value="building">Whole building (recommended)</option>
+            <option value="close">Close-up detail</option>
+            <option value="context">Wider site context</option>
+          </select>
+        </label>
+      ) : null}
+      <div className="grid grid-cols-3 gap-2">
+        <button className="button-secondary !py-2 text-xs" disabled={busy} onClick={() => void run((svg) => printProDrawing(svg, `${props.jobRef}-pro-plan`))} type="button">
+          {busy ? "Building…" : "Print PDF"}
+        </button>
+        <button className="button-ghost !py-2 text-xs" disabled={busy} onClick={() => void run((svg) => downloadProPng(svg, `${props.jobRef}-pro-plan`))} type="button">
+          PNG
+        </button>
+        <button className="button-ghost !py-2 text-xs" disabled={busy} onClick={() => void run((svg) => downloadProSvg(svg, `${props.jobRef}-pro-plan`))} type="button">
+          SVG
+        </button>
+      </div>
+      {error ? <p className="text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }
