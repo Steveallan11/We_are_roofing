@@ -5,16 +5,17 @@ import { JobCard } from "@/components/jobs/job-card";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { Button, Card, PageSection } from "@/components/ui/primitives";
-import { getBusiness, getJobs, getPricingRules, getUnreadCustomerReplies } from "@/lib/data";
+import { getBusiness, getJobs, getPricingRules, getUnreadCustomerReplies, getUpcomingDiaryTasks } from "@/lib/data";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
 import { formatDate } from "@/lib/utils";
 
 export default async function TodayPage() {
-  const [business, jobs, pricingRules, unreadReplies] = await Promise.all([
+  const [business, jobs, pricingRules, unreadReplies, upcomingTasks] = await Promise.all([
     getBusiness(),
     getJobs(),
     getPricingRules(),
-    getUnreadCustomerReplies()
+    getUnreadCustomerReplies(),
+    getUpcomingDiaryTasks()
   ]);
   const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const now = new Date();
@@ -61,6 +62,35 @@ export default async function TodayPage() {
     >
       <div className="stack">
         {!hasRateCard ? <RateCardNudge /> : null}
+
+        {upcomingTasks.length > 0 ? (
+          <PageSection
+            kicker="Tasks due"
+            title={`${upcomingTasks.length} ${upcomingTasks.length === 1 ? "task" : "tasks"} overdue or today`}
+            description="Complete or reschedule."
+            actions={
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/diary">View Diary</Link>
+              </Button>
+            }
+          >
+            <div className="grid gap-2">
+              {upcomingTasks.slice(0, 3).map((task) => (
+                <Link
+                  className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 p-3 text-sm transition-colors hover:border-[#f59e0b]"
+                  href={task.linked_job_id ? (`/jobs/${task.linked_job_id}` as Route) : "/diary"}
+                  key={task.id}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-[var(--text)]">{task.title || "Untitled task"}</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{task.entry_type}</span>
+                  </div>
+                  {task.body ? <p className="mt-1 truncate text-xs text-[var(--text-muted)]">{task.body}</p> : null}
+                </Link>
+              ))}
+            </div>
+          </PageSection>
+        ) : null}
 
         {unreadReplies.length > 0 ? (
           <PageSection

@@ -339,6 +339,56 @@ function isMissingRelationError(message: string) {
   return /relation .* does not exist|schema cache|could not find the table/i.test(message);
 }
 
+export type DiaryTask = {
+  id: string;
+  entry_type: "task" | "reminder";
+  title: string | null;
+  body: string | null;
+  task_due_date: string | null;
+  task_assigned_to: string | null;
+  task_completed: boolean;
+  linked_job_id: string | null;
+  created_at: string;
+};
+
+/**
+ * Incomplete tasks/reminders due today or earlier.
+ * Used by Today "Tasks due" section.
+ */
+export async function getUpcomingDiaryTasks(): Promise<DiaryTask[]> {
+  if (!canUseSupabase()) return [];
+  const supabase = createSupabaseAdminClient();
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("diary_entries")
+    .select("id, entry_type, title, body, task_due_date, task_assigned_to, task_completed, linked_job_id, created_at")
+    .in("entry_type", ["task", "reminder"])
+    .eq("task_completed", false)
+    .lte("task_due_date", today)
+    .order("task_due_date", { ascending: true })
+    .limit(20);
+
+  if (error) {
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Upcoming diary tasks could not be loaded:", error.message);
+    }
+    return [];
+  }
+
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    entry_type: (row.entry_type as "task" | "reminder") ?? "task",
+    title: (row.title as string | null) ?? null,
+    body: (row.body as string | null) ?? null,
+    task_due_date: (row.task_due_date as string | null) ?? null,
+    task_assigned_to: (row.task_assigned_to as string | null) ?? null,
+    task_completed: Boolean(row.task_completed),
+    linked_job_id: row.linked_job_id ? String(row.linked_job_id) : null,
+    created_at: String(row.created_at ?? "")
+  }));
+}
+
 export async function getHistoricalQuotes(limit = 100): Promise<HistoricalQuoteRecord[]> {
   if (!canUseSupabase()) {
     return [];
