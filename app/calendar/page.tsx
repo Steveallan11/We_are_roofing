@@ -6,6 +6,7 @@ import { getBookings, getJobs } from "@/lib/data";
 import { googleCalendarLink } from "@/lib/calendar/generateICS";
 import { formatDate } from "@/lib/utils";
 import { MonthViewClient } from "@/components/calendar/MonthViewClient";
+import { WeekViewClient } from "@/components/calendar/WeekViewClient";
 
 type CalendarEvent = {
   id: string;
@@ -31,12 +32,13 @@ const FILTERS = [
 
 export default async function CalendarPage({ searchParams }: { searchParams?: Promise<{ view?: string; display?: string }> }) {
   const [params, bookings, jobs] = await Promise.all([
-    searchParams ?? Promise.resolve({ view: undefined as string | undefined, display: "month" as string | undefined }),
+    searchParams ?? Promise.resolve({ view: undefined as string | undefined, display: undefined as string | undefined }),
     getBookings(),
     getJobs()
   ]);
   const view = params.view;
-  const display = params.display ?? "month";
+  const defaultDisplay = "week";
+  const display = params.display ?? defaultDisplay;
   const activeView: string = FILTERS.some((filter) => filter.id === view) && view ? view : "all";
 
   const startDates: CalendarEvent[] = jobs
@@ -129,7 +131,13 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
         </section>
 
         <PageSection
-          kicker={display === "month" ? "Month View" : "Diary View"}
+          kicker={
+            display === "month"
+              ? "Month View"
+              : display === "week"
+                ? "Week View"
+                : "Diary View"
+          }
           title="Upcoming schedule"
           actions={
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -150,6 +158,9 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
                 })}
               </div>
               <div className="flex gap-1">
+                <Button variant={display === "week" ? "primary" : "subtle"} size="sm" asChild className="rounded-full">
+                  <Link href={`/calendar?view=${activeView}&display=week` as Route}>Week</Link>
+                </Button>
                 <Button variant={display === "month" ? "primary" : "subtle"} size="sm" asChild className="rounded-full">
                   <Link href={`/calendar?view=${activeView}&display=month` as Route}>Month</Link>
                 </Button>
@@ -162,6 +173,8 @@ export default async function CalendarPage({ searchParams }: { searchParams?: Pr
         >
           {display === "month" ? (
             <MonthViewClient events={visibleEvents} filterView={activeView} />
+          ) : display === "week" ? (
+            <WeekViewClient events={visibleEvents} filterView={activeView} />
           ) : (
             <div className="grid gap-5">
               {groupedEvents.length ? (
