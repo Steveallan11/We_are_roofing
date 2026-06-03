@@ -46,10 +46,11 @@ export default async function JobDetailPage({ params }: Props) {
         quote={bundle.quote ?? null}
         documents={bundle.documents}
         photos={bundle.photos}
-      materials={bundle.materials}
-      labourPlan={bundle.labour_plan ?? null}
-      invoices={bundle.invoices}
+        materials={bundle.materials}
+        labourPlan={bundle.labour_plan ?? null}
+        invoices={bundle.invoices}
         emailLogs={bundle.email_logs}
+        activity={bundle.activity ?? []}
         paymentSchedule={paymentSchedule}
       />
     </AppShell>

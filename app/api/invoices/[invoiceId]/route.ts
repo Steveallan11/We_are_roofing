@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { ActivityType } from "@/lib/activity/types";
 import type { InvoiceStatus } from "@/lib/types";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -52,12 +54,42 @@ export async function PATCH(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: update.error?.message ?? "Unable to update invoice." }, { status: 500 });
   }
 
-  if (body.status === "Paid" && paidAmount > Number(invoice.amount_paid ?? 0)) {
+  const paymentDelta = body.status === "Paid" ? paidAmount - Number(invoice.amount_paid ?? 0) : 0;
+  if (paymentDelta > 0) {
     await supabase.from("invoice_payments").insert({
       invoice_id: invoiceId,
-      amount: paidAmount - Number(invoice.amount_paid ?? 0),
+      amount: paymentDelta,
       payment_method: body.payment_method ?? "Manual",
       payment_reference: body.payment_reference ?? null
+    });
+  }
+
+  if (body.status !== invoice.status) {
+    const activityType: ActivityType = body.status === "Paid" ? "payment_received" : body.status === "Sent" ? "invoice_sent" : "status_changed";
+    const message =
+      body.status === "Paid"
+        ? `Payment received: £${paymentDelta.toFixed(2)} for ${invoice.invoice_ref}`
+        : body.status === "Sent"
+          ? `Invoice ${invoice.invoice_ref} sent`
+          : `Invoice ${invoice.invoice_ref} marked ${body.status}`;
+    await createActivity(supabase, {
+      business_id: invoice.business_id ? String(invoice.business_id) : null,
+      job_id: invoice.job_id ? String(invoice.job_id) : null,
+      invoice_id: invoiceId,
+      activity_type: activityType,
+      message,
+      actor_type: "user",
+      actor_id: auth.session.user?.id ?? null,
+      actor_name: auth.session.user?.email ?? null,
+      linked_entity_type: "invoice",
+      linked_entity_id: invoiceId,
+      details: {
+        from_status: invoice.status,
+        to_status: body.status,
+        amount: paymentDelta || undefined,
+        payment_method: body.payment_method ?? null,
+        payment_reference: body.payment_reference ?? null
+      }
     });
   }
 

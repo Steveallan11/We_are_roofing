@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { createJobSchema } from "@/lib/validators";
 import { deleteJobWithCleanup } from "@/lib/jobs/deleteJob";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -181,6 +182,18 @@ export async function POST(request: Request) {
   if (jobError || !job) {
     return NextResponse.json({ ok: false, error: jobError?.message ?? "Unable to create job." }, { status: 500 });
   }
+
+  await createActivity(supabase, {
+    business_id: businessId,
+    job_id: String(job.id),
+    customer_id: customer.id,
+    activity_type: "job_created",
+    message: `Job ${String(job.job_ref ?? "")} created for ${displayName}`.trim(),
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    details: { job_ref: job.job_ref, source: customerPayload.source ?? null }
+  });
 
   return NextResponse.json({
     ok: true,

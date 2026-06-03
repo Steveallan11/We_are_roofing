@@ -159,7 +159,7 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
   const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return null;
 
-  const [businessResult, customerResult, surveyResult, quoteResult, invoiceResult, materialResult, photoResult, documentResult, emailResult] = await Promise.all([
+  const [businessResult, customerResult, surveyResult, quoteResult, invoiceResult, materialResult, photoResult, documentResult, emailResult, activityResult] = await Promise.all([
     supabase.from("businesses").select("*").eq("id", job.business_id).single(),
     supabase.from("customers").select("*").eq("id", job.customer_id).single(),
     supabase.from("surveys").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -168,7 +168,8 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     supabase.from("materials").select("*").eq("job_id", jobId).order("created_at", { ascending: true }),
     supabase.from("job_photos").select("*").eq("job_id", jobId).order("uploaded_at", { ascending: false }),
     supabase.from("job_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-    supabase.from("email_logs").select("*").eq("job_id", jobId).order("sent_at", { ascending: false })
+    supabase.from("email_logs").select("*").eq("job_id", jobId).order("sent_at", { ascending: false }),
+    supabase.from("job_activity").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(100)
   ]);
   const labourPlan = await getJobLabourPlan(jobId);
 
@@ -183,7 +184,8 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     labour_plan: labourPlan,
     photos: (photoResult.data as JobBundle["photos"] | null) ?? [],
     documents: (documentResult.data as JobDocumentRecord[] | null) ?? [],
-    email_logs: (emailResult.data as EmailLog[] | null) ?? []
+    email_logs: (emailResult.data as EmailLog[] | null) ?? [],
+    activity: activityResult.error ? [] : ((activityResult.data as JobBundle["activity"]) ?? [])
   };
 }
 

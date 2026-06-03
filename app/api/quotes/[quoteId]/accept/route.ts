@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createActivity } from "@/lib/activity/createActivity";
 import { learnPricingFromQuote } from "@/lib/pricing/learning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
@@ -91,7 +92,25 @@ export async function POST(request: Request, { params }: Props) {
     .update({ status: "Accepted", accepted_at: new Date().toISOString(), estimated_value: acceptedTotal, updated_at: new Date().toISOString() })
     .eq("id", quoteRecord.job_id);
 
-  const { data: job } = await supabase.from("jobs").select("business_id").eq("id", quoteRecord.job_id).maybeSingle();
+  const { data: job } = await supabase.from("jobs").select("business_id, customer_id").eq("id", quoteRecord.job_id).maybeSingle();
+
+  await createActivity(supabase, {
+    business_id: job?.business_id ? String(job.business_id) : null,
+    job_id: quoteRecord.job_id,
+    customer_id: job?.customer_id ? String(job.customer_id) : null,
+    quote_id: quoteId,
+    activity_type: "quote_accepted",
+    message: `${customerName} accepted quote ${quoteRecord.quote_ref}`,
+    actor_type: "customer",
+    actor_name: customerName,
+    linked_entity_type: "quote",
+    linked_entity_id: quoteId,
+    details: {
+      customer_email: customerEmail,
+      accepted_option_id: acceptedOption?.id ?? null,
+      total: acceptedTotal
+    }
+  });
   if (job?.business_id) {
     const learning = await learnPricingFromQuote({
       supabase,

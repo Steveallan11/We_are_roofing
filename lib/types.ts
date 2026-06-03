@@ -790,4 +790,5 @@ export type JobBundle = {
   photos: JobPhoto[];
   documents: JobDocumentRecord[];
   email_logs: EmailLog[];
+  activity?: import("@/lib/activity/types").ActivityRecord[];
 };

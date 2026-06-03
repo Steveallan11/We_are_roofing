@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { getJobBundle } from "@/lib/data";
 import { buildInvoiceLineItemsFromQuote, persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -81,6 +82,22 @@ export async function POST(_request: Request, { params }: Props) {
 
   const invoice = data as InvoiceRecord;
   const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [invoice, ...bundle.invoices] }, invoice);
+
+  await createActivity(supabase, {
+    business_id: bundle.business.id,
+    job_id: bundle.job.id,
+    customer_id: bundle.customer.id,
+    quote_id: bundle.quote.id,
+    invoice_id: invoice.id,
+    activity_type: "invoice_created",
+    message: `Invoice ${invoiceRef} created for £${total.toFixed(2)}`,
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    linked_entity_type: "invoice",
+    linked_entity_id: invoice.id,
+    details: { invoice_ref: invoiceRef, total, quote_ref: bundle.quote.quote_ref }
+  });
 
   return NextResponse.json({
     ok: true,

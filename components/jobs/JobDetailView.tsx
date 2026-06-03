@@ -36,9 +36,10 @@ import { getJobDocumentHref } from "@/lib/documents";
 import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate, cn } from "@/lib/utils";
+import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
+import { NextActionButton } from "@/components/jobs/NextActionButton";
+import type { ActivityRecord } from "@/lib/activity/types";
 import {
-  buildActivityFeed,
-  getActivityDotClass,
   getDocumentDisplayType,
   groupDocuments,
   formatFileSize,
@@ -69,6 +70,7 @@ export type JobDetailViewProps = {
   labourPlan?: LabourPlanRecord | null;
   invoices: InvoiceRecord[];
   emailLogs: EmailLog[];
+  activity?: ActivityRecord[];
   paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 };
 
@@ -85,7 +87,7 @@ const TABS: { value: TabId; label: string }[] = [
 ];
 
 export function JobDetailView(props: JobDetailViewProps) {
-  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, emailLogs, paymentSchedule } = props;
+  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, emailLogs, activity, paymentSchedule } = props;
 
   const router = useRouter();
   const pathname = usePathname();
@@ -114,13 +116,15 @@ export function JobDetailView(props: JobDetailViewProps) {
     : "TBC";
 
   return (
-    <div className="stack">
+    <div className="stack pb-20 lg:pb-0">
       <JobDetailHeader
         job={job}
         customer={customer}
         nextAction={nextAction}
         stageColors={stageColors}
       />
+
+      <MobileNextActionBar job={{ ...job, customer, quote: quote ?? null }} />
 
       <Tabs value={validInitialTab} onValueChange={handleTabChange} className="stack">
         <div className="sticky top-0 z-20 -mx-4 bg-[var(--ink)]/80 px-4 backdrop-blur-md md:relative md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none">
@@ -172,7 +176,7 @@ export function JobDetailView(props: JobDetailViewProps) {
         </TabsContent>
 
         <TabsContent value="activity">
-          <ActivityTab job={job} documents={documents} emailLogs={emailLogs} quote={quote} survey={survey} />
+          <ActivityTab job={job} emailLogs={emailLogs} activity={activity ?? []} />
         </TabsContent>
       </Tabs>
     </div>
@@ -649,66 +653,17 @@ function DocumentRow({ document }: { document: JobDocumentRecord }) {
 
 function ActivityTab({
   job,
-  documents,
   emailLogs,
-  quote,
-  survey
+  activity
 }: {
   job: Job;
-  documents: JobDocumentRecord[];
   emailLogs: EmailLog[];
-  quote?: QuoteRecord | null;
-  survey?: SurveyRecord | null;
+  activity: ActivityRecord[];
 }) {
-  const workflowTimeline = [
-    { label: "Job created", date: job.created_at, detail: job.job_ref ?? "Job file opened" },
-    { label: "Survey booked", date: job.survey_date, detail: survey ? "Survey workspace active" : "Waiting for survey" },
-    { label: "Survey completed", date: survey?.updated_at ?? survey?.created_at, detail: survey ? "Survey details saved" : null },
-    { label: "Quote generated", date: quote?.created_at, detail: quote?.quote_ref ?? null },
-    { label: "Quote sent", date: quote?.sent_at ?? job.quote_sent_at, detail: quote?.status === "Sent" ? "Customer has received quote" : null },
-    { label: "Accepted", date: job.accepted_at, detail: job.status === "Accepted" ? "Ready to book in" : null },
-    { label: "Completed", date: job.completed_at, detail: job.status === "Completed" ? "Ready for final paperwork" : null }
-  ].filter((event) => event.date || event.detail);
-
-  const feed = buildActivityFeed({ events: workflowTimeline, documents, emailLogs, jobId: job.id });
-
   return (
     <div className="stack">
-      <PageSection kicker="Recent activity" title="Timeline" description="Key milestones, emails, and filed documents.">
-        {feed.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No activity recorded yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {feed.map((event, index) => (
-              <div key={`${event.type}-${event.label}-${index}`} className="grid grid-cols-[1rem_1fr] gap-3">
-                <div className="relative flex justify-center">
-                  <span className={cn("mt-1.5 h-2.5 w-2.5 rounded-full", getActivityDotClass(event.type))} />
-                  {index < feed.length - 1 ? (
-                    <span className="absolute top-4 h-[calc(100%+0.25rem)] w-px bg-[var(--border)]" />
-                  ) : null}
-                </div>
-                <Card variant="outlined" padding="sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-[var(--text)]">{event.label}</p>
-                      <Badge size="sm" variant="neutral">{event.badge}</Badge>
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)]">{formatDate(event.date ?? null)}</p>
-                  </div>
-                  {event.detail ? <p className="mt-1 text-xs text-[var(--text-muted)]">{event.detail}</p> : null}
-                  {event.href ? (
-                    <Link
-                      className="mt-2 inline-flex text-xs font-semibold text-[var(--gold)] underline-offset-4 hover:underline"
-                      href={event.href as Route}
-                    >
-                      Open →
-                    </Link>
-                  ) : null}
-                </Card>
-              </div>
-            ))}
-          </div>
-        )}
+      <PageSection kicker="Recent activity" title="Timeline" description="Audited log of everything that happens on this job.">
+        <ActivityTimeline entries={activity} jobId={job.id} emptyMessage="No activity logged yet. Activity is recorded automatically as the job progresses." />
       </PageSection>
 
       <PageSection
@@ -784,5 +739,17 @@ function SmartButton({
     <Button asChild {...props}>
       <Link href={href as Route}>{children}</Link>
     </Button>
+  );
+}
+
+/* -----------------  Mobile sticky next-action bar  ----------------- */
+
+function MobileNextActionBar({ job }: { job: React.ComponentProps<typeof NextActionButton>["job"] }) {
+  return (
+    <div className="fixed inset-x-0 bottom-[calc(var(--mobile-bottom-nav-height,4rem)+0.5rem)] z-30 px-4 lg:hidden">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--ink)]/95 p-2 shadow-[0_-6px_18px_rgba(0,0,0,0.45)] backdrop-blur-md">
+        <NextActionButton job={job} size="md" fullWidth showWhyLabel />
+      </div>
+    </div>
   );
 }

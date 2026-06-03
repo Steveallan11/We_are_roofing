@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { getJobBundle } from "@/lib/data";
 import { quoteSentEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -157,6 +158,26 @@ export async function POST(request: Request, { params }: Props) {
   if (toEmail !== (bundle.customer.email ?? "")) {
     await supabase.from("customers").update({ email: toEmail }).eq("id", bundle.customer.id);
   }
+
+  await createActivity(supabase, {
+    business_id: bundle.business.id,
+    job_id: quote.job_id,
+    customer_id: bundle.customer.id,
+    quote_id: quoteId,
+    activity_type: "quote_sent",
+    message: `Quote ${quote.quote_ref} sent to ${toEmail}`,
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    linked_entity_type: "quote",
+    linked_entity_id: quoteId,
+    details: {
+      to_email: toEmail,
+      subject,
+      provider_message_id: emailResult.id ?? null,
+      total: Number(sentQuote.total ?? 0)
+    }
+  });
 
   if (bundle.customer.phone) {
     await sendSMS({

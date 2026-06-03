@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { googleCalendarLink, type CalendarBooking } from "@/lib/calendar/generateICS";
 import { surveyConfirmationEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -126,6 +127,25 @@ export async function POST(request: Request, { params }: Props) {
       templateType: "survey_confirmation"
     });
   }
+
+  await createActivity(supabase, {
+    business_id: bundle.business.id,
+    job_id: jobId,
+    customer_id: bundle.customer.id,
+    activity_type: "survey_booked",
+    message: `Survey booked for ${dateText} at ${body.time_start}`,
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    details: {
+      date: body.date,
+      time: body.time_start,
+      duration_mins: duration,
+      address,
+      sent_email: Boolean(body.send_email),
+      sent_sms: Boolean(body.send_sms)
+    }
+  });
 
   return NextResponse.json({ ok: true, booking, calendar_url: `${appUrl}/calendar` });
 }

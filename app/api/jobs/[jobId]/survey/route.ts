@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   formatSurveySnapshotValue,
@@ -158,6 +159,24 @@ async function saveSurvey(request: Request, { params }: Props) {
       updated_at: new Date().toISOString()
     })
     .eq("id", jobId);
+
+  const { data: jobMeta } = await supabase.from("jobs").select("business_id, customer_id").eq("id", jobId).maybeSingle();
+
+  await createActivity(supabase, {
+    business_id: jobMeta?.business_id ? String(jobMeta.business_id) : null,
+    job_id: jobId,
+    customer_id: jobMeta?.customer_id ? String(jobMeta.customer_id) : null,
+    activity_type: existingSurvey ? "survey_edited" : "survey_saved",
+    message: existingSurvey
+      ? `Survey updated by ${surveyorName}`
+      : `Survey completed by ${surveyorName}`,
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    linked_entity_type: "survey",
+    linked_entity_id: surveyResult.data.id,
+    details: { survey_type: surveyType, roof_type: roofType, next_status: nextStatus }
+  });
 
   return NextResponse.json({
     ok: true,
