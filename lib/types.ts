@@ -792,3 +792,42 @@ export type JobBundle = {
   email_logs: EmailLog[];
   activity?: import("@/lib/activity/types").ActivityRecord[];
 };
+
+export type DiaryEntryType = "voice_note" | "text_note" | "photo" | "reminder" | "task" | "expense" | "payment";
+export type ExpenseCategory = "materials" | "labour" | "subcontractor" | "fuel" | "travel" | "other";
+export type PaymentMethod = "cash" | "transfer" | "card" | "other";
+
+export type DiaryEntry = {
+  id: string;
+  business_id: string;
+  user_id: string | null;
+  entry_type: DiaryEntryType;
+
+  title: string | null;
+  body: string | null;
+
+  voice_url: string | null;
+  voice_transcript: string | null;
+  voice_transcript_by: "user" | "gauge" | "system";
+
+  photos: Array<{ url: string; caption?: string; type?: string }>;
+
+  linked_job_id: string | null;
+  linked_customer_id: string | null;
+  linked_supplier_id: string | null;
+
+  task_due_date: string | null;
+  task_completed: boolean;
+  task_assigned_to: string | null;
+
+  expense_amount: number | null;
+  expense_category: ExpenseCategory | null;
+  expense_receipt_url: string | null;
+
+  payment_amount: number | null;
+  payment_to_name: string | null;
+  payment_method: PaymentMethod | null;
+
+  created_at: string;
+  updated_at: string;
+};
