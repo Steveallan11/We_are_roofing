@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { learnPricingFromQuote } from "@/lib/pricing/learning";
 import { calculateOptionNet, calculateOptionVat, getQuotePipelineValue, normaliseQuoteCostLine, normaliseQuoteOption } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -108,6 +109,26 @@ export async function PATCH(request: Request, { params }: Props) {
       updated_at: new Date().toISOString()
     })
     .eq("id", existingQuote.job_id);
+
+  if (job?.business_id) {
+    const learningLines = [
+      ...((updatedQuote.cost_breakdown ?? []) as CostLineItem[]),
+      ...normalisedOptions.flatMap((option) => option.cost_breakdown ?? [])
+    ];
+    const learning = await learnPricingFromQuote({
+      supabase,
+      businessId: String(job.business_id),
+      jobId: existingQuote.job_id,
+      quoteId,
+      lines: learningLines,
+      sourceType: "quote_save"
+    });
+
+    if (learning.notes.length) {
+      const nextNotes = [...new Set([...(Array.isArray(updatedQuote.pricing_notes) ? updatedQuote.pricing_notes : []), ...learning.notes])];
+      await supabase.from("quotes").update({ pricing_notes: nextNotes, updated_at: new Date().toISOString() }).eq("id", quoteId);
+    }
+  }
 
   return NextResponse.json({ ok: true, quote: updatedQuote });
 }

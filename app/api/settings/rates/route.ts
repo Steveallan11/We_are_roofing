@@ -72,8 +72,7 @@ export async function POST(request: Request) {
     flat_adjustment: rate.rate,
     uplift_multiplier: 1,
     active: rate.active !== false,
-    preferred_supplier_id: rate.preferred_supplier_id || null,
-    notes: "Rate Card unit price"
+    preferred_supplier_id: rate.preferred_supplier_id || null
   }));
 
   const deleteExisting = await supabase

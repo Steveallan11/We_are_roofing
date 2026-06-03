@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { learnPricingFromQuote } from "@/lib/pricing/learning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
@@ -48,6 +49,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   let acceptedTotal = Number(quoteRecord.total ?? 0);
+  let acceptedLines = (quoteRecord.cost_breakdown ?? []) as CostLineItem[];
   const quoteUpdates: Record<string, unknown> = {
     status: "Accepted",
     accepted_option_id: acceptedOption?.id ?? null,
@@ -67,6 +69,7 @@ export async function POST(request: Request, { params }: Props) {
     quoteUpdates.vat_amount = selectedTotals.vat_amount;
     quoteUpdates.total = selectedTotals.total;
     acceptedTotal = selectedTotals.total;
+    acceptedLines = selectedLines;
   } else if (acceptedOption) {
     const selectedLines = (acceptedOption.cost_breakdown ?? []).map(normaliseCostLine);
     const selectedTotals = calculateTotals(selectedLines);
@@ -75,6 +78,7 @@ export async function POST(request: Request, { params }: Props) {
     quoteUpdates.vat_amount = selectedTotals.vat_amount;
     quoteUpdates.total = selectedTotals.total;
     acceptedTotal = selectedTotals.total;
+    acceptedLines = selectedLines;
   }
 
   const { error: updateError } = await supabase.from("quotes").update(quoteUpdates).eq("id", quoteId);
@@ -86,6 +90,23 @@ export async function POST(request: Request, { params }: Props) {
     .from("jobs")
     .update({ status: "Accepted", accepted_at: new Date().toISOString(), estimated_value: acceptedTotal, updated_at: new Date().toISOString() })
     .eq("id", quoteRecord.job_id);
+
+  const { data: job } = await supabase.from("jobs").select("business_id").eq("id", quoteRecord.job_id).maybeSingle();
+  if (job?.business_id) {
+    const learning = await learnPricingFromQuote({
+      supabase,
+      businessId: String(job.business_id),
+      jobId: quoteRecord.job_id,
+      quoteId,
+      lines: acceptedLines,
+      sourceType: "quote_accept"
+    });
+
+    if (learning.notes.length) {
+      const nextNotes = [...new Set([...(Array.isArray(quoteRecord.pricing_notes) ? quoteRecord.pricing_notes : []), ...learning.notes])];
+      await supabase.from("quotes").update({ pricing_notes: nextNotes, updated_at: new Date().toISOString() }).eq("id", quoteId);
+    }
+  }
 
   return NextResponse.json({ ok: true, accepted_option_id: acceptedOption?.id ?? null });
 }

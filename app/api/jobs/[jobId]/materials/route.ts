@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { learnPricingFromMaterial } from "@/lib/pricing/learning";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -39,5 +40,22 @@ export async function POST(request: Request, { params }: Props) {
     .single();
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (data?.unit_cost) {
+    const { data: job } = await supabase.from("jobs").select("business_id").eq("id", jobId).maybeSingle();
+    if (job?.business_id) {
+      await learnPricingFromMaterial({
+        supabase,
+        businessId: String(job.business_id),
+        jobId,
+        materialId: data.id,
+        itemName: data.item_name,
+        category: data.category,
+        quantity: data.quantity,
+        unit: data.unit,
+        unitCost: data.unit_cost,
+        totalCost: data.total_cost
+      });
+    }
+  }
   return NextResponse.json({ ok: true, material: data });
 }
