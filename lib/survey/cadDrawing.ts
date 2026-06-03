@@ -89,6 +89,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const totalArea = opts.sections.reduce((sum, section) => sum + Number(section.area_m2 || 0), 0);
   const totalLength = opts.lines.reduce((sum, line) => sum + Number(line.length_lm || 0), 0);
   const customerPlan = opts.style === "satellite";
+  const orderedCustomerLines = customerPlan ? orderCustomerLines(opts.lines) : opts.lines;
 
   const sectionShapes = useStaticMapGeometry
     ? ""
@@ -139,7 +140,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const mapCode = opts.style === "satellite" ? sectionMarkerLabel : (index: number) => `L${index + 1}`;
   const legendRows = [
     ...opts.sections.map((section, index) => ({ color: exportSectionColor(index, section.color), code: opts.style === "satellite" ? sectionMarkerLabel(index) : `S${index + 1}`, label: section.label || section.type, value: `${Number(section.area_m2 || 0).toFixed(1)} m2` })),
-    ...opts.lines.map((line, index) => ({ color: exportLineColor(index, line), code: mapCode(opts.sections.length + index), label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
+    ...orderedCustomerLines.map((line, index) => ({ color: exportLineColor(index, line), code: mapCode(opts.sections.length + index), label: line.label || line.type, value: `${Number(line.length_lm || 0).toFixed(1)} lm` })),
     ...opts.features.map((feature, index) => ({ color: feature.color || gold, code: opts.style === "satellite" ? sectionMarkerLabel(opts.sections.length + opts.lines.length + index) : `I${index + 1}`, label: feature.label || feature.type, value: "1 no." }))
   ];
 
@@ -184,20 +185,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .slice(0, 3)
     .map((line, index) => `<text x="64" y="${780 + index * 18}" class="notes-text">${escapeXml(line)}</text>`)
     .join("");
-  const customerScheduleRows = legendRows
-    .slice(0, 14)
-    .map((row, index) => {
-      const y = 248 + index * 34;
-      return `
-        <g transform="translate(842 ${y})">
-          <circle cx="13" cy="-5" r="12" fill="${row.color}" stroke="#111827" stroke-width="1.5" />
-          <text x="13" y="0" text-anchor="middle" class="customer-code">${escapeXml(row.code)}</text>
-          <text x="34" y="-6" class="customer-label">${escapeXml(row.label || "Measured section")}</text>
-          <text x="264" y="-6" text-anchor="end" class="customer-value">${escapeXml(row.value)}</text>
-          <text x="34" y="12" class="customer-note">${escapeXml(customerRowDescription(row.label || "Measured item"))}</text>
-        </g>`;
-    })
-    .join("");
+  const customerScheduleRows = buildCustomerScheduleRows(legendRows.slice(0, 16));
 
   if (customerPlan) {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -208,6 +196,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .subtitle,.meta,.notes-text{font:500 13px Montserrat,Arial,sans-serif;fill:${muted}}
     .panel-title{font:800 12px Montserrat,Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;fill:${gold}}
     .panel-helper{font:600 11px Montserrat,Arial,sans-serif;fill:${muted}}
+    .customer-group{font:900 10px Montserrat,Arial,sans-serif;letter-spacing:1.5px;text-transform:uppercase;fill:${gold}}
     .customer-code{font:900 10px Montserrat,Arial,sans-serif;fill:#fff}
     .customer-label{font:800 12px Montserrat,Arial,sans-serif;fill:${text}}
     .customer-value{font:900 12px Montserrat,Arial,sans-serif;fill:${text}}
@@ -243,7 +232,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
 
   <rect x="828" y="154" width="308" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
   <text x="848" y="186" class="panel-title">How to read this plan</text>
-  <text x="848" y="208" class="panel-helper">Numbers on the roof match this list.</text>
+  <text x="848" y="208" class="panel-helper">Markers on the roof match the groups below.</text>
   <text x="848" y="226" class="panel-helper">Prices are shown in the quotation, not on this drawing.</text>
   ${customerScheduleRows || `<text x="848" y="258" class="subtitle">No measured items yet.</text>`}
 
@@ -440,6 +429,7 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
   const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, crop.paddingMeters) : null;
   const center = bounds ? geoBoundsCenter(bounds) : null;
   const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, crop.zoomBoost) : null;
+  const orderedLines = orderCustomerLines(opts.lines);
   const params = new URLSearchParams({
     key: apiKey,
     maptype: "satellite",
@@ -457,17 +447,17 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const coords = section.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 3) return;
     const color = staticMapColor(exportSectionColor(index, section.color));
-    const path = [`color:0x${color}ff`, `fillcolor:0x${color}aa`, "weight:8", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
+    const path = [`color:0x${color}ff`, `fillcolor:0x${color}88`, "weight:5", ...coords.map((point) => `${point.lat},${point.lng}`), `${coords[0].lat},${coords[0].lng}`].join("|");
     params.append("path", path);
     const centre = geoCentroid(coords);
     params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(index)}|${centre.lat},${centre.lng}`);
   });
 
-  opts.lines.slice(0, 16).forEach((line, index) => {
+  orderedLines.slice(0, 16).forEach((line, index) => {
     const coords = line.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 2) return;
     const color = staticMapColor(exportLineColor(index, line));
-    params.append("path", [`color:0x${color}ff`, "weight:9", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    params.append("path", [`color:0x${color}ff`, "weight:5", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
     const mid = geoMidpoint(coords);
     params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(opts.sections.length + index)}|${mid.lat},${mid.lng}`);
   });
@@ -595,6 +585,62 @@ function customerRowDescription(label: string) {
   if (clean.toLowerCase().includes("scaffold") || clean.toLowerCase().includes("access")) return "Access/scaffold reference";
   if (clean.toLowerCase().includes("section")) return "Measured quote section";
   return "Measured roof item";
+}
+
+function buildCustomerScheduleRows(rows: Array<{ color: string; code: string; label?: string; value: string }>) {
+  const groups = [
+    { key: "section", title: "Roof work sections", rows: rows.filter((row) => customerRowGroup(row.label || "") === "section") },
+    { key: "ridge", title: "Ridge runs", rows: rows.filter((row) => customerRowGroup(row.label || "") === "ridge") },
+    { key: "detail", title: "Other measured details", rows: rows.filter((row) => customerRowGroup(row.label || "") === "detail") }
+  ].filter((group) => group.rows.length);
+  const output: string[] = [];
+  let y = 252;
+
+  groups.forEach((group) => {
+    output.push(`<text x="848" y="${y}" class="customer-group">${escapeXml(group.title)}</text>`);
+    y += 24;
+    group.rows.forEach((row) => {
+      output.push(`
+        <g transform="translate(842 ${y})">
+          <circle cx="13" cy="-5" r="10" fill="${row.color}" stroke="#111827" stroke-width="1.3" />
+          <text x="13" y="-1" text-anchor="middle" class="customer-code">${escapeXml(row.code)}</text>
+          <text x="32" y="-7" class="customer-label">${escapeXml(row.label || "Measured section")}</text>
+          <text x="264" y="-7" text-anchor="end" class="customer-value">${escapeXml(row.value)}</text>
+          <text x="32" y="10" class="customer-note">${escapeXml(customerRowDescription(row.label || "Measured item"))}</text>
+        </g>`);
+      y += 30;
+    });
+    y += 8;
+  });
+
+  return output.join("");
+}
+
+function customerRowGroup(label: string) {
+  const clean = label.toLowerCase();
+  if (clean.includes("ridge")) return "ridge";
+  if (clean.includes("section") || clean.includes("eaves") || clean.includes("verge")) return "section";
+  return "detail";
+}
+
+function orderCustomerLines(lines: RoofSurveyLine[]) {
+  return [...lines].sort((a, b) => {
+    const groupDelta = customerLineSortOrder(a) - customerLineSortOrder(b);
+    if (groupDelta !== 0) return groupDelta;
+    return naturalLabelCompare(a.label || a.type || "", b.label || b.type || "");
+  });
+}
+
+function customerLineSortOrder(line: RoofSurveyLine) {
+  const label = `${line.label || ""} ${line.type || ""}`.toLowerCase();
+  if (label.includes("section") || label.includes("eaves") || label.includes("verge")) return 1;
+  if (label.includes("ridge")) return 2;
+  if (label.includes("valley") || label.includes("hip")) return 3;
+  return 4;
+}
+
+function naturalLabelCompare(a: string, b: string) {
+  return a.localeCompare(b, "en-GB", { numeric: true, sensitivity: "base" });
 }
 
 function wrapText(value: string, max: number) {
