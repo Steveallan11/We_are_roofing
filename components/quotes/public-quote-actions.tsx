@@ -23,6 +23,7 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
   );
   const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>(() => sectionChoices.flatMap((section) => section.indexes));
   const [status, setStatus] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const selectedOption = useSectionSelection ? null : options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
   const hasSelection = useSectionSelection ? selectedLineIndexes.length > 0 : options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
   const hasName = customerName.trim().length >= 2;
@@ -71,6 +72,19 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
     });
     setStatus(response.ok ? "Message sent to We Are Roofing." : "Sorry, message could not be sent.");
     if (response.ok) setMessage("");
+  }
+
+  async function downloadPDF() {
+    setIsDownloading(true);
+    try {
+      const url = `/api/quotes/${quoteId}/public-pdf?token=${encodeURIComponent(secureToken)}`;
+      window.location.href = url;
+    } catch (error) {
+      console.error("Download error:", error);
+      setStatus("Sorry, the PDF download failed. Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   return (
@@ -169,14 +183,24 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
           <input className="field min-h-12" onChange={(event) => setCustomerEmail(event.target.value)} placeholder="Email address" type="email" inputMode="email" autoComplete="email" value={customerEmail} />
         </div>
         <p className={`mt-4 font-ui text-sm font-semibold ${canAccept ? "text-[#166534]" : "text-[#8a4b00]"}`}>{acceptanceHelper}</p>
-        <button
-          className="mt-4 min-h-14 w-full rounded-xl bg-[var(--gold)] px-5 py-3 font-ui text-base font-extrabold text-black shadow-[0_10px_28px_rgba(212,175,55,0.28)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#d6caa0] disabled:text-[#6a6248] disabled:shadow-none"
-          disabled={!canAccept}
-          onClick={accept}
-          type="button"
-        >
-          Accept This Quote
-        </button>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <button
+            className="min-h-14 w-full rounded-xl bg-[var(--gold)] px-5 py-3 font-ui text-base font-extrabold text-black shadow-[0_10px_28px_rgba(212,175,55,0.28)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#d6caa0] disabled:text-[#6a6248] disabled:shadow-none"
+            disabled={!canAccept}
+            onClick={accept}
+            type="button"
+          >
+            Accept This Quote
+          </button>
+          <button
+            className="min-h-14 w-full rounded-xl border-2 border-[var(--gold)] bg-transparent px-5 py-3 font-ui text-base font-extrabold text-[var(--gold)] transition hover:bg-[var(--gold)]/10 disabled:cursor-not-allowed disabled:border-[#d6caa0] disabled:text-[#6a6248]"
+            disabled={isDownloading}
+            onClick={downloadPDF}
+            type="button"
+          >
+            {isDownloading ? "Downloading..." : "Download PDF"}
+          </button>
+        </div>
       </section>
 
       <section className="rounded-[1.5rem] border border-[var(--border)] bg-[#101010] p-5 md:p-7">
