@@ -1,7 +1,7 @@
 import type { RoofSurveyFeature, RoofSurveyLine, RoofSurveySection } from "@/lib/survey/types";
 
 export type TakeoffDrawingStyle = "customer_quote" | "technical_satellite" | "section_detail" | "technical" | "customer" | "quote" | "satellite";
-export type TakeoffDrawingFraming = "close" | "building" | "context";
+export type TakeoffDrawingFraming = "detail" | "close" | "building" | "context";
 
 type DrawingPoint = { lat?: number; lng?: number; x?: number; y?: number };
 
@@ -541,6 +541,7 @@ function exportLineColor(index: number, line: RoofSurveyLine) {
 }
 
 function framingConfig(framing: TakeoffDrawingFraming) {
+  if (framing === "detail") return { paddingMeters: 1.5, zoomBoost: 3 };
   if (framing === "close") return { paddingMeters: 4, zoomBoost: 2 };
   if (framing === "context") return { paddingMeters: 28, zoomBoost: -1 };
   return { paddingMeters: 8, zoomBoost: 1 };
@@ -677,11 +678,11 @@ function buildCustomerQuoteScheduleRows(sections: CustomerQuoteDrawingSection[])
 
       return `
         <g transform="translate(842 ${y})">
-          <circle cx="15" cy="-7" r="13" fill="${section.color}" stroke="#111827" stroke-width="1.5" />
-          <text x="15" y="-2" text-anchor="middle" class="customer-code">${escapeXml(section.code)}</text>
-          <text x="36" y="-9" class="customer-label">${escapeXml(section.label)}</text>
+          <circle cx="16" cy="-7" r="12" fill="${section.color}" stroke="#111827" stroke-width="1.5" />
+          <text x="16" y="-2" text-anchor="middle" class="customer-code">${escapeXml(section.code)}</text>
+          <text x="48" y="-9" class="customer-label">${escapeXml(section.label)}</text>
           <text x="264" y="-9" text-anchor="end" class="customer-value">${escapeXml(measurement)}</text>
-          <text x="36" y="9" class="customer-note">${escapeXml(scope)}</text>
+          <text x="48" y="9" class="customer-note">${escapeXml(scope)}</text>
         </g>`;
     })
     .join("");

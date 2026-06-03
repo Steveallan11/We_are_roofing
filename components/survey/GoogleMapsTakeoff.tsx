@@ -988,7 +988,7 @@ function ExportButtons(props: {
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
   const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("customer_quote");
-  const [drawingFraming, setDrawingFraming] = useState<TakeoffDrawingFraming>("close");
+  const [drawingFraming, setDrawingFraming] = useState<TakeoffDrawingFraming>("detail");
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
   const usesSatelliteMap = drawingStyle === "customer_quote" || drawingStyle === "section_detail" || drawingStyle === "technical_satellite" || drawingStyle === "satellite";
 
@@ -1069,7 +1069,8 @@ function ExportButtons(props: {
           <label className="block">
             <span className="label">Satellite framing</span>
             <select className="field mt-1" onChange={(event) => setDrawingFraming(event.target.value as TakeoffDrawingFraming)} value={drawingFraming}>
-              <option value="close">Close-up detail (recommended)</option>
+              <option value="detail">Roof detail / closest</option>
+              <option value="close">Close-up roof + surroundings</option>
               <option value="building">Whole building</option>
               <option value="context">Wider context / access</option>
             </select>

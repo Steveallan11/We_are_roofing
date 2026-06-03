@@ -652,7 +652,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       lines: roofSurvey.lines,
       features: roofSurvey.features,
       style: "customer_quote",
-      staticMapFraming: "close",
+      staticMapFraming: "detail",
       googleMapsApiKey,
       quoteSections: buildDrawingQuoteSections(costBreakdown, roofSurvey)
     });
