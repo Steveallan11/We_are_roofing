@@ -471,6 +471,7 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
   const cropCoords = primaryCropPoints(opts);
   const bounds = getGeoBounds(cropCoords.length ? cropCoords : coords);
   const crop = framingConfig(framing);
+  const customerQuoteMap = opts.lines.some((line) => line.type === "Customer Quote Section");
   const croppedBounds = bounds ? expandGeoBoundsByMeters(bounds, crop.paddingMeters) : null;
   const center = bounds ? geoBoundsCenter(bounds) : null;
   const zoom = croppedBounds ? getStaticMapZoom(croppedBounds, 640, 514, crop.zoomBoost) : null;
@@ -503,7 +504,8 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     if (coords.length < 2) return;
     const color = staticMapColor(exportLineColor(index, line));
     const isCustomerQuoteLine = line.type === "Customer Quote Section";
-    params.append("path", [`color:0x${color}${isCustomerQuoteLine ? "cc" : "ff"}`, `weight:${isCustomerQuoteLine ? 3 : 5}`, ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    params.append("path", [`color:0x${color}${isCustomerQuoteLine ? "aa" : "ff"}`, `weight:${isCustomerQuoteLine ? 2 : 5}`, ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    if (customerQuoteMap) return;
     const mid = geoMidpoint(coords);
     const markerLabel = isCustomerQuoteLine ? quoteSectionMarkerLabel(index) : sectionMarkerLabel(opts.sections.length + index);
     params.append("markers", `color:0x${color}|label:${markerLabel}|${mid.lat},${mid.lng}`);
@@ -547,7 +549,7 @@ function exportLineColor(index: number, line: RoofSurveyLine) {
 }
 
 function framingConfig(framing: TakeoffDrawingFraming) {
-  if (framing === "detail") return { paddingMeters: 5, zoomBoost: 2 };
+  if (framing === "detail") return { paddingMeters: 2, zoomBoost: 3 };
   if (framing === "close") return { paddingMeters: 4, zoomBoost: 2 };
   if (framing === "context") return { paddingMeters: 28, zoomBoost: -1 };
   return { paddingMeters: 8, zoomBoost: 1 };
