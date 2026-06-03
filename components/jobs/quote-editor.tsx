@@ -16,7 +16,7 @@ import {
   normaliseQuoteOption
 } from "@/lib/quotes/value";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
-import { buildStaticMapUrl, buildTakeoffDrawingSvg, printDrawing, type DrawingQuoteSection } from "@/lib/survey/cadDrawing";
+import { buildTakeoffDrawingSvg, printDrawing, type DrawingQuoteSection } from "@/lib/survey/cadDrawing";
 import { currency } from "@/lib/utils";
 import { TakeoffQuotePreview } from "@/components/jobs/takeoff-quote-preview";
 
@@ -639,18 +639,6 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     setError(null);
     setSuccess(null);
     const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    let satelliteImageHref: string | null = null;
-    let satelliteInsetImageHref: string | null = null;
-
-    if (googleMapsApiKey) {
-      try {
-        satelliteImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey, "close"));
-        satelliteInsetImageHref = await imageUrlToDataUrl(buildStaticMapUrl(roofSurvey, googleMapsApiKey, "context"));
-      } catch {
-        satelliteImageHref = null;
-        satelliteInsetImageHref = null;
-      }
-    }
 
     const quoteMeta = currentQuote as QuoteRecord & Partial<{ job_ref: string; job_title: string; property_address: string; customer_name: string }>;
     const svg = buildTakeoffDrawingSvg({
@@ -663,11 +651,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
       sections: roofSurvey.sections,
       lines: roofSurvey.lines,
       features: roofSurvey.features,
-      style: "satellite",
+      style: "customer_quote",
       staticMapFraming: "close",
       googleMapsApiKey,
-      satelliteImageHref,
-      satelliteInsetImageHref,
       quoteSections: buildDrawingQuoteSections(costBreakdown, roofSurvey)
     });
 
@@ -1335,18 +1321,6 @@ function drawingSectionIndex(group: { label: string; sourceId?: string }, survey
   });
 
   return index >= 0 ? index : 1000;
-}
-
-async function imageUrlToDataUrl(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Image could not be loaded.");
-  const blob = await response.blob();
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
 }
 
 function slugify(value: string) {

@@ -1,9 +1,20 @@
 import type { RoofSurveyFeature, RoofSurveyLine, RoofSurveySection } from "@/lib/survey/types";
 
-export type TakeoffDrawingStyle = "technical" | "customer" | "quote" | "satellite";
+export type TakeoffDrawingStyle = "customer_quote" | "technical_satellite" | "section_detail" | "technical" | "customer" | "quote" | "satellite";
 export type TakeoffDrawingFraming = "close" | "building" | "context";
 
 type DrawingPoint = { lat?: number; lng?: number; x?: number; y?: number };
+
+type CustomerQuoteDrawingSection = {
+  code: string;
+  label: string;
+  measurementLm: number;
+  hasRoofWorks: boolean;
+  hasScaffold: boolean;
+  points: DrawingPoint[];
+  color: string;
+  notes: string[];
+};
 
 export type DrawingQuoteSection = {
   code: string;
@@ -69,6 +80,27 @@ const STYLE_COPY: Record<TakeoffDrawingStyle, { title: string; subtitle: string;
     background: "#fffdf7",
     stroke: "#1f2937",
     soft: "#efe6cf"
+  },
+  customer_quote: {
+    title: "Customer Quote Roof Plan",
+    subtitle: "Clean plan showing the roof sections used in your quotation",
+    background: "#fffdf7",
+    stroke: "#1f2937",
+    soft: "#efe6cf"
+  },
+  technical_satellite: {
+    title: "Technical Satellite Takeoff Plan",
+    subtitle: "Full measured takeoff with all areas, lines, and roof details",
+    background: "#fffdf7",
+    stroke: "#1f2937",
+    soft: "#efe6cf"
+  },
+  section_detail: {
+    title: "Section Detail Roof Plan",
+    subtitle: "Close-up detail for one quoted roof section",
+    background: "#fffdf7",
+    stroke: "#1f2937",
+    soft: "#efe6cf"
   }
 };
 
@@ -78,17 +110,20 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const project = makeProjector(bounds);
   const style = STYLE_COPY[opts.style];
   const dark = opts.style === "quote";
-  const satelliteUrl =
-    opts.style === "satellite" ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey, opts.staticMapFraming) : null) : null;
-  const satelliteInsetUrl =
-    opts.style === "satellite" ? opts.satelliteInsetImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey, "context") : null) : null;
+  const satelliteStyle = opts.style === "satellite" || opts.style === "customer_quote" || opts.style === "technical_satellite" || opts.style === "section_detail";
+  const customerQuotePlan = opts.style === "customer_quote" || opts.style === "section_detail";
+  const customerQuoteSections = buildCustomerQuoteSections(opts);
+  const customerQuoteMapData = customerQuoteSectionsToMapData(customerQuoteSections);
+  const mapSource = customerQuotePlan ? customerQuoteMapData : opts;
+  const satelliteUrl = satelliteStyle ? opts.satelliteImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(mapSource, opts.googleMapsApiKey, opts.staticMapFraming) : null) : null;
+  const satelliteInsetUrl = satelliteStyle ? opts.satelliteInsetImageHref || (opts.googleMapsApiKey ? buildStaticMapUrl(opts, opts.googleMapsApiKey, "context") : null) : null;
   const useStaticMapGeometry = Boolean(satelliteUrl);
   const text = dark ? "#f8f5e8" : "#111827";
   const muted = dark ? "#b7aa82" : "#6b7280";
   const gold = "#D4AF37";
   const totalArea = opts.sections.reduce((sum, section) => sum + Number(section.area_m2 || 0), 0);
   const totalLength = opts.lines.reduce((sum, line) => sum + Number(line.length_lm || 0), 0);
-  const customerPlan = opts.style === "satellite";
+  const customerPlan = opts.style === "satellite" || customerQuotePlan;
   const orderedCustomerLines = customerPlan ? orderCustomerLines(opts.lines) : opts.lines;
 
   const sectionShapes = useStaticMapGeometry
@@ -185,7 +220,12 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .slice(0, 3)
     .map((line, index) => `<text x="64" y="${780 + index * 18}" class="notes-text">${escapeXml(line)}</text>`)
     .join("");
-  const customerScheduleRows = buildCustomerScheduleRows(legendRows.slice(0, 16));
+  const customerScheduleRows = customerQuotePlan ? buildCustomerQuoteScheduleRows(customerQuoteSections.slice(0, 12)) : buildCustomerScheduleRows(legendRows.slice(0, 16));
+  const customerTitle = customerQuotePlan ? "Customer Quote Roof Plan" : "Customer Roof Measurement Plan";
+  const customerSubtitle = customerQuotePlan ? "Numbered sections match the quotation" : "Numbered roof sections used to prepare your quotation";
+  const customerPanelTitle = customerQuotePlan ? "Your quoted roof sections" : "How to read this plan";
+  const customerPanelLine1 = customerQuotePlan ? "Each marker is one quoted work section." : "Markers on the roof match the groups below.";
+  const customerPanelLine2 = customerQuotePlan ? "Roof works and scaffold/access are grouped together." : "Prices are shown in the quotation, not on this drawing.";
 
   if (customerPlan) {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -212,8 +252,8 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   <rect width="${WIDTH}" height="${HEIGHT}" fill="${style.background}" />
   <rect x="32" y="32" width="${WIDTH - 64}" height="${HEIGHT - 64}" rx="24" fill="#fff" stroke="${style.soft}" />
   <text x="64" y="74" class="eyebrow">We Are Roofing UK Ltd</text>
-  <text x="64" y="110" class="title">Customer Roof Measurement Plan</text>
-  <text x="64" y="136" class="subtitle">Numbered roof sections used to prepare your quotation</text>
+  <text x="64" y="110" class="title">${escapeXml(customerTitle)}</text>
+  <text x="64" y="136" class="subtitle">${escapeXml(customerSubtitle)}</text>
   <text x="64" y="164" class="meta">${escapeXml(opts.jobRef)} - ${escapeXml(opts.address)}</text>
 
   <rect x="64" y="154" width="742" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
@@ -228,12 +268,12 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
       ? ""
       : `<text x="92" y="204" class="satellite-warning">Satellite image unavailable - enable Maps Static API and check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</text>`
   }
-  <text x="84" y="642" class="small-label">Close roof detail</text>
+  <text x="84" y="642" class="small-label">${customerQuotePlan ? "Clean quote section plan" : "Close roof detail"}</text>
 
   <rect x="828" y="154" width="308" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
-  <text x="848" y="186" class="panel-title">How to read this plan</text>
-  <text x="848" y="208" class="panel-helper">Markers on the roof match the groups below.</text>
-  <text x="848" y="226" class="panel-helper">Prices are shown in the quotation, not on this drawing.</text>
+  <text x="848" y="186" class="panel-title">${escapeXml(customerPanelTitle)}</text>
+  <text x="848" y="208" class="panel-helper">${escapeXml(customerPanelLine1)}</text>
+  <text x="848" y="226" class="panel-helper">${escapeXml(customerPanelLine2)}</text>
   ${customerScheduleRows || `<text x="848" y="258" class="subtitle">No measured items yet.</text>`}
 
   <rect x="64" y="704" width="250" height="94" rx="14" fill="#fbfaf5" stroke="${style.soft}" />
@@ -247,14 +287,14 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
 
   <rect x="338" y="704" width="468" height="94" rx="14" fill="#fbfaf5" stroke="${style.soft}" />
   <text x="358" y="732" class="panel-title">Customer note</text>
-  <text x="358" y="756" class="panel-helper">The numbered sections on this plan match the quotation sections.</text>
+  <text x="358" y="756" class="panel-helper">${customerQuotePlan ? "This plan is simplified so customers can follow the quoted sections." : "The numbered sections on this plan match the quotation sections."}</text>
   <text x="358" y="774" class="panel-helper">Scaffold/access and final prices are confirmed in the quote document.</text>
 
   <rect x="828" y="704" width="308" height="94" rx="14" fill="#f8f0d8" stroke="${gold}" stroke-opacity="0.35" />
-  <text x="848" y="732" class="panel-title">Measured totals</text>
-  <text x="848" y="765" class="total-value">${totalArea.toFixed(1)} m2</text>
-  <text x="986" y="765" class="total-value">${totalLength.toFixed(1)} lm</text>
-  <text x="848" y="787" class="panel-helper">${opts.sections.length} area(s), ${opts.lines.length} line(s), ${opts.features.length} item(s)</text>
+  <text x="848" y="732" class="panel-title">${customerQuotePlan ? "Quote sections" : "Measured totals"}</text>
+  <text x="848" y="765" class="total-value">${customerQuotePlan ? customerQuoteSections.length : totalArea.toFixed(1)}</text>
+  <text x="986" y="765" class="total-value">${customerQuotePlan ? `${customerQuoteSections.reduce((sum, section) => sum + section.measurementLm, 0).toFixed(0)} lm` : `${totalLength.toFixed(1)} lm`}</text>
+  <text x="848" y="787" class="panel-helper">${customerQuotePlan ? "Clean customer view - technical takeoff available separately" : `${opts.sections.length} area(s), ${opts.lines.length} line(s), ${opts.features.length} item(s)`}</text>
   <text x="64" y="834" class="meta">Customer: ${escapeXml(opts.customerName || "Not set")} - Survey date: ${escapeXml(opts.surveyDate)}</text>
 </svg>`;
   }
@@ -457,7 +497,8 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const coords = line.points.map(toCoord).filter(Boolean).slice(0, 24) as Array<{ lat: number; lng: number }>;
     if (coords.length < 2) return;
     const color = staticMapColor(exportLineColor(index, line));
-    params.append("path", [`color:0x${color}ff`, "weight:5", ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
+    const isCustomerQuoteLine = line.type === "Customer Quote Section";
+    params.append("path", [`color:0x${color}${isCustomerQuoteLine ? "cc" : "ff"}`, `weight:${isCustomerQuoteLine ? 3 : 5}`, ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
     const mid = geoMidpoint(coords);
     params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(opts.sections.length + index)}|${mid.lat},${mid.lng}`);
   });
@@ -469,6 +510,12 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
   });
 
   return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
+}
+
+export function buildDrawingStaticMapUrl(opts: DrawingOpts, apiKey: string, framing: TakeoffDrawingFraming = "building") {
+  const customerQuotePlan = opts.style === "customer_quote" || opts.style === "section_detail";
+  const mapSource = customerQuotePlan ? customerQuoteSectionsToMapData(buildCustomerQuoteSections(opts)) : opts;
+  return buildStaticMapUrl(mapSource, apiKey, framing);
 }
 
 function staticMapColor(value: string) {
@@ -616,6 +663,118 @@ function buildCustomerScheduleRows(rows: Array<{ color: string; code: string; la
   });
 
   return output.join("");
+}
+
+function buildCustomerQuoteScheduleRows(sections: CustomerQuoteDrawingSection[]) {
+  return sections
+    .map((section, index) => {
+      const y = 258 + index * 38;
+      const scope = [
+        section.hasRoofWorks ? "Roof works" : null,
+        section.hasScaffold ? "Scaffold/access" : null
+      ].filter(Boolean).join(" + ") || "Quoted section";
+      const measurement = section.measurementLm > 0 ? `${section.measurementLm.toFixed(section.measurementLm >= 10 ? 0 : 1)} lm` : "No drawing marker yet";
+
+      return `
+        <g transform="translate(842 ${y})">
+          <circle cx="15" cy="-7" r="13" fill="${section.color}" stroke="#111827" stroke-width="1.5" />
+          <text x="15" y="-2" text-anchor="middle" class="customer-code">${escapeXml(section.code)}</text>
+          <text x="36" y="-9" class="customer-label">${escapeXml(section.label)}</text>
+          <text x="264" y="-9" text-anchor="end" class="customer-value">${escapeXml(measurement)}</text>
+          <text x="36" y="9" class="customer-note">${escapeXml(scope)}</text>
+        </g>`;
+    })
+    .join("");
+}
+
+function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines" | "features" | "quoteSections">): CustomerQuoteDrawingSection[] {
+  const groups = new Map<string, Omit<CustomerQuoteDrawingSection, "code">>();
+
+  opts.lines.forEach((line, index) => {
+    const label = customerQuoteSectionLabel(line.label || line.type || `Section ${index + 1}`);
+    const existing = groups.get(label) ?? {
+      label,
+      measurementLm: 0,
+      hasRoofWorks: false,
+      hasScaffold: false,
+      points: [] as DrawingPoint[],
+      color: exportLineColor(groups.size, line),
+      notes: [] as string[]
+    };
+    const identity = `${line.type || ""} ${line.label || ""}`.toLowerCase();
+    existing.hasScaffold ||= identity.includes("scaffold") || identity.includes("access");
+    existing.hasRoofWorks ||= identity.includes("roof work") || identity.includes("roof works") || identity.includes("section");
+    existing.measurementLm += Number(line.length_lm || 0);
+    existing.points.push(...line.points);
+    if (line.notes) existing.notes.push(line.notes);
+    groups.set(label, existing);
+  });
+
+  opts.sections.forEach((section) => {
+    const label = customerQuoteSectionLabel(section.label || section.type || "Roof Section");
+    const existing = groups.get(label) ?? {
+      label,
+      measurementLm: 0,
+      hasRoofWorks: true,
+      hasScaffold: false,
+      points: [] as DrawingPoint[],
+      color: section.color || EXPORT_SECTION_COLORS[groups.size % EXPORT_SECTION_COLORS.length],
+      notes: [] as string[]
+    };
+    existing.hasRoofWorks = true;
+    existing.points.push(...section.points);
+    if (section.notes) existing.notes.push(section.notes);
+    groups.set(label, existing);
+  });
+
+  (opts.quoteSections || []).forEach((quoteSection) => {
+    const label = customerQuoteSectionLabel(quoteSection.label || "Quoted Section");
+    if (groups.has(label)) return;
+    groups.set(label, {
+      label,
+      measurementLm: 0,
+      hasRoofWorks: typeof quoteSection.roofNet === "number" && quoteSection.roofNet > 0,
+      hasScaffold: typeof quoteSection.accessNet === "number" && quoteSection.accessNet > 0,
+      points: [],
+      color: EXPORT_SECTION_COLORS[groups.size % EXPORT_SECTION_COLORS.length],
+      notes: []
+    });
+  });
+
+  return [...groups.values()]
+    .sort((left, right) => naturalLabelCompare(left.label, right.label))
+    .map((section, index) => ({ ...section, code: sectionMarkerLabel(index) }));
+}
+
+function customerQuoteSectionsToMapData(sections: CustomerQuoteDrawingSection[]): Pick<DrawingOpts, "sections" | "lines" | "features"> {
+  return {
+    sections: [],
+    lines: sections
+      .filter((section) => section.points.length >= 2)
+      .map((section) => ({
+        id: section.label,
+        label: section.label,
+        type: "Customer Quote Section",
+        color: section.color,
+        points: section.points.map(toSurveyPoint),
+        length_lm: section.measurementLm,
+        notes: section.notes.join("\n")
+      })),
+    features: []
+  };
+}
+
+function toSurveyPoint(point: DrawingPoint) {
+  const coord = toCoord(point) ?? { lat: 0, lng: 0 };
+  return { x: coord.lng, y: coord.lat, lat: coord.lat, lng: coord.lng };
+}
+
+function customerQuoteSectionLabel(value: string) {
+  const clean = value
+    .replace(/\s*[-–—]\s*(roof\s*works?|roof\s*work\s*section|scaffold\s*\/?\s*access|access|scaffold)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean || "General Works";
 }
 
 function customerRowGroup(label: string) {

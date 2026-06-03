@@ -5,7 +5,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
-import { buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingFraming, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
+import { buildDrawingStaticMapUrl, buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingFraming, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
 import { buildCleanSatellite, buildProDrawingSvg, downloadProPng, downloadProSvg, printProDrawing, type ProDrawingStyle } from "@/lib/survey/proDrawing";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
@@ -39,6 +39,13 @@ type DrawnFeature = {
   point: { lat: number; lng: number };
   color: string;
   notes: string;
+};
+
+type QuoteSectionStatus = {
+  name: string;
+  hasRoofWorks: boolean;
+  hasScaffold: boolean;
+  measurementLm: number;
 };
 
 type Props = {
@@ -607,6 +614,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const totalArea = sections.reduce((sum, section) => sum + section.area_m2, 0);
   const totalLength = lines.reduce((sum, line) => sum + line.length_lm, 0);
   const exportRows = useMemo(() => ({ sections: serialiseSections(sections), lines: serialiseLines(lines), features: serialiseFeatures(features) }), [features, lines, sections]);
+  const quoteSectionStatus = useMemo(() => buildQuoteSectionStatus(lines, sections), [lines, sections]);
   useEffect(() => {
     sections.forEach((section) => {
       const selected = selectedShape?.kind === "section" && selectedShape.id === section.id;
@@ -773,6 +781,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
             </section>
 
             <ShapeList
+              quoteSectionStatus={quoteSectionStatus}
               lineTypes={LINE_TYPES}
               onDeleteLine={deleteLine}
               onDeleteSection={deleteSection}
@@ -832,6 +841,36 @@ function defaultLineLabel(type: string, currentLines: DrawnLine[]) {
 function sectionLetterForType(currentLines: DrawnLine[], type: string) {
   const sameTypeCount = currentLines.filter((line) => line.type === type).length;
   return `Section ${String.fromCharCode(65 + Math.min(sameTypeCount, 25))}`;
+}
+
+function buildQuoteSectionStatus(lines: DrawnLine[], sections: DrawnSection[]): QuoteSectionStatus[] {
+  const groups = new Map<string, QuoteSectionStatus>();
+
+  lines.forEach((line) => {
+    const name = drawingQuoteSectionName(line.label || line.type || "General Works");
+    const existing = groups.get(name) ?? { name, hasRoofWorks: false, hasScaffold: false, measurementLm: 0 };
+    const identity = `${line.type} ${line.label}`.toLowerCase();
+    existing.hasRoofWorks ||= identity.includes("roof work") || identity.includes("roof works") || identity.includes("section");
+    existing.hasScaffold ||= identity.includes("scaffold") || identity.includes("access");
+    existing.measurementLm += Number(line.length_lm || 0);
+    groups.set(name, existing);
+  });
+
+  sections.forEach((section) => {
+    const name = drawingQuoteSectionName(section.label || section.type || "General Works");
+    const existing = groups.get(name) ?? { name, hasRoofWorks: false, hasScaffold: false, measurementLm: 0 };
+    existing.hasRoofWorks = true;
+    groups.set(name, existing);
+  });
+
+  return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name, "en-GB", { numeric: true, sensitivity: "base" }));
+}
+
+function drawingQuoteSectionName(value: string) {
+  return value
+    .replace(/\s*[-–—]\s*(roof\s*works?|roof\s*work\s*section|scaffold\s*\/?\s*access|access|scaffold)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim() || "General Works";
 }
 
 function featureMarkerIcon(color: string, selected: boolean): google.maps.Symbol {
@@ -948,9 +987,10 @@ function ExportButtons(props: {
   notes: string;
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
-  const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("satellite");
+  const [drawingStyle, setDrawingStyle] = useState<TakeoffDrawingStyle>("customer_quote");
   const [drawingFraming, setDrawingFraming] = useState<TakeoffDrawingFraming>("close");
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+  const usesSatelliteMap = drawingStyle === "customer_quote" || drawingStyle === "section_detail" || drawingStyle === "technical_satellite" || drawingStyle === "satellite";
 
   function makeKml() {
     return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features });
@@ -978,24 +1018,12 @@ function ExportButtons(props: {
   }
 
   async function makeExportDrawingSvg() {
-    if (drawingStyle !== "satellite" || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    if (!usesSatelliteMap || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
       return makeDrawingSvg();
     }
 
     try {
-      const staticMapUrl = buildStaticMapUrl(
-        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features },
-        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
-        drawingFraming
-      );
-      const staticInsetUrl = buildStaticMapUrl(
-        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features },
-        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
-        "context"
-      );
-      const satelliteImageHref = await imageUrlToDataUrl(staticMapUrl);
-      const satelliteInsetImageHref = await imageUrlToDataUrl(staticInsetUrl);
-      return buildTakeoffDrawingSvg({
+      const drawingOpts = {
         projectName: props.projectName,
         jobRef: props.jobRef,
         address: props.address,
@@ -1006,7 +1034,14 @@ function ExportButtons(props: {
         lines: props.rows.lines,
         features: props.rows.features,
         style: drawingStyle,
-        staticMapFraming: drawingFraming,
+        staticMapFraming: drawingFraming
+      };
+      const staticMapUrl = buildDrawingStaticMapUrl(drawingOpts, process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, drawingFraming);
+      const staticInsetUrl = buildStaticMapUrl({ sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features }, process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, "context");
+      const satelliteImageHref = await imageUrlToDataUrl(staticMapUrl);
+      const satelliteInsetImageHref = await imageUrlToDataUrl(staticInsetUrl);
+      return buildTakeoffDrawingSvg({
+        ...drawingOpts,
         satelliteImageHref,
         satelliteInsetImageHref
       });
@@ -1020,13 +1055,16 @@ function ExportButtons(props: {
       <label className="block">
         <span className="label">Customer drawing style</span>
         <select className="field mt-1" onChange={(event) => setDrawingStyle(event.target.value as TakeoffDrawingStyle)} value={drawingStyle}>
-          <option value="satellite">Best: Satellite plan with measurements</option>
+          <option value="customer_quote">Best: Customer quote plan</option>
+          <option value="technical_satellite">Technical takeoff plan</option>
+          <option value="section_detail">Section detail plan</option>
+          <option value="satellite">Legacy: Satellite plan with all measurements</option>
           <option value="customer">Simple customer drawing</option>
           <option value="quote">Dark quote sketch</option>
           <option value="technical">Technical takeoff only</option>
         </select>
       </label>
-      {drawingStyle === "satellite" ? (
+      {usesSatelliteMap ? (
         <>
           <label className="block">
             <span className="label">Satellite framing</span>
@@ -1038,7 +1076,9 @@ function ExportButtons(props: {
           </label>
           <div className={`rounded-xl border p-3 text-xs leading-5 ${staticMapsReady ? "border-[var(--gold)]/30 bg-[var(--gold)]/5 text-[var(--gold-l)]" : "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fcd88a]"}`}>
             {staticMapsReady
-              ? "Customer PDF now includes a close roof detail plus a wider context inset. Use Whole building or Wider context if you need less crop."
+              ? drawingStyle === "customer_quote"
+                ? "Default customer plan groups roof works and scaffold/access into clean quoted sections. Use Technical takeoff plan when you need every measurement."
+                : "Satellite exports include a close roof detail plus a wider context inset. Use Whole building or Wider context if you need less crop."
               : "Satellite background is not available because NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing. The drawing will export as a clean measured plan instead."}
           </div>
         </>
@@ -1237,6 +1277,7 @@ function ShapeList({
   sections,
   lines,
   features,
+  quoteSectionStatus,
   sectionTypes,
   lineTypes,
   featureTypes,
@@ -1254,6 +1295,7 @@ function ShapeList({
   sections: DrawnSection[];
   lines: DrawnLine[];
   features: DrawnFeature[];
+  quoteSectionStatus: QuoteSectionStatus[];
   sectionTypes: string[];
   lineTypes: string[];
   featureTypes: string[];
@@ -1272,6 +1314,26 @@ function ShapeList({
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
       <p className="label">Individual Measurements</p>
       <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Name each area or run clearly. Click Focus to jump the map to that exact measurement before pricing.</p>
+      {quoteSectionStatus.length ? (
+        <div className="mt-3 rounded-xl border border-[var(--gold)]/25 bg-[var(--gold)]/5 p-3">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--gold)]">Quote section check</p>
+          <div className="mt-2 space-y-2">
+            {quoteSectionStatus.map((section) => (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-black/15 px-3 py-2 text-xs" key={section.name}>
+                <div>
+                  <p className="font-bold text-white">{section.name}</p>
+                  <p className="mt-1 text-[var(--muted)]">{section.measurementLm.toFixed(section.measurementLm >= 10 ? 0 : 1)} lm measured</p>
+                </div>
+                <div className="flex gap-1">
+                  <span className={`rounded-full px-2 py-1 font-bold ${section.hasRoofWorks ? "bg-[#D4AF37]/20 text-[#f5d46a]" : "bg-black/20 text-[var(--muted)]"}`}>Roof</span>
+                  <span className={`rounded-full px-2 py-1 font-bold ${section.hasScaffold ? "bg-[#10b981]/20 text-[#8df0b7]" : "bg-black/20 text-[var(--muted)]"}`}>Scaffold</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[0.68rem] leading-5 text-[var(--muted)]">Use the same Section A/B/C name for roof works and scaffold/access so the quote and drawing match.</p>
+        </div>
+      ) : null}
       <div className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
         {sections.map((section) => (
           <ShapeRow
