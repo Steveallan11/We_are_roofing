@@ -21,13 +21,6 @@ type CustomerQuoteDrawingSection = {
   notes: string[];
 };
 
-type DrawingRect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
 export type DrawingQuoteSection = {
   code: string;
   label: string;
@@ -237,10 +230,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const customerSubtitle = customerQuotePlan ? "Lettered sections match the quotation" : "Numbered roof sections used to prepare your quotation";
   const customerPanelTitle = customerQuotePlan ? "Your quoted roof sections" : "How to read this plan";
   const customerPanelLine1 = customerQuotePlan ? "Letters on the roof match the measured items below." : "Markers on the roof match the groups below.";
-  const customerPanelLine2 = customerQuotePlan ? "Areas show m2. Ridges, valleys, eaves and access show lm." : "Prices are shown in the quotation, not on this drawing.";
-  const cleanCustomerDiagram = customerQuotePlan
-    ? buildCleanCustomerQuoteDiagram(customerQuoteSections, { x: 64, y: 154, width: 742, height: 520 }, style.soft)
-    : "";
+  const customerPanelLine2 = customerQuotePlan ? "Roof works and scaffold/access are grouped together." : "Prices are shown in the quotation, not on this drawing.";
 
   if (customerPlan) {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -259,9 +249,6 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .total-value{font:800 24px Montserrat,Arial,sans-serif;fill:${text}}
     .small-label{font:800 10px Montserrat,Arial,sans-serif;letter-spacing:1.5px;text-transform:uppercase;fill:${gold}}
     .satellite-warning{font:800 14px Montserrat,Arial,sans-serif;fill:#b45309;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
-    .diagram-label{font:900 10px Montserrat,Arial,sans-serif;fill:#fff}
-    .diagram-caption{font:800 11px Montserrat,Arial,sans-serif;fill:#1f2937}
-    .diagram-muted{font:700 10px Montserrat,Arial,sans-serif;fill:#6b7280}
   </style>
   <defs>
     <filter id="satelliteEnhance">
@@ -285,19 +272,17 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
 
   <rect x="64" y="154" width="742" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
   ${
-    customerQuotePlan
-      ? cleanCustomerDiagram
-      : satelliteUrl
+    satelliteUrl
       ? `<image href="${escapeXml(satelliteUrl)}" x="64" y="154" width="742" height="520" preserveAspectRatio="xMidYMid slice" clip-path="url(#mainClip)" filter="url(#satelliteEnhance)" opacity="0.98" />
   <rect x="64" y="154" width="742" height="520" rx="18" fill="rgba(0,0,0,0.02)" stroke="${style.soft}" />`
       : gridLines(false)
   }
   ${
-    customerQuotePlan || satelliteUrl
+    satelliteUrl
       ? ""
       : `<text x="92" y="204" class="satellite-warning">Satellite image unavailable - enable Maps Static API and check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</text>`
   }
-  <text x="84" y="642" class="small-label">${customerQuotePlan ? "Generated clean roof diagram" : "Close roof detail"}</text>
+  <text x="84" y="642" class="small-label">${customerQuotePlan ? "Clean quote section plan" : "Close roof detail"}</text>
 
   <rect x="828" y="154" width="308" height="520" rx="18" fill="#fbfaf5" stroke="${style.soft}" />
   <text x="848" y="186" class="panel-title">${escapeXml(customerPanelTitle)}</text>
@@ -488,156 +473,6 @@ function gridLines(dark: boolean) {
     lines.push(`<line x1="${DRAWING_LEFT}" y1="${y}" x2="${DRAWING_LEFT + DRAWING_WIDTH}" y2="${y}" stroke="${stroke}" stroke-width="1" />`);
   }
   return lines.join("");
-}
-
-function buildCleanCustomerQuoteDiagram(sections: CustomerQuoteDrawingSection[], rect: DrawingRect, borderColor: string) {
-  const geometryPoints = sections.flatMap((section) => [
-    ...section.points,
-    ...section.lineSegments.flat()
-  ]);
-  const coords = geometryPoints.map(toCoord).filter(Boolean) as Array<{ lat: number; lng: number }>;
-  if (!coords.length) {
-    return `
-      ${cleanDiagramGrid(rect)}
-      <text x="${rect.x + 34}" y="${rect.y + 58}" class="diagram-caption">No drawing geometry has been linked to these quote sections yet.</text>
-      <text x="${rect.x + 34}" y="${rect.y + 80}" class="diagram-muted">Add roof work, scaffold/access, ridge, valley or area measurements in the takeoff tool.</text>`;
-  }
-
-  const project = makeRectProjector(getBounds(geometryPoints), rect, 54);
-  const areaShapes: string[] = [];
-  const lineShapes: string[] = [];
-  const callouts: Array<{ section: CustomerQuoteDrawingSection; anchor: { x: number; y: number }; measurement: string }> = [];
-
-  sections.forEach((section) => {
-    const areaPoints = section.points.map(project).filter(isProjectedPoint);
-    if (section.areaM2 > 0 && areaPoints.length >= 3) {
-      const path = areaPoints.map(pointString).join(" ");
-      const centre = centroid(areaPoints);
-      areaShapes.push(`
-        <polygon points="${path}" fill="${section.color}" fill-opacity="0.2" stroke="#ffffff" stroke-width="7" stroke-linejoin="round" />
-        <polygon points="${path}" fill="${section.color}" fill-opacity="0.24" stroke="${section.color}" stroke-width="3" stroke-linejoin="round" />`);
-      callouts.push({ section, anchor: centre, measurement: formatSquareMetres(section.areaM2) });
-    }
-
-    const drawableSegments = section.lineSegments
-      .map((segment) => straightenDrawingPath(segment).map(project).filter(isProjectedPoint))
-      .filter((segment) => segment.length >= 2);
-
-    drawableSegments.forEach((segment) => {
-      const path = segment.map(pointString).join(" ");
-      lineShapes.push(`
-        <polyline points="${path}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
-        <polyline points="${path}" fill="none" stroke="${section.color}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />`);
-    });
-
-    if (!(section.areaM2 > 0 && areaPoints.length >= 3) && drawableSegments.length) {
-      const anchorSegment = [...drawableSegments].sort((left, right) => projectedSpan(right) - projectedSpan(left))[0];
-      callouts.push({ section, anchor: midpoint(anchorSegment), measurement: sectionMeasurementLabel(section) });
-    }
-  });
-
-  const placedCallouts = placeDiagramCallouts(callouts, rect);
-
-  return `
-    ${cleanDiagramGrid(rect)}
-    <g clip-path="url(#mainClip)">
-      ${areaShapes.join("")}
-      ${lineShapes.join("")}
-    </g>
-    ${placedCallouts.map(({ section, anchor, bubble, measurement }) => `
-      <line x1="${anchor.x.toFixed(1)}" y1="${anchor.y.toFixed(1)}" x2="${bubble.x.toFixed(1)}" y2="${bubble.y.toFixed(1)}" stroke="#111827" stroke-width="1.2" stroke-opacity="0.3" />
-      <circle cx="${bubble.x.toFixed(1)}" cy="${bubble.y.toFixed(1)}" r="13" fill="${section.color}" stroke="#ffffff" stroke-width="3" />
-      <text x="${bubble.x.toFixed(1)}" y="${(bubble.y + 4).toFixed(1)}" text-anchor="middle" class="diagram-label">${escapeXml(section.code)}</text>
-      <text x="${(bubble.x + 18).toFixed(1)}" y="${(bubble.y - 2).toFixed(1)}" class="diagram-caption">${escapeXml(truncateText(section.label, 18))}</text>
-      <text x="${(bubble.x + 18).toFixed(1)}" y="${(bubble.y + 14).toFixed(1)}" class="diagram-muted">${escapeXml(measurement)}</text>`).join("")}
-    <rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" rx="18" fill="none" stroke="${borderColor}" />`;
-}
-
-function cleanDiagramGrid(rect: DrawingRect) {
-  const lines: string[] = [];
-  for (let x = rect.x + 32; x < rect.x + rect.width; x += 32) {
-    lines.push(`<line x1="${x}" y1="${rect.y}" x2="${x}" y2="${rect.y + rect.height}" stroke="#efe8d6" stroke-width="1" opacity="0.55" />`);
-  }
-  for (let y = rect.y + 32; y < rect.y + rect.height; y += 32) {
-    lines.push(`<line x1="${rect.x}" y1="${y}" x2="${rect.x + rect.width}" y2="${y}" stroke="#efe8d6" stroke-width="1" opacity="0.55" />`);
-  }
-  return `
-    <rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" rx="18" fill="#fffdf7" />
-    <g clip-path="url(#mainClip)">${lines.join("")}</g>
-    <rect x="${rect.x + 18}" y="${rect.y + 18}" width="${rect.width - 36}" height="${rect.height - 36}" rx="12" fill="none" stroke="#f4eddc" stroke-width="1.5" stroke-dasharray="5 7" />`;
-}
-
-function makeRectProjector(bounds: ReturnType<typeof getBounds>, rect: DrawingRect, padding: number) {
-  const innerWidth = Math.max(rect.width - padding * 2, 1);
-  const innerHeight = Math.max(rect.height - padding * 2, 1);
-  const lngSpan = Math.max(bounds.east - bounds.west, 0.000001);
-  const latSpan = Math.max(bounds.north - bounds.south, 0.000001);
-  const scale = Math.min(innerWidth / lngSpan, innerHeight / latSpan);
-  const shapeWidth = lngSpan * scale;
-  const shapeHeight = latSpan * scale;
-  const offsetX = rect.x + (rect.width - shapeWidth) / 2;
-  const offsetY = rect.y + (rect.height - shapeHeight) / 2;
-
-  return (point: DrawingPoint) => {
-    const coord = toCoord(point);
-    if (!coord) return null;
-    return {
-      x: offsetX + (coord.lng - bounds.west) * scale,
-      y: offsetY + (bounds.north - coord.lat) * scale
-    };
-  };
-}
-
-function projectedSpan(points: Array<{ x: number; y: number }>) {
-  if (points.length < 2) return 0;
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  return Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys);
-}
-
-function sectionMeasurementLabel(section: CustomerQuoteDrawingSection) {
-  if (section.roofWorksLm > 0 && section.scaffoldLm > 0) return `Roof ${formatLinearMetres(section.roofWorksLm)} | Scaffold ${formatLinearMetres(section.scaffoldLm)}`;
-  if (section.roofWorksLm > 0) return `Roof works ${formatLinearMetres(section.roofWorksLm)}`;
-  if (section.scaffoldLm > 0) return `Scaffold ${formatLinearMetres(section.scaffoldLm)}`;
-  if (section.detailLm > 0) return `${linearMeasurementLabel(section.label)} ${formatLinearMetres(section.detailLm)}`;
-  if (section.measurementLm > 0) return formatLinearMetres(section.measurementLm);
-  return "Measurement linked";
-}
-
-function placeDiagramCallouts(
-  callouts: Array<{ section: CustomerQuoteDrawingSection; anchor: { x: number; y: number }; measurement: string }>,
-  rect: DrawingRect
-) {
-  const placed: Array<{ section: CustomerQuoteDrawingSection; anchor: { x: number; y: number }; bubble: { x: number; y: number }; measurement: string }> = [];
-  const minDistance = 34;
-
-  callouts.forEach((callout, index) => {
-    let bubble = {
-      x: clamp(callout.anchor.x + (index % 2 === 0 ? 16 : -16), rect.x + 24, rect.x + rect.width - 150),
-      y: clamp(callout.anchor.y + ((index % 3) - 1) * 18, rect.y + 28, rect.y + rect.height - 34)
-    };
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const collides = placed.some((item) => distance(item.bubble, bubble) < minDistance);
-      if (!collides) break;
-      bubble = {
-        x: clamp(bubble.x + (attempt % 2 === 0 ? 30 : -22), rect.x + 24, rect.x + rect.width - 150),
-        y: clamp(bubble.y + 20, rect.y + 28, rect.y + rect.height - 34)
-      };
-    }
-
-    placed.push({ ...callout, bubble });
-  });
-
-  return placed;
-}
-
-function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
 
 export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" | "features">, apiKey: string, framing: TakeoffDrawingFraming = "building") {
