@@ -24,6 +24,10 @@ import type {
   JobDocumentRecord,
   KanbanColumn,
   KnowledgeBaseRecord,
+  LabourPersonRecord,
+  LabourPlanRecord,
+  LabourRateRecord,
+  LabourEntryRecord,
   PricingRuleRecord,
   QuoteRecord,
   PaymentScheduleRecord,
@@ -166,6 +170,7 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     supabase.from("job_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
     supabase.from("email_logs").select("*").eq("job_id", jobId).order("sent_at", { ascending: false })
   ]);
+  const labourPlan = await getJobLabourPlan(jobId);
 
   return {
     business: (businessResult.data as Business | null) ?? MOCK_BUSINESS,
@@ -175,6 +180,7 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     quote: (quoteResult.data as QuoteRecord | null) ?? null,
     invoices: (invoiceResult.data as InvoiceRecord[] | null) ?? [],
     materials: (materialResult.data as JobBundle["materials"] | null) ?? [],
+    labour_plan: labourPlan,
     photos: (photoResult.data as JobBundle["photos"] | null) ?? [],
     documents: (documentResult.data as JobDocumentRecord[] | null) ?? [],
     email_logs: (emailResult.data as EmailLog[] | null) ?? []
@@ -317,6 +323,96 @@ export async function getSuppliers(): Promise<SupplierRecord[]> {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase.from("suppliers").select("*").eq("business_id", business.id).order("name", { ascending: true });
   return (data as SupplierRecord[] | null) ?? [];
+}
+
+export async function getLabourRates(): Promise<LabourRateRecord[]> {
+  if (!canUseSupabase()) {
+    return [];
+  }
+
+  const business = await getBusiness();
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("labour_rates")
+    .select("*")
+    .eq("business_id", business.id)
+    .order("active", { ascending: false })
+    .order("role_name", { ascending: true });
+
+  if (error) {
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Labour rates could not be loaded:", error.message);
+    }
+    return [];
+  }
+
+  return (data as LabourRateRecord[] | null) ?? [];
+}
+
+export async function getLabourPeople(): Promise<LabourPersonRecord[]> {
+  if (!canUseSupabase()) {
+    return [];
+  }
+
+  const business = await getBusiness();
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("labour_people")
+    .select("*")
+    .eq("business_id", business.id)
+    .order("is_active", { ascending: false })
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Labour people could not be loaded:", error.message);
+    }
+    return [];
+  }
+
+  return (data as LabourPersonRecord[] | null) ?? [];
+}
+
+export async function getJobLabourPlan(jobId: string): Promise<LabourPlanRecord | null> {
+  if (!canUseSupabase()) return null;
+
+  const supabase = createSupabaseAdminClient();
+  const { data: plan, error: planError } = await supabase
+    .from("labour_plans")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (planError) {
+    if (!isMissingRelationError(planError.message)) {
+      console.warn("Labour plan could not be loaded:", planError.message);
+    }
+    return null;
+  }
+  if (!plan) return null;
+
+  const { data: entries, error: entriesError } = await supabase
+    .from("labour_entries")
+    .select("*, labour_people(*)")
+    .eq("plan_id", plan.id)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (entriesError) {
+    if (!isMissingRelationError(entriesError.message)) {
+      console.warn("Labour entries could not be loaded:", entriesError.message);
+    }
+    return { ...(plan as LabourPlanRecord), entries: [] };
+  }
+
+  const mappedEntries = ((entries as Array<Record<string, unknown>> | null) ?? []).map((entry) => ({
+    ...(entry as unknown as LabourEntryRecord),
+    person: (entry.labour_people as LabourPersonRecord | null) ?? null
+  }));
+
+  return { ...(plan as LabourPlanRecord), entries: mappedEntries };
 }
 
 export async function getBookings(): Promise<BookingRecord[]> {

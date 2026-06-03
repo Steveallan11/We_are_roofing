@@ -451,6 +451,79 @@ export type MaterialRecord = MaterialLineItem & {
   updated_at?: string;
 };
 
+export type LabourRateRecord = {
+  id: string;
+  business_id: string;
+  role_name: string;
+  cost_rate: number;
+  charge_rate: number;
+  unit: "hour" | "day";
+  default_margin_pct?: number | null;
+  active: boolean;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LabourPersonRecord = {
+  id: string;
+  business_id: string;
+  full_name: string;
+  worker_type: "staff" | "subcontractor" | "agency" | "other";
+  primary_role?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  company_name?: string | null;
+  day_rate_cost?: number | null;
+  day_rate_charge?: number | null;
+  hourly_rate_cost?: number | null;
+  hourly_rate_charge?: number | null;
+  skills?: string[] | null;
+  emergency_contact?: string | null;
+  insurance_notes?: string | null;
+  is_active: boolean;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LabourEntryRecord = {
+  id: string;
+  plan_id: string;
+  job_id: string;
+  labour_rate_id?: string | null;
+  person_id?: string | null;
+  role_name: string;
+  people: number;
+  duration: number;
+  unit: "hour" | "day";
+  cost_rate: number;
+  charge_rate: number;
+  estimated_cost: number;
+  charge_total: number;
+  actual_duration?: number | null;
+  actual_cost?: number | null;
+  notes?: string | null;
+  sort_order?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  person?: LabourPersonRecord | null;
+};
+
+export type LabourPlanRecord = {
+  id: string;
+  job_id: string;
+  quote_id?: string | null;
+  business_id?: string | null;
+  title?: string | null;
+  status: "estimated" | "booked" | "in_progress" | "completed";
+  crew_confirmed?: boolean | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  entries?: LabourEntryRecord[];
+};
+
 export type SupplierRecord = {
   id: string;
   business_id: string;
@@ -713,6 +786,7 @@ export type JobBundle = {
   quote?: QuoteRecord | null;
   invoices: InvoiceRecord[];
   materials: MaterialRecord[];
+  labour_plan?: LabourPlanRecord | null;
   photos: JobPhoto[];
   documents: JobDocumentRecord[];
   email_logs: EmailLog[];

@@ -6,7 +6,7 @@ import { QuoteEditor } from "@/components/jobs/quote-editor";
 import { AppShell } from "@/components/layout/app-shell";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { StatusPill } from "@/components/ui/status-pill";
-import { getJobBundle, getPricingRules } from "@/lib/data";
+import { getJobBundle, getJobLabourPlan, getPricingRules } from "@/lib/data";
 import { getJobDocumentHref } from "@/lib/documents";
 import { pricingRulesToRateCard } from "@/lib/pricing/rateCard";
 import { buildQuoteOptionPriceSummary, getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
@@ -21,7 +21,7 @@ type Props = {
 export default async function QuotePage({ params, searchParams }: Props) {
   const { jobId } = await params;
   const query = searchParams ? await searchParams : undefined;
-  const [bundle, pricingRules, roofSurvey] = await Promise.all([getJobBundle(jobId), getPricingRules(), getLatestRoofSurvey(jobId)]);
+  const [bundle, pricingRules, roofSurvey, labourPlan] = await Promise.all([getJobBundle(jobId), getPricingRules(), getLatestRoofSurvey(jobId), getJobLabourPlan(jobId)]);
   if (!bundle) notFound();
 
   const quote = bundle.quote ?? null;
@@ -89,7 +89,7 @@ export default async function QuotePage({ params, searchParams }: Props) {
             )}
           </div>
 
-          <QuoteEditor jobId={bundle.job.id} quote={quote} rateCard={rateCard} roofSurvey={roofSurvey} />
+          <QuoteEditor jobId={bundle.job.id} labourPlan={labourPlan} quote={quote} rateCard={rateCard} roofSurvey={roofSurvey} />
         </div>
 
         <aside className="stack">

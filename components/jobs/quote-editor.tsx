@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
+import type { CostLineItem, LabourPlanRecord, QuoteOption, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
 import {
   buildDefaultQuoteOptionsFromLines,
@@ -25,9 +25,10 @@ type Props = {
   quote: QuoteRecord | null;
   rateCard?: RateCardEntry[];
   roofSurvey?: RoofSurveyRecord | null;
+  labourPlan?: LabourPlanRecord | null;
 };
 
-export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: Props) {
+export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, labourPlan = null }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +84,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
     [costBreakdown, rateCard]
   );
   const quoteSections = useMemo(() => groupQuoteSections(costBreakdown), [costBreakdown]);
+  const labourEntries = labourPlan?.entries ?? [];
+  const labourChargeTotal = useMemo(() => labourEntries.reduce((sum, entry) => sum + Number(entry.charge_total || 0), 0), [labourEntries]);
+  const labourCostTotal = useMemo(() => labourEntries.reduce((sum, entry) => sum + Number(entry.estimated_cost || 0), 0), [labourEntries]);
 
   if (!quote) {
     return (
@@ -272,6 +276,42 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
         return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
       })
     );
+  }
+
+  function addLabourPlanToOption(optionId: string) {
+    if (!labourChargeTotal) {
+      setError("Create a labour plan first, then pull it into the quote option.");
+      setSuccess(null);
+      return;
+    }
+
+    const labourLine: CostLineItem = {
+      item: "Labour - crew plan",
+      cost: labourChargeTotal,
+      vat_applicable: false,
+      notes: buildLabourQuoteNotes(labourEntries, labourCostTotal),
+      quantity: 1,
+      unit: "item",
+      unit_rate: labourChargeTotal,
+      pricing_source: "labour_plan",
+      pricing_category: "labour",
+      source_type: "labour_plan",
+      source_id: labourPlan?.id ?? undefined
+    };
+
+    setOptions((current) =>
+      current.map((option) => {
+        if (option.id !== optionId) return option;
+        const existingIndex = option.cost_breakdown.findIndex((line) => line.pricing_source === "labour_plan" || line.item.toLowerCase() === "labour - crew plan");
+        const cost_breakdown =
+          existingIndex >= 0
+            ? option.cost_breakdown.map((line, lineIndex) => (lineIndex === existingIndex ? labourLine : line))
+            : [...option.cost_breakdown, labourLine];
+        return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
+      })
+    );
+    setSuccess("Labour plan added to the option. Save changes to keep it.");
+    setError(null);
   }
 
   function addSectionPackage(optionId: string) {
@@ -774,6 +814,24 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                     + Add roof section + scaffold price
                   </button>
                 </div>
+                <div className="mt-3 rounded-2xl border border-[var(--border)] bg-black/20 p-3">
+                  <p className="section-kicker text-[0.62rem] uppercase">Labour plan</p>
+                  {labourChargeTotal > 0 ? (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs leading-5 text-[var(--muted)]">
+                        {labourEntries.length} labour row{labourEntries.length === 1 ? "" : "s"} · quote charge{" "}
+                        <span className="font-semibold text-[var(--gold-l)]">{currency(labourChargeTotal)}</span>
+                      </p>
+                      <button className="button-secondary !min-h-10 !px-3 !py-2 text-xs" onClick={() => addLabourPlanToOption(option.id)} type="button">
+                        + Add / Replace Labour
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                      No labour plan yet. Build it from the job file, then return here to add it to this option.
+                    </p>
+                  )}
+                </div>
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
                       <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
@@ -794,6 +852,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null }: 
                               value={line.pricing_category || getQuoteLineItemCategory(line)}
                             >
                               <option value="roof_works">Roof works</option>
+                              <option value="labour">Labour</option>
                               <option value="standard_scaffold">Standard scaffold</option>
                               <option value="temporary_roof_protection">Temporary roof protection</option>
                               <option value="access">Other access</option>
@@ -1261,6 +1320,22 @@ function groupQuoteSections(lines: CostLineItem[]) {
   });
 
   return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function buildLabourQuoteNotes(entries: NonNullable<LabourPlanRecord["entries"]>, internalCost: number) {
+  const lines = entries.map((entry) => {
+    const person = entry.person?.full_name ? `${entry.person.full_name} - ` : "";
+    const unitLabel = entry.unit === "hour" ? "hour" : "day";
+    return `${person}${entry.role_name}: ${entry.people} x ${entry.duration} ${unitLabel}${Number(entry.duration) === 1 ? "" : "s"}`;
+  });
+
+  return [
+    "Labour allowance from the job labour plan.",
+    ...lines,
+    internalCost > 0 ? `Internal estimated labour cost: ${currency(internalCost)}.` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildDrawingQuoteSections(lines: CostLineItem[], survey: RoofSurveyRecord): DrawingQuoteSection[] {

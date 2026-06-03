@@ -51,6 +51,7 @@ import type {
   Job,
   JobDocumentRecord,
   JobPhoto,
+  LabourPlanRecord,
   MaterialRecord,
   QuoteOption,
   QuoteRecord,
@@ -65,24 +66,26 @@ export type JobDetailViewProps = {
   documents: JobDocumentRecord[];
   photos: JobPhoto[];
   materials: MaterialRecord[];
+  labourPlan?: LabourPlanRecord | null;
   invoices: InvoiceRecord[];
   emailLogs: EmailLog[];
   paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 };
 
-type TabId = "overview" | "survey" | "quote" | "materials" | "documents" | "activity";
+type TabId = "overview" | "survey" | "quote" | "materials" | "labour" | "documents" | "activity";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "survey", label: "Survey" },
   { value: "quote", label: "Quote" },
   { value: "materials", label: "Materials" },
+  { value: "labour", label: "Labour" },
   { value: "documents", label: "Documents" },
   { value: "activity", label: "Activity" }
 ];
 
 export function JobDetailView(props: JobDetailViewProps) {
-  const { job, customer, survey, quote, documents, photos, materials, invoices, emailLogs, paymentSchedule } = props;
+  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, emailLogs, paymentSchedule } = props;
 
   const router = useRouter();
   const pathname = usePathname();
@@ -152,6 +155,10 @@ export function JobDetailView(props: JobDetailViewProps) {
 
         <TabsContent value="materials">
           <MaterialsTab job={job} materials={materials} />
+        </TabsContent>
+
+        <TabsContent value="labour">
+          <LabourTab job={job} labourPlan={labourPlan ?? null} />
         </TabsContent>
 
         <TabsContent value="documents">
@@ -497,6 +504,40 @@ function MaterialsTab({ job, materials }: { job: Job; materials: MaterialRecord[
         <p className="text-sm text-[var(--text-muted)]">
           Open the dedicated materials view to check suppliers, status, quantities, and notes.
         </p>
+      )}
+    </PageSection>
+  );
+}
+
+/* -----------------  Labour tab  ----------------- */
+
+function LabourTab({ job, labourPlan }: { job: Job; labourPlan?: LabourPlanRecord | null }) {
+  const entries = labourPlan?.entries ?? [];
+  const costTotal = entries.reduce((sum, entry) => sum + Number(entry.estimated_cost || 0), 0);
+  const chargeTotal = entries.reduce((sum, entry) => sum + Number(entry.charge_total || 0), 0);
+  const margin = chargeTotal > 0 ? ((chargeTotal - costTotal) / chargeTotal) * 100 : 0;
+
+  return (
+    <PageSection
+      kicker="Labour"
+      title={entries.length > 0 ? `${entries.length} labour ${entries.length === 1 ? "row" : "rows"} planned` : "No labour plan yet"}
+      description="Estimate crew days, assign staff or subcontractors, track real labour cost, and pull the charge total into quote options."
+      actions={
+        <SmartButton variant={entries.length > 0 ? "primary" : "secondary"} size="md" href={`/jobs/${job.id}/labour`}>
+          {entries.length > 0 ? "Open Labour Plan" : "Create Labour Plan"}
+        </SmartButton>
+      }
+    >
+      {entries.length === 0 ? (
+        <p className="text-sm text-[var(--text-muted)]">
+          Use the labour plan to build roofer/labourer/foreman days before pricing the quote. Crew can be assigned later when the job is booked.
+        </p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-3">
+          <Stat label="Internal labour cost" value={currency(costTotal)} hint="Estimated real cost" />
+          <Stat label="Quote labour charge" value={currency(chargeTotal)} hint="Customer-facing labour total" tone="active" />
+          <Stat label="Labour margin" value={`${Math.round(margin)}%`} hint="Based on current plan" />
+        </div>
       )}
     </PageSection>
   );

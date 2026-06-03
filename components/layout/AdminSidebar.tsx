@@ -84,6 +84,7 @@ const NAV: NavGroup[] = [
         children: [
           { label: "Settings Home", href: "/settings" },
           { label: "Rate Card", href: "/settings/rates" },
+          { label: "Labour", href: "/settings/labour" },
           { label: "Knowledge", href: "/knowledge" },
           { label: "Suppliers", href: "/settings/suppliers" }
         ]
