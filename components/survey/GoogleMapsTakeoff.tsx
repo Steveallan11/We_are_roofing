@@ -989,7 +989,7 @@ function DrawingPackExports(props: {
   notes: string;
   rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
 }) {
-  const [customerFraming, setCustomerFraming] = useState<ProDrawingFraming>("building");
+  const [customerFraming, setCustomerFraming] = useState<ProDrawingFraming>("close");
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
@@ -1133,8 +1133,8 @@ function DrawingPackExports(props: {
       <label className="block">
         <span className="label">Customer plan framing</span>
         <select className="field mt-1" onChange={(event) => setCustomerFraming(event.target.value as ProDrawingFraming)} value={customerFraming}>
-          <option value="building">Whole building (recommended)</option>
-          <option value="close">Close-up roof detail</option>
+          <option value="close">Close-up roof detail (recommended)</option>
+          <option value="building">Whole building</option>
           <option value="context">Wider site context</option>
         </select>
       </label>

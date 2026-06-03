@@ -202,7 +202,7 @@ export function buildCleanSatellite(
   const padded = expandBoundsMeters(bounds, cfg.paddingMeters);
   const center = { lat: (padded.north + padded.south) / 2, lng: (padded.east + padded.west) / 2 };
   const width = 640;
-  const height = 640;
+  const height = 520;
   const scale: 1 | 2 = 2;
   const zoom = pickZoomForBounds(padded, width, height, cfg.zoomBoost);
 
@@ -383,7 +383,13 @@ function lineColor(line: RoofSurveyLine, fallbackIndex: number) {
 }
 
 function markerCode(index: number) {
-  return index < 9 ? String(index + 1) : String.fromCharCode(65 + (index - 9));
+  let n = index;
+  let code = "";
+  do {
+    code = String.fromCharCode(65 + (n % 26)) + code;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return code;
 }
 
 function escapeXml(value: string) {
@@ -466,7 +472,7 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         `);
       }
 
-      // Sections (polygons) with edge dimensions and centroid markers
+      // Customer plan: keep this readable. Detailed dimensions live on the technical drawings.
       opts.sections.forEach((section, idx) => {
         const ll = section.points.map(toLatLng).filter(Boolean) as LatLng[];
         if (ll.length < 3) return;
@@ -474,63 +480,34 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         const color = sectionColor(idx, section.color);
         overlay.push(`
           <path d="${pointsToPath(pts, true)}"
-            fill="${color}" fill-opacity="0.32"
-            stroke="#ffffff" stroke-width="6" stroke-linejoin="round" opacity="0.95"/>
+            fill="${color}" fill-opacity="0.38"
+            stroke="#ffffff" stroke-width="8" stroke-linejoin="round" opacity="0.96"/>
           <path d="${pointsToPath(pts, true)}"
-            fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round"/>`);
-        // edge dimensions
-        for (let i = 0; i < ll.length; i += 1) {
-          const next = (i + 1) % ll.length;
-          const lengthM = haversine(ll[i], ll[next]);
-          overlay.push(edgeDimension(pts[i], pts[next], `${lengthM.toFixed(1)} m`, "light"));
-        }
+            fill="none" stroke="${color}" stroke-width="4" stroke-linejoin="round"/>`);
         const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
         const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
         sectionMarkers.push({ x: cx, y: cy, code: markerCode(idx), color });
       });
 
-      // Lines (polylines) with per-segment + total dimensions
-      const lineMarkers: Marker[] = [];
+      // Lines are shown as context only on the customer plan. Technical drawings carry the line refs and dimensions.
       opts.lines.forEach((line, idx) => {
         const ll = line.points.map(toLatLng).filter(Boolean) as LatLng[];
         if (ll.length < 2) return;
         const pts = ll.map(project);
         const color = lineColor(line, idx);
         overlay.push(`
-          <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
-          <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`);
-        for (let i = 1; i < ll.length; i += 1) {
-          const lengthM = haversine(ll[i - 1], ll[i]);
-          overlay.push(edgeDimension(pts[i - 1], pts[i], `${lengthM.toFixed(1)} m`, "light"));
-        }
-        const midIdx = Math.floor(pts.length / 2);
-        lineMarkers.push({
-          x: pts[midIdx].x,
-          y: pts[midIdx].y,
-          code: markerCode(opts.sections.length + idx),
-          color
-        });
+          <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.70"/>
+          <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="3.5" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>`);
       });
 
-      // Features (points)
-      const featureMarkers: Marker[] = opts.features.map((f, idx) => {
-        const p = toLatLng(f.point);
-        const px = p ? project(p) : { x: 0, y: 0 };
-        return {
-          x: px.x, y: px.y,
-          code: markerCode(opts.sections.length + opts.lines.length + idx),
-          color: f.color || "#fbbf24"
-        };
-      });
-
-      // Distribute markers to avoid overlap
-      const allMarkers = distributeMarkers([...sectionMarkers, ...lineMarkers, ...featureMarkers]);
+      // Distribute section markers to avoid overlap.
+      const allMarkers = distributeMarkers(sectionMarkers, 28);
       allMarkers.forEach((m) => {
         overlay.push(`
           <g transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})">
-            <circle r="18" fill="#0a0a0a" fill-opacity="0.55"/>
-            <circle r="16" fill="${m.color}" stroke="#ffffff" stroke-width="2.5"/>
-            <text text-anchor="middle" y="5" font-family="Inter,sans-serif" font-size="14" font-weight="800" fill="#0a0a0a">${escapeXml(m.code)}</text>
+            <circle r="24" fill="#0a0a0a" fill-opacity="0.58"/>
+            <circle r="20" fill="${m.color}" stroke="#ffffff" stroke-width="3"/>
+            <text text-anchor="middle" y="6" font-family="Inter,sans-serif" font-size="18" font-weight="900" fill="#0a0a0a">${escapeXml(m.code)}</text>
           </g>`);
       });
 
@@ -548,7 +525,8 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         lines: opts.lines,
         features: opts.features,
         totalArea,
-        totalLength
+        totalLength,
+        customerSummary: true
       });
 
       return overlay.join("\n") + legend;
@@ -741,6 +719,23 @@ function buildDimensionedBwSvg(opts: ProDrawingOpts) {
           const lengthM = haversine(ll[i - 1], ll[i]);
           overlay.push(edgeDimension(pts[i - 1], pts[i], `${lengthM.toFixed(2)} m`, "light"));
         }
+        const midIdx = Math.floor(pts.length / 2);
+        overlay.push(`
+          <g transform="translate(${pts[midIdx].x} ${pts[midIdx].y - 18})" font-family="Inter,sans-serif">
+            <rect x="-15" y="-12" width="30" height="20" rx="4" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+            <text text-anchor="middle" y="3" font-size="11" font-weight="900" fill="#111827">${markerCode(opts.sections.length + idx)}</text>
+          </g>`);
+      });
+
+      opts.features.forEach((feature, idx) => {
+        const p = toLatLng(feature.point);
+        if (!p) return;
+        const px = projector.project(p);
+        overlay.push(`
+          <g transform="translate(${px.x} ${px.y})" font-family="Inter,sans-serif">
+            <rect x="-12" y="-12" width="24" height="24" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+            <text text-anchor="middle" y="4" font-size="10" font-weight="900" fill="#111827">${markerCode(opts.sections.length + opts.lines.length + idx)}</text>
+          </g>`);
       });
 
       overlay.push(scaleBar(layout.drawingX + 32, layout.drawingY + layout.drawingH - 32, projector.metersPerSvgUnit, "light"));
@@ -830,16 +825,17 @@ type LegendArgs = {
   totalLength: number;
   showHatchPatterns?: boolean;
   cadLegend?: boolean;
+  customerSummary?: boolean;
 };
 
-function renderLegend({ layout, sections, lines, features, totalArea, totalLength, cadLegend }: LegendArgs) {
+function renderLegend({ layout, sections, lines, features, totalArea, totalLength, cadLegend, customerSummary }: LegendArgs) {
   let y = layout.legendY + 28;
   const parts: string[] = [];
 
   parts.push(`<rect x="${layout.legendX}" y="${layout.legendY}" width="${layout.legendW}" height="${layout.legendH}" rx="12" fill="#fbfaf5" stroke="#e5e5e0"/>`);
   parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="11" font-weight="800" letter-spacing="2.4" fill="#D4AF37">HOW TO READ THIS PLAN</text>`);
   y += 22;
-  parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="11" fill="#6b7280">Numbers on the drawing match each item below.</text>`);
+  parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="11" fill="#6b7280">Letters on the drawing match each item below.</text>`);
   y += 14;
   parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="11" fill="#6b7280">All dimensions in metres unless noted.</text>`);
   y += 24;
@@ -866,18 +862,32 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
     y += 8;
   }
 
+  if (customerSummary && (lines.length || features.length)) {
+    const hiddenCount = lines.length + features.length;
+    parts.push(`
+      <g transform="translate(${layout.legendX + 20} ${y})">
+        <rect x="0" y="-12" width="${layout.legendW - 40}" height="58" rx="9" fill="#fff7df" stroke="#D4AF37" stroke-opacity="0.35"/>
+        <text x="14" y="6" font-size="11" font-weight="800" fill="#111827">Technical details available</text>
+        <text x="14" y="24" font-size="10" fill="#6b7280">${hiddenCount} line/feature item${hiddenCount === 1 ? "" : "s"} are shown on the Technical Takeoff Plan.</text>
+      </g>`);
+    y += 78;
+  }
+
   // Lines group
-  if (lines.length) {
+  if (!customerSummary && lines.length) {
     parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="10" font-weight="800" letter-spacing="1.6" fill="#D4AF37">RIDGES, VALLEYS &amp; EDGES</text>`);
     y += 18;
     lines.forEach((l, idx) => {
       const color = lineColor(l, idx);
       const length = Number(l.length_lm || 0);
       const label = l.label || l.type || `Line ${idx + 1}`;
+      const code = markerCode(sections.length + idx);
       parts.push(`
         <g transform="translate(${layout.legendX + 20} ${y})">
-          <rect x="0" y="-9" width="22" height="6" rx="3" fill="${color}"/>
-          <text x="32" y="-3" font-size="12" font-weight="700" fill="#111827">${escapeXml(label)}</text>
+          <circle cx="11" cy="-5" r="10" fill="#ffffff" stroke="${color}" stroke-width="2"/>
+          <text x="11" y="-1" text-anchor="middle" font-size="9" font-weight="900" fill="${color}">${escapeXml(code)}</text>
+          <rect x="28" y="-9" width="20" height="6" rx="3" fill="${color}"/>
+          <text x="56" y="-3" font-size="12" font-weight="700" fill="#111827">${escapeXml(label)}</text>
           <text x="${layout.legendW - 40}" y="-3" text-anchor="end" font-size="12" font-weight="800" fill="#111827">${length.toFixed(1)} lm</text>
         </g>`);
       y += 22;
@@ -886,13 +896,15 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
   }
 
   // Features group
-  if (features.length) {
+  if (!customerSummary && features.length) {
     parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="10" font-weight="800" letter-spacing="1.6" fill="#D4AF37">ROOF FEATURES</text>`);
     y += 18;
     features.forEach((f, idx) => {
+      const code = markerCode(sections.length + lines.length + idx);
       parts.push(`
         <g transform="translate(${layout.legendX + 20} ${y})">
           <rect x="2" y="-12" width="18" height="18" fill="${f.color || "#fbbf24"}" stroke="#111827" stroke-width="1.2"/>
+          <text x="11" y="1" text-anchor="middle" font-size="9" font-weight="900" fill="#0a0a0a">${escapeXml(code)}</text>
           <text x="32" y="0" font-size="12" font-weight="700" fill="#111827">${escapeXml(f.label || f.type || `Item ${idx + 1}`)}</text>
         </g>`);
       y += 22;
