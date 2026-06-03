@@ -282,6 +282,59 @@ export async function getUnreadConversationCount(): Promise<number> {
   return conversations.reduce((sum, conversation) => sum + Number(conversation.unread_count ?? 0), 0);
 }
 
+export type UnreadCustomerReply = {
+  conversation_id: string;
+  job_id: string | null;
+  customer_id: string | null;
+  quote_id: string | null;
+  subject: string | null;
+  preview: string | null;
+  channel: string;
+  last_message_at: string | null;
+  unread_count: number;
+  customer_name: string | null;
+  job_ref: string | null;
+  job_title: string | null;
+};
+
+/**
+ * Conversations with at least one unread customer message.
+ * Used by Today "Customer replies" needs-attention block.
+ */
+export async function getUnreadCustomerReplies(): Promise<UnreadCustomerReply[]> {
+  if (!canUseSupabase()) return [];
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id, job_id, customer_id, quote_id, subject, last_message_preview, primary_channel, last_message_at, unread_count, customers(full_name), jobs(job_ref, job_title)")
+    .gt("unread_count", 0)
+    .neq("status", "resolved")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(50);
+
+  if (error) {
+    if (!isMissingRelationError(error.message)) {
+      console.warn("Unread conversations could not be loaded:", error.message);
+    }
+    return [];
+  }
+
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map((row) => ({
+    conversation_id: String(row.id ?? ""),
+    job_id: row.job_id ? String(row.job_id) : null,
+    customer_id: row.customer_id ? String(row.customer_id) : null,
+    quote_id: row.quote_id ? String(row.quote_id) : null,
+    subject: (row.subject as string | null) ?? null,
+    preview: (row.last_message_preview as string | null) ?? null,
+    channel: String(row.primary_channel ?? "email"),
+    last_message_at: (row.last_message_at as string | null) ?? null,
+    unread_count: Number(row.unread_count ?? 0),
+    customer_name: ((row.customers as { full_name?: string } | null) ?? null)?.full_name ?? null,
+    job_ref: ((row.jobs as { job_ref?: string } | null) ?? null)?.job_ref ?? null,
+    job_title: ((row.jobs as { job_title?: string } | null) ?? null)?.job_title ?? null
+  }));
+}
+
 function isMissingRelationError(message: string) {
   return /relation .* does not exist|schema cache|could not find the table/i.test(message);
 }

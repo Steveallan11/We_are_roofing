@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
+import { findOrCreateConversation } from "@/lib/comms/findOrCreateConversation";
 import { getJobBundle } from "@/lib/data";
 import { quoteSentEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -178,6 +179,43 @@ export async function POST(request: Request, { params }: Props) {
       total: Number(sentQuote.total ?? 0)
     }
   });
+
+  // Create/reuse a unified Comms conversation so the customer's reply (via Resend webhook)
+  // will thread onto the same conversation in the unified inbox.
+  try {
+    const conversation = await findOrCreateConversation({
+      customerEmail: toEmail,
+      channel: "email",
+      subject,
+      jobId: quote.job_id,
+      quoteId
+    });
+
+    await supabase.from("messages").insert({
+      conversation_id: conversation.id,
+      direction: "outbound",
+      channel: "email",
+      sender_type: "admin",
+      sender_name: emailCustomerName,
+      sender_email: toEmail,
+      body: messageBody,
+      subject,
+      provider: "resend",
+      provider_msg_id: emailResult.id ?? null,
+      status: emailResult.status?.toLowerCase().includes("fail") ? "failed" : "sent"
+    });
+
+    await supabase
+      .from("conversations")
+      .update({
+        last_message_at: new Date().toISOString(),
+        last_message_preview: messageBody.slice(0, 100),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", conversation.id);
+  } catch (convoError) {
+    console.warn("Comms conversation/message persist failed for quote send:", convoError instanceof Error ? convoError.message : convoError);
+  }
 
   if (bundle.customer.phone) {
     await sendSMS({

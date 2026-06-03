@@ -5,12 +5,17 @@ import { JobCard } from "@/components/jobs/job-card";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { Button, Card, PageSection } from "@/components/ui/primitives";
-import { getBusiness, getJobs, getPricingRules } from "@/lib/data";
+import { getBusiness, getJobs, getPricingRules, getUnreadCustomerReplies } from "@/lib/data";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
 import { formatDate } from "@/lib/utils";
 
 export default async function TodayPage() {
-  const [business, jobs, pricingRules] = await Promise.all([getBusiness(), getJobs(), getPricingRules()]);
+  const [business, jobs, pricingRules, unreadReplies] = await Promise.all([
+    getBusiness(),
+    getJobs(),
+    getPricingRules(),
+    getUnreadCustomerReplies()
+  ]);
   const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -56,6 +61,38 @@ export default async function TodayPage() {
     >
       <div className="stack">
         {!hasRateCard ? <RateCardNudge /> : null}
+
+        {unreadReplies.length > 0 ? (
+          <PageSection
+            kicker="Customer replies"
+            title={`${unreadReplies.length} unread ${unreadReplies.length === 1 ? "message" : "messages"}`}
+            description="Customers are waiting for a response."
+            actions={
+              <Button variant="primary" size="sm" asChild>
+                <Link href="/comms">Open Comms</Link>
+              </Button>
+            }
+          >
+            <div className="grid gap-2">
+              {unreadReplies.slice(0, 3).map((reply) => (
+                <Link
+                  className="rounded-lg border border-[#3b82f6]/40 bg-[#3b82f6]/10 p-3 text-sm transition-colors hover:border-[#3b82f6]"
+                  href={(reply.job_id ? `/jobs/${reply.job_id}` : "/comms") as Route}
+                  key={reply.conversation_id}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-[var(--text)]">
+                      {reply.customer_name ?? reply.subject ?? "Customer"}
+                      {reply.job_ref ? <span className="ml-2 text-xs text-[var(--text-muted)]">{reply.job_ref}</span> : null}
+                    </span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{reply.channel}</span>
+                  </div>
+                  {reply.preview ? <p className="mt-1 truncate text-xs text-[var(--text-muted)]">{reply.preview}</p> : null}
+                </Link>
+              ))}
+            </div>
+          </PageSection>
+        ) : null}
 
         {attentionJobs.length > 0 ? (
           <PageSection
