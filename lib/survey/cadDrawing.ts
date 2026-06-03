@@ -583,6 +583,7 @@ function customerRowDescription(label: string) {
   if (clean.toLowerCase().includes("ridge")) return "Ridge/run measurement";
   if (clean.toLowerCase().includes("valley")) return "Valley/detail measurement";
   if (clean.toLowerCase().includes("scaffold") || clean.toLowerCase().includes("access")) return "Access/scaffold reference";
+  if (clean.toLowerCase().includes("roof work")) return "Roof works measurement";
   if (clean.toLowerCase().includes("section")) return "Measured quote section";
   return "Measured roof item";
 }
@@ -590,6 +591,7 @@ function customerRowDescription(label: string) {
 function buildCustomerScheduleRows(rows: Array<{ color: string; code: string; label?: string; value: string }>) {
   const groups = [
     { key: "section", title: "Roof work sections", rows: rows.filter((row) => customerRowGroup(row.label || "") === "section") },
+    { key: "scaffold", title: "Scaffold / access lines", rows: rows.filter((row) => customerRowGroup(row.label || "") === "scaffold") },
     { key: "ridge", title: "Ridge runs", rows: rows.filter((row) => customerRowGroup(row.label || "") === "ridge") },
     { key: "detail", title: "Other measured details", rows: rows.filter((row) => customerRowGroup(row.label || "") === "detail") }
   ].filter((group) => group.rows.length);
@@ -618,8 +620,9 @@ function buildCustomerScheduleRows(rows: Array<{ color: string; code: string; la
 
 function customerRowGroup(label: string) {
   const clean = label.toLowerCase();
+  if (clean.includes("scaffold") || clean.includes("access")) return "scaffold";
   if (clean.includes("ridge")) return "ridge";
-  if (clean.includes("section") || clean.includes("eaves") || clean.includes("verge")) return "section";
+  if (clean.includes("roof work") || clean.includes("section") || clean.includes("eaves") || clean.includes("verge")) return "section";
   return "detail";
 }
 
@@ -633,10 +636,11 @@ function orderCustomerLines(lines: RoofSurveyLine[]) {
 
 function customerLineSortOrder(line: RoofSurveyLine) {
   const label = `${line.label || ""} ${line.type || ""}`.toLowerCase();
-  if (label.includes("section") || label.includes("eaves") || label.includes("verge")) return 1;
-  if (label.includes("ridge")) return 2;
-  if (label.includes("valley") || label.includes("hip")) return 3;
-  return 4;
+  if (label.includes("scaffold") || label.includes("access")) return 2;
+  if (label.includes("section") || label.includes("eaves") || label.includes("verge") || label.includes("roof work")) return 1;
+  if (label.includes("ridge")) return 3;
+  if (label.includes("valley") || label.includes("hip")) return 4;
+  return 5;
 }
 
 function naturalLabelCompare(a: string, b: string) {

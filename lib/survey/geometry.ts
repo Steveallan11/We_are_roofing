@@ -109,13 +109,15 @@ export function buildRoofSurveyBom(survey: RoofSurveyRecord): BOMItem[] {
     if (!qty) return;
     const lineDef = LINE_DEFS.find((item) => item.name === line.type);
     const sourceLabel = line.label || line.type || "Measured Run";
+    const quoteSection = getLineQuoteSection(line);
+    const pricingCategory = getLinePricingCategory(line);
     add(`line:${line.id ?? line.label}:${line.type}`, {
       source_id: line.id,
-      label: measurementLabel(line.label, line.type || "Measured Run"),
+      label: getLineBOMLabel(line),
       source_label: sourceLabel,
       measurement_label: formatMeasurement(qty, "lm"),
-      quote_section: sourceLabel,
-      pricing_category: line.type || "Measured Run",
+      quote_section: quoteSection,
+      pricing_category: pricingCategory,
       qty,
       unit: "lm",
       color: line.color || lineDef?.color || "#D4AF37",
@@ -199,6 +201,31 @@ function measurementLabel(label: string | null | undefined, type: string) {
   if (!cleanLabel) return cleanType;
   if (!cleanType || cleanLabel.toLowerCase().includes(cleanType.toLowerCase())) return cleanLabel;
   return `${cleanLabel} - ${cleanType}`;
+}
+
+function getLinePricingCategory(line: RoofSurveyLine) {
+  const identity = `${line.type || ""} ${line.label || ""}`.toLowerCase();
+  if (identity.includes("scaffold") || identity.includes("access")) return "standard_scaffold";
+  if (identity.includes("roof work") || identity.includes("roof works") || identity.includes("section")) return "roof_works";
+  return line.type || "Measured Run";
+}
+
+function getLineQuoteSection(line: RoofSurveyLine) {
+  const cleanLabel = (line.label || line.type || "Measured Run").trim();
+  const stripped = cleanLabel
+    .replace(/\s*[-–—]\s*(roof\s*works?|roof\s*work\s*section|scaffold\s*\/?\s*access|access|scaffold)\s*$/i, "")
+    .trim();
+  if (stripped) return stripped;
+  const typeIdentity = `${line.type || ""}`.toLowerCase();
+  if (typeIdentity.includes("scaffold") || typeIdentity.includes("roof work")) return "General Works";
+  return cleanLabel;
+}
+
+function getLineBOMLabel(line: RoofSurveyLine) {
+  const category = getLinePricingCategory(line);
+  if (category === "roof_works") return "Roof works";
+  if (category === "standard_scaffold") return "Scaffold/access";
+  return measurementLabel(line.label, line.type || "Measured Run");
 }
 
 function formatMeasurement(qty: number, unit: BOMItem["unit"]) {

@@ -50,7 +50,7 @@ type Props = {
   initialSurvey: RoofSurveyRecord;
 };
 
-const LINE_TYPES = ["Ridge", "Hip", "Valley", "Eaves", "Verge", "Abutment", "Flashing", "Gutter", "Fascia", "Soaker", "Parapet", "Other"];
+const LINE_TYPES = ["Roof Work Section", "Scaffold / Access", "Ridge", "Hip", "Valley", "Eaves", "Verge", "Abutment", "Flashing", "Gutter", "Fascia", "Soaker", "Parapet", "Other"];
 const SECTION_TYPES = ["Pitched - Tile", "Pitched - Slate", "Pitched - Metal", "Flat - EPDM", "Flat - GRP", "Flat - Felt", "Flat - Lead", "Hip Roof", "Mansard", "Other"];
 const ROOF_FEATURES = [
   { type: "Chimney", color: "#f87171" },
@@ -68,6 +68,8 @@ const ROOF_FEATURES = [
 ];
 const SECTION_COLOURS = ["#D4AF37", "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444"];
 const LINE_COLOURS: Record<string, string> = {
+  "Roof Work Section": "#D4AF37",
+  "Scaffold / Access": "#10b981",
   Ridge: "#3b82f6",
   Hip: "#8b5cf6",
   Valley: "#10b981",
@@ -89,13 +91,14 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const drawingRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const featureClickRef = useRef<google.maps.MapsEventListener | null>(null);
   const loadedExistingRef = useRef(false);
+  const activeLineTypeRef = useRef("Roof Work Section");
 
   const [sections, setSections] = useState<DrawnSection[]>([]);
   const [lines, setLines] = useState<DrawnLine[]>([]);
   const [features, setFeatures] = useState<DrawnFeature[]>([]);
   const [drawMode, setDrawMode] = useState<"none" | "section" | "line" | "feature">("none");
   const [sectionType, setSectionType] = useState("Pitched - Tile");
-  const [lineType, setLineType] = useState("Ridge");
+  const [lineType, setLineType] = useState("Roof Work Section");
   const [featureType, setFeatureType] = useState("Chimney");
   const [sectionColor, setSectionColor] = useState("#D4AF37");
   const [searchAddr, setSearchAddr] = useState(address);
@@ -110,6 +113,10 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const [error, setError] = useState<string | null>(null);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    activeLineTypeRef.current = lineType;
+  }, [lineType]);
 
   const geocodeAddress = useCallback((addr: string, map = mapRef.current, lockAfterSearch = false) => {
     if (!map || !window.google?.maps) return;
@@ -316,7 +323,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
           drawingMode: null,
           drawingControl: false,
           polygonOptions: sectionOptions(sectionColor),
-          polylineOptions: lineOptions(lineType)
+          polylineOptions: lineOptions(activeLineTypeRef.current)
         });
         drawingManager.setMap(map);
         drawingRef.current = drawingManager;
@@ -344,16 +351,17 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
         google.maps.event.addListener(drawingManager, "polylinecomplete", (polyline: google.maps.Polyline) => {
           const id = crypto.randomUUID();
-          const color = LINE_COLOURS[lineType] || LINE_COLOURS.default;
-          polyline.setOptions(lineOptions(lineType));
+          const activeLineType = activeLineTypeRef.current;
+          const color = LINE_COLOURS[activeLineType] || LINE_COLOURS.default;
+          polyline.setOptions(lineOptions(activeLineType));
           attachPolylineListeners(id, polyline);
           const length_lm = round2(google.maps.geometry.spherical.computeLength(polyline.getPath()));
           setLines((current) => [
             ...current,
             {
               id,
-              label: `${lineType} ${current.length + 1}`,
-              type: lineType,
+              label: defaultLineLabel(activeLineType, current),
+              type: activeLineType,
               polyline,
               length_lm,
               color,
@@ -376,7 +384,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
     return () => {
       cancelled = true;
     };
-  }, [address, apiKey, attachPolygonListeners, attachPolylineListeners, geocodeAddress, lineType, loadExistingShapes, sectionColor, sectionType]);
+  }, [address, apiKey, attachPolygonListeners, attachPolylineListeners, geocodeAddress, loadExistingShapes, sectionColor, sectionType]);
 
   function startDrawSection() {
     if (!drawingRef.current) return;
@@ -391,7 +399,19 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
     if (!drawingRef.current) return;
     featureClickRef.current?.remove();
     featureClickRef.current = null;
+    activeLineTypeRef.current = lineType;
     drawingRef.current.setOptions({ polylineOptions: lineOptions(lineType) });
+    drawingRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYLINE);
+    setDrawMode("line");
+  }
+
+  function startDrawQuickLine(type: string) {
+    if (!drawingRef.current) return;
+    activeLineTypeRef.current = type;
+    setLineType(type);
+    featureClickRef.current?.remove();
+    featureClickRef.current = null;
+    drawingRef.current.setOptions({ polylineOptions: lineOptions(type) });
     drawingRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYLINE);
     setDrawMode("line");
   }
@@ -688,6 +708,17 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
               <p className="label">Draw Linear Run</p>
+              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Use roof work lines for quote sections, then scaffold/access lines for the matching scaffold price.</p>
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <button className="rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/15 px-3 py-3 text-left text-xs font-bold text-[#f5d46a]" onClick={() => startDrawQuickLine("Roof Work Section")} type="button">
+                  Draw Roof Work Section
+                  <span className="block pt-1 text-[0.65rem] font-semibold text-[var(--muted)]">Use for Section A/B/C roof works pricing</span>
+                </button>
+                <button className="rounded-xl border border-[#10b981]/40 bg-[#10b981]/15 px-3 py-3 text-left text-xs font-bold text-[#8df0b7]" onClick={() => startDrawQuickLine("Scaffold / Access")} type="button">
+                  Draw Scaffold / Access Line
+                  <span className="block pt-1 text-[0.65rem] font-semibold text-[var(--muted)]">Use for scaffold pricing linked to that section</span>
+                </button>
+              </div>
               <select className="field mt-3" onChange={(event) => setLineType(event.target.value)} value={lineType}>
                 {LINE_TYPES.map((type) => (
                   <option key={type}>{type}</option>
@@ -784,6 +815,22 @@ function sectionOptions(color: string): google.maps.PolygonOptions {
 
 function lineOptions(type: string): google.maps.PolylineOptions {
   return { strokeColor: LINE_COLOURS[type] || LINE_COLOURS.default, strokeWeight: 3, editable: true, clickable: true };
+}
+
+function defaultLineLabel(type: string, currentLines: DrawnLine[]) {
+  if (type === "Roof Work Section") {
+    return `${sectionLetterForType(currentLines, type)} - Roof works`;
+  }
+  if (type === "Scaffold / Access") {
+    return `${sectionLetterForType(currentLines, type)} - Scaffold/access`;
+  }
+  const sameTypeCount = currentLines.filter((line) => line.type === type).length;
+  return `${type} ${sameTypeCount + 1}`;
+}
+
+function sectionLetterForType(currentLines: DrawnLine[], type: string) {
+  const sameTypeCount = currentLines.filter((line) => line.type === type).length;
+  return `Section ${String.fromCharCode(65 + Math.min(sameTypeCount, 25))}`;
 }
 
 function featureMarkerIcon(color: string, selected: boolean): google.maps.Symbol {

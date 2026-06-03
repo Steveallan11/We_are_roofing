@@ -96,6 +96,8 @@ export const SECTION_TYPES = [
 export const CONDITIONS = ["Good", "Fair", "Poor", "Critical"] as const;
 
 export const LINE_DEFS = [
+  { name: "Roof Work Section", color: "#D4AF37", dash: [] as number[] },
+  { name: "Scaffold / Access", color: "#10b981", dash: [8, 4] as number[] },
   { name: "Ridge", color: "#ffffff", dash: [] as number[] },
   { name: "Valley", color: "#60a5fa", dash: [] as number[] },
   { name: "Hip", color: "#D4AF37", dash: [] as number[] },
