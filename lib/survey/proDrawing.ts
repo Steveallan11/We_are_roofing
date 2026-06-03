@@ -202,7 +202,7 @@ export function buildCleanSatellite(
   const padded = expandBoundsMeters(bounds, cfg.paddingMeters);
   const center = { lat: (padded.north + padded.south) / 2, lng: (padded.east + padded.west) / 2 };
   const width = 640;
-  const height = 514;
+  const height = 640;
   const scale: 1 | 2 = 2;
   const zoom = pickZoomForBounds(padded, width, height, cfg.zoomBoost);
 
@@ -211,7 +211,7 @@ export function buildCleanSatellite(
     maptype: "satellite",
     size: `${width}x${height}`,
     scale: String(scale),
-    format: "jpg",
+    format: "png32",
     center: `${center.lat},${center.lng}`,
     zoom: String(zoom)
   });
@@ -987,9 +987,13 @@ export function printProDrawing(svg: string, filename: string) {
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(`<!DOCTYPE html><html><head><title>${escapeXml(filename)}</title>
-    <style>body{margin:0;background:#f4f1e8}svg{width:100%;height:auto;display:block}
-    @page{size:A3 landscape;margin:6mm}
-    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>
+    <style>
+    @page{size:A3 landscape;margin:0}
+    html,body{margin:0;width:420mm;min-height:297mm;background:#f4f1e8}
+    svg{width:420mm;height:297mm;display:block}
+    @media screen{body{display:flex;justify-content:center;padding:16px}svg{max-width:100%;height:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}}
+    @media print{html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}svg{box-shadow:none}}
+    </style>
     </head><body>${svg}</body></html>`);
   win.document.close();
   win.focus();

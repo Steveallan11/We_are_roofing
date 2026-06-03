@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { KmzUploadButton, type ParsedKmlShape } from "@/components/survey/KmzUploadButton";
 import { buildDrawingStaticMapUrl, buildStaticMapUrl, buildTakeoffDrawingSvg, downloadPng, downloadSvg, printDrawing, type TakeoffDrawingFraming, type TakeoffDrawingStyle } from "@/lib/survey/cadDrawing";
-import { buildCleanSatellite, buildProDrawingSvg, downloadProPng, downloadProSvg, printProDrawing, type ProDrawingStyle } from "@/lib/survey/proDrawing";
+import { buildCleanSatellite, buildProDrawingSvg, downloadProPng, downloadProSvg, printProDrawing, type ProDrawingFraming, type ProDrawingStyle } from "@/lib/survey/proDrawing";
 import { buildCsv, downloadCsv } from "@/lib/survey/csvExporter";
 import { exportZipPackage } from "@/lib/survey/zipExporter";
 import type { RoofSurveyRecord, SurveyPoint } from "@/lib/survey/types";
@@ -768,9 +768,10 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
               {sections.length === 0 && lines.length === 0 && features.length === 0 ? (
                 <p className="mt-2 text-xs text-[var(--muted)]">Draw or import at least one measured section, line, or item before creating the quote draft.</p>
               ) : null}
-              <ExportButtons
+              <DrawingPackExports
                 address={address}
                 customerName={customerName || ""}
+                jobId={jobId}
                 jobRef={jobRef || "WR-J-TBC"}
                 projectName={initialSurvey.project_name}
                 surveyDate={new Date(initialSurvey.created_at || Date.now()).toLocaleDateString("en-GB")}
@@ -975,6 +976,251 @@ function downloadText(content: string, filename: string, type: string) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function DrawingPackExports(props: {
+  projectName: string;
+  jobId: string;
+  jobRef: string;
+  address: string;
+  customerName: string;
+  surveyDate: string;
+  surveyId: string;
+  notes: string;
+  rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
+}) {
+  const [customerFraming, setCustomerFraming] = useState<ProDrawingFraming>("building");
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+  const totalItems = props.rows.sections.length + props.rows.lines.length + props.rows.features.length;
+  const canExport = totalItems > 0;
+  const totalArea = props.rows.sections.reduce((sum, section) => sum + (Number(section.area_m2) || 0), 0);
+  const totalLength = props.rows.lines.reduce((sum, line) => sum + (Number(line.length_lm) || 0), 0);
+  const busy = Boolean(busyAction);
+
+  function makeKml() {
+    return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features });
+  }
+
+  function makeCsv() {
+    return buildCsv({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features, surveyDate: props.surveyDate });
+  }
+
+  async function makeProSvg(style: ProDrawingStyle, framing: ProDrawingFraming) {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    let satelliteImageHref: string | null = null;
+    let satelliteMeta = null;
+    let satelliteImageUrl: string | null = null;
+
+    if (style === "satellite-pro" && apiKey) {
+      const built = buildCleanSatellite(
+        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features, framing },
+        apiKey,
+        framing
+      );
+      if (built) {
+        satelliteImageUrl = built.url;
+        try {
+          satelliteImageHref = await imageUrlToDataUrl(built.url);
+        } catch {
+          // Keep the external URL as a fallback for print/preview. PNG export may still need a CORS-friendly map response.
+          satelliteImageHref = built.url;
+        }
+        satelliteMeta = built.meta;
+      }
+    }
+
+    const svg = buildProDrawingSvg({
+      projectName: props.projectName,
+      jobRef: props.jobRef,
+      address: props.address,
+      customerName: props.customerName,
+      surveyDate: props.surveyDate,
+      notes: props.notes,
+      sections: props.rows.sections,
+      lines: props.rows.lines,
+      features: props.rows.features,
+      style,
+      framing,
+      satelliteImageHref,
+      satelliteMeta
+    });
+
+    return { svg, satelliteImageUrl };
+  }
+
+  async function run(actionName: string, action: () => Promise<void>) {
+    if (!canExport) {
+      setMessage({ type: "error", text: "Add at least one roof section, line, or feature before exporting drawings." });
+      return;
+    }
+
+    setBusyAction(actionName);
+    setMessage(null);
+    try {
+      await action();
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to build drawing." });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function saveGeneratedDrawing(drawingType: string, displayName: string, svg: string) {
+    const response = await fetch(`/api/jobs/${props.jobId}/drawings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        survey_id: props.surveyId,
+        drawing_type: drawingType,
+        display_name: displayName,
+        svg
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.message || payload.error || "Unable to save drawing to job documents.");
+    }
+    setMessage({ type: "success", text: `${displayName} saved to the job documents.` });
+  }
+
+  async function buildDrawingPack() {
+    const customer = await makeProSvg("satellite-pro", customerFraming);
+    const technical = await makeProSvg("schematic-cad", "building");
+    const dimensioned = await makeProSvg("dimensioned-bw", "building");
+    await exportZipPackage({
+      projectName: props.projectName,
+      jobRef: props.jobRef,
+      address: props.address,
+      customerName: props.customerName,
+      surveyDate: props.surveyDate,
+      kmlString: makeKml(),
+      csvString: makeCsv(),
+      canvasDataUrl: svgToDataUrl(customer.svg),
+      customerSvg: customer.svg,
+      technicalSvg: technical.svg,
+      dimensionedSvg: dimensioned.svg,
+      satelliteImageUrl: customer.satelliteImageUrl
+    });
+  }
+
+  return (
+    <div className="mt-4 space-y-3 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-l)]">Drawing Pack</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Customer roof plan, technical takeoff plan, CSV and KML from the measured roof geometry.</p>
+        </div>
+        <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[10px] text-[var(--muted)]">{totalItems} items</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 text-center">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">Area</p>
+          <p className="text-sm font-bold text-[var(--text-primary)]">{totalArea.toFixed(1)} m2</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">Linear</p>
+          <p className="text-sm font-bold text-[var(--text-primary)]">{totalLength.toFixed(1)} lm</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">Features</p>
+          <p className="text-sm font-bold text-[var(--text-primary)]">{props.rows.features.length}</p>
+        </div>
+      </div>
+
+      <label className="block">
+        <span className="label">Customer plan framing</span>
+        <select className="field mt-1" onChange={(event) => setCustomerFraming(event.target.value as ProDrawingFraming)} value={customerFraming}>
+          <option value="building">Whole building (recommended)</option>
+          <option value="close">Close-up roof detail</option>
+          <option value="context">Wider site context</option>
+        </select>
+      </label>
+
+      <div className={`rounded-xl border p-3 text-xs leading-5 ${staticMapsReady ? "border-[var(--gold)]/30 bg-[var(--surface)] text-[var(--muted)]" : "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fcd88a]"}`}>
+        {staticMapsReady
+          ? "Customer plans use a high-resolution satellite base with vector section lines, labels and measurement text on top, so the linework stays crisp."
+          : "Google static satellite is not configured, so the customer plan will fall back to a clean vector roof drawing."}
+      </div>
+
+      <div className="grid grid-cols-1 gap-2">
+        <button
+          className="button-primary !py-3 text-xs"
+          disabled={busy || !canExport}
+          onClick={() => void run("customer-pdf", async () => printProDrawing((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))}
+          type="button"
+        >
+          {busyAction === "customer-pdf" ? "Building..." : "Customer Roof Plan PDF"}
+        </button>
+        <button
+          className="button-secondary !py-3 text-xs"
+          disabled={busy || !canExport}
+          onClick={() => void run("technical-pdf", async () => printProDrawing((await makeProSvg("schematic-cad", "building")).svg, `${props.jobRef}-technical-takeoff-plan`))}
+          type="button"
+        >
+          {busyAction === "technical-pdf" ? "Building..." : "Technical Takeoff Plan PDF"}
+        </button>
+        <button className="button-ghost !py-3 text-xs" disabled={busy || !canExport} onClick={() => void run("pack", buildDrawingPack)} type="button">
+          {busyAction === "pack" ? "Packaging..." : "Download Drawing Pack"}
+        </button>
+        <button
+          className="button-ghost !py-3 text-xs"
+          disabled={busy || !canExport}
+          onClick={() =>
+            void run("save-customer", async () => {
+              const { svg } = await makeProSvg("satellite-pro", customerFraming);
+              await saveGeneratedDrawing("customer_roof_plan_svg", "Customer Roof Plan", svg);
+            })
+          }
+          type="button"
+        >
+          {busyAction === "save-customer" ? "Saving..." : "Save Plan to Job Documents"}
+        </button>
+      </div>
+
+      <details className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Advanced exports</summary>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("customer-svg", async () => downloadProSvg((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))} type="button">
+            Customer SVG
+          </button>
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("customer-png", async () => downloadProPng((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))} type="button">
+            Customer PNG
+          </button>
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("technical-svg", async () => downloadProSvg((await makeProSvg("schematic-cad", "building")).svg, `${props.jobRef}-technical-takeoff-plan`))} type="button">
+            Technical SVG
+          </button>
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("bw-svg", async () => downloadProSvg((await makeProSvg("dimensioned-bw", "building")).svg, `${props.jobRef}-dimensioned-plan`))} type="button">
+            B/W SVG
+          </button>
+          <button className="button-ghost !py-2 text-xs" onClick={() => downloadCsv(makeCsv(), `${props.jobRef}-measurements`)} type="button">
+            CSV
+          </button>
+          <button className="button-ghost !py-2 text-xs" onClick={() => downloadText(makeKml(), `${props.jobRef}-roof-survey.kml`, "application/vnd.google-earth.kml+xml")} type="button">
+            KML
+          </button>
+          <button
+            className="button-ghost col-span-2 !py-2 text-xs"
+            onClick={() =>
+              printHtml(
+                `<h1>Roof Takeoff - ${escapeXml(props.jobRef)}</h1><p>${escapeXml(props.address)}</p><p>Total sections: ${props.rows.sections.length}</p><p>Total lines: ${props.rows.lines.length}</p><p>Total items: ${props.rows.features.length}</p><pre>${escapeXml(makeCsv())}</pre>`,
+                `${props.jobRef}-roof-takeoff`
+              )
+            }
+            type="button"
+          >
+            Measurement Table PDF
+          </button>
+        </div>
+      </details>
+
+      {message ? (
+        <p className={`text-xs ${message.type === "error" ? "text-red-400" : message.type === "success" ? "text-[var(--success)]" : "text-[var(--muted)]"}`}>{message.text}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function ExportButtons(props: {
