@@ -9,6 +9,8 @@ type CustomerQuoteDrawingSection = {
   code: string;
   label: string;
   measurementLm: number;
+  roofWorksLm: number;
+  scaffoldLm: number;
   hasRoofWorks: boolean;
   hasScaffold: boolean;
   points: DrawingPoint[];
@@ -670,19 +672,16 @@ function buildCustomerScheduleRows(rows: Array<{ color: string; code: string; la
 function buildCustomerQuoteScheduleRows(sections: CustomerQuoteDrawingSection[]) {
   return sections
     .map((section, index) => {
-      const y = 258 + index * 38;
-      const scope = [
-        section.hasRoofWorks ? "Roof works" : null,
-        section.hasScaffold ? "Scaffold/access" : null
-      ].filter(Boolean).join(" + ") || "Quoted section";
-      const measurement = section.measurementLm > 0 ? `${section.measurementLm.toFixed(section.measurementLm >= 10 ? 0 : 1)} lm` : "No drawing marker yet";
+      const y = 258 + index * 42;
+      const roofMeasurement = section.roofWorksLm > 0 ? `Roof works ${formatLinearMetres(section.roofWorksLm)}` : null;
+      const scaffoldMeasurement = section.scaffoldLm > 0 ? `Scaffold/access ${formatLinearMetres(section.scaffoldLm)}` : null;
+      const scope = [roofMeasurement, scaffoldMeasurement].filter(Boolean).join("  |  ") || "No drawing marker yet";
 
       return `
         <g transform="translate(842 ${y})">
           <circle cx="16" cy="-7" r="12" fill="${section.color}" stroke="#111827" stroke-width="1.5" />
           <text x="16" y="-2" text-anchor="middle" class="customer-code">${escapeXml(section.code)}</text>
           <text x="48" y="-9" class="customer-label">${escapeXml(section.label)}</text>
-          <text x="264" y="-9" text-anchor="end" class="customer-value">${escapeXml(measurement)}</text>
           <text x="48" y="9" class="customer-note">${escapeXml(scope)}</text>
         </g>`;
     })
@@ -697,6 +696,8 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     const existing = groups.get(label) ?? {
       label,
       measurementLm: 0,
+      roofWorksLm: 0,
+      scaffoldLm: 0,
       hasRoofWorks: false,
       hasScaffold: false,
       points: [] as DrawingPoint[],
@@ -708,6 +709,11 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     existing.hasScaffold ||= identity.includes("scaffold") || identity.includes("access");
     existing.hasRoofWorks ||= identity.includes("roof work") || identity.includes("roof works") || identity.includes("section");
     existing.measurementLm += Number(line.length_lm || 0);
+    if (identity.includes("scaffold") || identity.includes("access")) {
+      existing.scaffoldLm += Number(line.length_lm || 0);
+    } else if (identity.includes("roof work") || identity.includes("roof works") || identity.includes("section")) {
+      existing.roofWorksLm += Number(line.length_lm || 0);
+    }
     existing.points.push(...line.points);
     if (line.points.length >= 2) existing.lineSegments.push(line.points);
     if (line.notes) existing.notes.push(line.notes);
@@ -719,6 +725,8 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     const existing = groups.get(label) ?? {
       label,
       measurementLm: 0,
+      roofWorksLm: 0,
+      scaffoldLm: 0,
       hasRoofWorks: true,
       hasScaffold: false,
       points: [] as DrawingPoint[],
@@ -738,6 +746,8 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
     groups.set(label, {
       label,
       measurementLm: 0,
+      roofWorksLm: 0,
+      scaffoldLm: 0,
       hasRoofWorks: typeof quoteSection.roofNet === "number" && quoteSection.roofNet > 0,
       hasScaffold: typeof quoteSection.accessNet === "number" && quoteSection.accessNet > 0,
       points: [],
@@ -797,6 +807,10 @@ function customerQuoteSectionLabel(value: string) {
     .replace(/\s+/g, " ")
     .trim();
   return clean || "General Works";
+}
+
+function formatLinearMetres(value: number) {
+  return `${value.toFixed(value >= 10 ? 0 : 1)} lm`;
 }
 
 function customerRowGroup(label: string) {
