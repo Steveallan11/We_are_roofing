@@ -759,7 +759,7 @@ function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines"
 
   return [...groups.values()]
     .sort((left, right) => naturalLabelCompare(left.label, right.label))
-    .map((section, index) => ({ ...section, code: sectionMarkerLabel(index) }));
+    .map((section, index) => ({ ...section, code: quoteSectionMarkerLabel(index) }));
 }
 
 function customerQuoteSectionsToMapData(sections: CustomerQuoteDrawingSection[]): Pick<DrawingOpts, "sections" | "lines" | "features"> {
@@ -807,6 +807,10 @@ function customerQuoteSectionLabel(value: string) {
     .replace(/\s+/g, " ")
     .trim();
   return clean || "General Works";
+}
+
+function quoteSectionMarkerLabel(index: number) {
+  return String.fromCharCode(65 + Math.min(index, 25));
 }
 
 function formatLinearMetres(value: number) {
