@@ -25,6 +25,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
   const options = (record.options ?? []) as QuoteOption[];
   const displayTotal = getQuotePipelineValue(record) ?? 0;
+  const roofPlan = access.mode === "token" ? await getInlineRoofPlanHref(supabase, record.id) : null;
 
   return (
     <main className="min-h-screen bg-[var(--obsidian)] px-4 py-6 md:py-10">
@@ -51,6 +52,17 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
             <QuoteSection title="Scope of Works" intro="The work included in this quotation.">
               <ReadableText value={record.scope_of_works} />
             </QuoteSection>
+
+            {roofPlan ? (
+              <QuoteSection title="Your Roof Plan" intro="The lettered sections on this plan match the quote sections below.">
+                <div className="overflow-hidden rounded-2xl border border-[var(--gold)]/25 bg-white">
+                  <img alt="Customer roof plan with lettered quote sections" className="h-auto w-full" src={roofPlan.href} />
+                </div>
+                <p className="font-ui text-base leading-7 text-[var(--text-muted)]">
+                  Prices stay in the quote section, so this drawing stays clean and easy to follow.
+                </p>
+              </QuoteSection>
+            ) : null}
 
             <PublicQuoteActions costBreakdown={record.cost_breakdown ?? []} options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
           </div>
@@ -89,6 +101,23 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
       </div>
     </main>
   );
+}
+
+async function getInlineRoofPlanHref(supabase: ReturnType<typeof createSupabaseAdminClient>, quoteId: string) {
+  const { data: attachment } = await supabase
+    .from("quote_attachments")
+    .select("job_documents(id, display_name, storage_bucket, storage_path, mime_type)")
+    .eq("quote_id", quoteId)
+    .eq("attachment_type", "inline_quote_roof_plan")
+    .limit(1)
+    .maybeSingle();
+
+  const document = Array.isArray(attachment?.job_documents) ? attachment?.job_documents[0] : attachment?.job_documents;
+  if (!document?.storage_bucket || !document.storage_path) return null;
+
+  const signed = await supabase.storage.from(document.storage_bucket).createSignedUrl(document.storage_path, 60 * 60);
+  const href = signed.data?.signedUrl;
+  return href ? { href, displayName: document.display_name ?? "Customer roof plan" } : null;
 }
 
 function QuoteSection({ children, intro, title }: { children: ReactNode; intro?: string; title: string }) {
