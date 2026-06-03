@@ -239,7 +239,7 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
   const customerPanelLine1 = customerQuotePlan ? "Letters on the roof match the measured items below." : "Markers on the roof match the groups below.";
   const customerPanelLine2 = customerQuotePlan ? "Areas show m2. Ridges, valleys, eaves and access show lm." : "Prices are shown in the quotation, not on this drawing.";
   const cleanCustomerDiagram = customerQuotePlan
-    ? buildCleanCustomerQuoteDiagram(customerQuoteSections, { x: 64, y: 154, width: 742, height: 520 }, style.soft, satelliteUrl)
+    ? buildCleanCustomerQuoteDiagram(customerQuoteSections, { x: 64, y: 154, width: 742, height: 520 }, style.soft)
     : "";
 
   if (customerPlan) {
@@ -272,15 +272,6 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
         <feFuncB type="linear" slope="1.08" intercept="-0.02" />
       </feComponentTransfer>
       <feConvolveMatrix order="3" kernelMatrix="0 -0.45 0 -0.45 2.8 -0.45 0 -0.45 0" preserveAlpha="true" />
-    </filter>
-    <filter id="customerPlanImage">
-      <feGaussianBlur stdDeviation="0.35" />
-      <feColorMatrix type="saturate" values="0.62" />
-      <feComponentTransfer>
-        <feFuncR type="linear" slope="1.12" intercept="0.01" />
-        <feFuncG type="linear" slope="1.12" intercept="0.01" />
-        <feFuncB type="linear" slope="1.12" intercept="0.01" />
-      </feComponentTransfer>
     </filter>
     <clipPath id="mainClip"><rect x="64" y="154" width="742" height="520" rx="18" /></clipPath>
     <clipPath id="insetClip"><rect x="64" y="704" width="250" height="94" rx="14" /></clipPath>
@@ -499,7 +490,7 @@ function gridLines(dark: boolean) {
   return lines.join("");
 }
 
-function buildCleanCustomerQuoteDiagram(sections: CustomerQuoteDrawingSection[], rect: DrawingRect, borderColor: string, satelliteUrl?: string | null) {
+function buildCleanCustomerQuoteDiagram(sections: CustomerQuoteDrawingSection[], rect: DrawingRect, borderColor: string) {
   const geometryPoints = sections.flatMap((section) => [
     ...section.points,
     ...section.lineSegments.flat()
@@ -549,7 +540,6 @@ function buildCleanCustomerQuoteDiagram(sections: CustomerQuoteDrawingSection[],
 
   return `
     ${cleanDiagramGrid(rect)}
-    ${cleanBuildingUnderlay(rect, satelliteUrl)}
     <g clip-path="url(#mainClip)">
       ${areaShapes.join("")}
       ${lineShapes.join("")}
@@ -575,21 +565,6 @@ function cleanDiagramGrid(rect: DrawingRect) {
     <rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" rx="18" fill="#fffdf7" />
     <g clip-path="url(#mainClip)">${lines.join("")}</g>
     <rect x="${rect.x + 18}" y="${rect.y + 18}" width="${rect.width - 36}" height="${rect.height - 36}" rx="12" fill="none" stroke="#f4eddc" stroke-width="1.5" stroke-dasharray="5 7" />`;
-}
-
-function cleanBuildingUnderlay(rect: DrawingRect, satelliteUrl?: string | null) {
-  if (!satelliteUrl) {
-    return `
-      <rect x="${rect.x + 28}" y="${rect.y + 28}" width="${rect.width - 56}" height="${rect.height - 56}" rx="12" fill="#f8f0d8" fill-opacity="0.36" stroke="#eadfbd" stroke-width="1.4" />
-      <text x="${rect.x + 46}" y="${rect.y + 64}" class="diagram-muted">Google Maps building image unavailable - showing clean takeoff geometry only.</text>`;
-  }
-
-  return `
-    <g clip-path="url(#mainClip)">
-      <image href="${escapeXml(satelliteUrl)}" x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" preserveAspectRatio="xMidYMid slice" filter="url(#customerPlanImage)" opacity="0.5" />
-      <rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" fill="#fffdf7" opacity="0.38" />
-      <rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" fill="#D4AF37" opacity="0.05" />
-    </g>`;
 }
 
 function makeRectProjector(bounds: ReturnType<typeof getBounds>, rect: DrawingRect, padding: number) {
