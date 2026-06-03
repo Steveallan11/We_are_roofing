@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/primitives";
 import { AttentionBanner } from "@/components/jobs/AttentionBanner";
 import { JobCard } from "@/components/jobs/job-card";
 import { JobFilters } from "@/components/jobs/JobFilters";
+import { JobSearchDialog } from "@/components/jobs/JobSearchDialog";
 import { PipelineStrip } from "@/components/jobs/PipelineStrip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getPipelineGroup, PIPELINE_GROUPS, type PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
@@ -24,10 +25,23 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
   const [activeFilter, setActiveFilter] = useState<PipelineGroupKey | "all" | "attention">(initialFilter);
   const [view, setView] = useState<"board" | "list">("board");
   const [draggingJobId, setDraggingJobId] = useState<string | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => {
     setOptimisticJobs(jobs);
   }, [jobs]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const attentionJobs = useMemo(() => optimisticJobs.filter(needsAttention), [optimisticJobs]);
   const activeJobs = useMemo(() => optimisticJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)), [optimisticJobs]);
@@ -81,7 +95,20 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
         </div>
       </div>
 
-      <AttentionBanner jobs={attentionJobs} onViewAll={() => setActiveFilter("attention")} />
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex-1">
+          <AttentionBanner jobs={attentionJobs} onViewAll={() => setActiveFilter("attention")} />
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setIsSearchOpen(true)}
+          className="shrink-0"
+        >
+          🔍 Search (⌘K)
+        </Button>
+      </div>
+
       <div className="hidden lg:block">
         <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={optimisticJobs} onSelect={setActiveFilter} />
       </div>
@@ -176,6 +203,8 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
           )}
         </>
       )}
+
+      <JobSearchDialog jobs={optimisticJobs} isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );
 }
