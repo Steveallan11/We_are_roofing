@@ -223,9 +223,9 @@ export function buildTakeoffDrawingSvg(opts: DrawingOpts) {
     .slice(0, 3)
     .map((line, index) => `<text x="64" y="${780 + index * 18}" class="notes-text">${escapeXml(line)}</text>`)
     .join("");
-  const customerScheduleRows = customerQuotePlan ? buildCustomerQuoteScheduleRows(customerQuoteSections.slice(0, 12)) : buildCustomerScheduleRows(legendRows.slice(0, 16));
+  const customerScheduleRows = customerQuotePlan ? buildCustomerQuoteScheduleRows(customerQuoteSections) : buildCustomerScheduleRows(legendRows);
   const customerTitle = customerQuotePlan ? "Customer Quote Roof Plan" : "Customer Roof Measurement Plan";
-  const customerSubtitle = customerQuotePlan ? "Numbered sections match the quotation" : "Numbered roof sections used to prepare your quotation";
+  const customerSubtitle = customerQuotePlan ? "Lettered sections match the quotation" : "Numbered roof sections used to prepare your quotation";
   const customerPanelTitle = customerQuotePlan ? "Your quoted roof sections" : "How to read this plan";
   const customerPanelLine1 = customerQuotePlan ? "Each marker is one quoted work section." : "Markers on the roof match the groups below.";
   const customerPanelLine2 = customerQuotePlan ? "Roof works and scaffold/access are grouped together." : "Prices are shown in the quotation, not on this drawing.";
@@ -503,7 +503,8 @@ export function buildStaticMapUrl(opts: Pick<DrawingOpts, "sections" | "lines" |
     const isCustomerQuoteLine = line.type === "Customer Quote Section";
     params.append("path", [`color:0x${color}${isCustomerQuoteLine ? "cc" : "ff"}`, `weight:${isCustomerQuoteLine ? 3 : 5}`, ...coords.map((point) => `${point.lat},${point.lng}`)].join("|"));
     const mid = geoMidpoint(coords);
-    params.append("markers", `color:0x${color}|label:${sectionMarkerLabel(opts.sections.length + index)}|${mid.lat},${mid.lng}`);
+    const markerLabel = isCustomerQuoteLine ? quoteSectionMarkerLabel(index) : sectionMarkerLabel(opts.sections.length + index);
+    params.append("markers", `color:0x${color}|label:${markerLabel}|${mid.lat},${mid.lng}`);
   });
 
   opts.features.slice(0, 12).forEach((feature, index) => {
@@ -648,31 +649,42 @@ function buildCustomerScheduleRows(rows: Array<{ color: string; code: string; la
   ].filter((group) => group.rows.length);
   const output: string[] = [];
   let y = 252;
+  let shown = 0;
+  const maxRows = 12;
 
   groups.forEach((group) => {
+    if (shown >= maxRows) return;
     output.push(`<text x="848" y="${y}" class="customer-group">${escapeXml(group.title)}</text>`);
-    y += 24;
+    y += 22;
     group.rows.forEach((row) => {
+      if (shown >= maxRows) return;
       output.push(`
         <g transform="translate(842 ${y})">
           <circle cx="13" cy="-5" r="10" fill="${row.color}" stroke="#111827" stroke-width="1.3" />
           <text x="13" y="-1" text-anchor="middle" class="customer-code">${escapeXml(row.code)}</text>
-          <text x="32" y="-7" class="customer-label">${escapeXml(row.label || "Measured section")}</text>
+          <text x="32" y="-7" class="customer-label">${escapeXml(truncateText(row.label || "Measured section", 26))}</text>
           <text x="264" y="-7" text-anchor="end" class="customer-value">${escapeXml(row.value)}</text>
-          <text x="32" y="10" class="customer-note">${escapeXml(customerRowDescription(row.label || "Measured item"))}</text>
+          <text x="32" y="10" class="customer-note">${escapeXml(truncateText(customerRowDescription(row.label || "Measured item"), 34))}</text>
         </g>`);
-      y += 30;
+      y += 28;
+      shown += 1;
     });
-    y += 8;
+    y += 6;
   });
+
+  if (rows.length > shown) {
+    output.push(`<text x="848" y="650" class="customer-note">+ ${rows.length - shown} more item(s) on the technical takeoff plan</text>`);
+  }
 
   return output.join("");
 }
 
 function buildCustomerQuoteScheduleRows(sections: CustomerQuoteDrawingSection[]) {
-  return sections
+  const maxRows = 12;
+  const visibleSections = sections.slice(0, maxRows);
+  const rows = visibleSections
     .map((section, index) => {
-      const y = 258 + index * 42;
+      const y = 256 + index * 32;
       const roofMeasurement = section.roofWorksLm > 0 ? `Roof works ${formatLinearMetres(section.roofWorksLm)}` : null;
       const scaffoldMeasurement = section.scaffoldLm > 0 ? `Scaffold/access ${formatLinearMetres(section.scaffoldLm)}` : null;
       const scope = [roofMeasurement, scaffoldMeasurement].filter(Boolean).join("  |  ") || "No drawing marker yet";
@@ -681,11 +693,14 @@ function buildCustomerQuoteScheduleRows(sections: CustomerQuoteDrawingSection[])
         <g transform="translate(842 ${y})">
           <circle cx="16" cy="-7" r="12" fill="${section.color}" stroke="#111827" stroke-width="1.5" />
           <text x="16" y="-2" text-anchor="middle" class="customer-code">${escapeXml(section.code)}</text>
-          <text x="48" y="-9" class="customer-label">${escapeXml(section.label)}</text>
-          <text x="48" y="9" class="customer-note">${escapeXml(scope)}</text>
+          <text x="48" y="-9" class="customer-label">${escapeXml(truncateText(section.label, 25))}</text>
+          <text x="48" y="8" class="customer-note">${escapeXml(truncateText(scope, 38))}</text>
         </g>`;
     })
     .join("");
+
+  if (sections.length <= maxRows) return rows;
+  return `${rows}<text x="848" y="650" class="customer-note">+ ${sections.length - maxRows} more section(s) on the technical takeoff plan</text>`;
 }
 
 function buildCustomerQuoteSections(opts: Pick<DrawingOpts, "sections" | "lines" | "features" | "quoteSections">): CustomerQuoteDrawingSection[] {
@@ -811,6 +826,11 @@ function customerQuoteSectionLabel(value: string) {
 
 function quoteSectionMarkerLabel(index: number) {
   return String.fromCharCode(65 + Math.min(index, 25));
+}
+
+function truncateText(value: string, max: number) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  return clean.length <= max ? clean : `${clean.slice(0, Math.max(0, max - 1)).trimEnd()}...`;
 }
 
 function formatLinearMetres(value: number) {
