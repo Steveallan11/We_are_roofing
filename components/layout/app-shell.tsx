@@ -2,6 +2,7 @@ import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { GaugeFAB } from "@/components/layout/GaugeFAB";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { OfflineIndicator } from "@/components/offline/OfflineIndicator";
 import { Starfield } from "@/components/ui/starfield";
 import { requireAdminSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export async function AppShell({
       </div>
       <MobileBottomNav />
       <GaugeFAB />
+      <OfflineIndicator />
     </div>
   );
 }
