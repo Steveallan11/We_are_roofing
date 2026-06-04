@@ -87,6 +87,21 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
   }
 
+  // Cancel nurture sequence when quote is accepted
+  try {
+    await supabase
+      .from("nurture_sequences")
+      .update({
+        completed_at: new Date().toISOString(),
+        completion_reason: "quote_accepted"
+      })
+      .eq("quote_id", quoteId)
+      .is("completed_at", null);
+  } catch (err) {
+    console.error("Failed to cancel nurture sequence on quote acceptance:", err);
+    // Don't fail the entire request if nurture cancellation fails
+  }
+
   await supabase
     .from("jobs")
     .update({ status: "Accepted", accepted_at: new Date().toISOString(), estimated_value: acceptedTotal, updated_at: new Date().toISOString() })
