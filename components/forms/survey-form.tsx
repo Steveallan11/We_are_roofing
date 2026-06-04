@@ -29,6 +29,16 @@ type Props = {
   initialSurvey?: SurveyRecord | null;
 };
 
+type TakeoffMeasurements = {
+  ridge_length_m: number | null;
+  eaves_length_m: number | null;
+  verge_length_m: number | null;
+  total_hip_metres: number | null;
+  total_valley_metres: number | null;
+  roof_area_override_m2: number | null;
+  line_breakdown: string;
+};
+
 const CONDITION_OPTIONS = ["Good", "Fair", "Poor", "Failed", "N/A"] as const;
 
 const SURVEY_META: Array<{
@@ -303,10 +313,49 @@ function MetricCard({ label, value, note }: { label: string; value: string; note
   );
 }
 
+function ImportFromTakeoffButton({ jobId, onImport }: { jobId: string; onImport: (m: TakeoffMeasurements) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleImport() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/import-roof-measurements`);
+      const data = await res.json() as { ok: boolean; measurements?: TakeoffMeasurements; error?: string };
+      if (!res.ok || !data.ok || !data.measurements) {
+        setError(data.error ?? "No roof takeoff found. Complete the Roof Map first.");
+        return;
+      }
+      onImport(data.measurements);
+    } catch {
+      setError("Unable to load roof takeoff data.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={handleImport}
+        disabled={loading}
+        className="rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/8 px-4 py-2 text-sm font-semibold text-[var(--gold)] transition hover:bg-[var(--gold)]/15 disabled:opacity-50"
+      >
+        {loading ? "Importing…" : "↓ Import from Roof Takeoff"}
+      </button>
+      {error ? <p className="mt-2 text-xs text-[var(--stage-alert-text)]">{error}</p> : null}
+    </div>
+  );
+}
+
 function SpecialistSectionPitched({
+  jobId,
   value,
   onChange
 }: {
+  jobId?: string;
   value: PitchedRoofDetails;
   onChange: (value: PitchedRoofDetails) => void;
 }) {
@@ -370,6 +419,23 @@ function SpecialistSectionPitched({
       </SurveySection>
 
       <SurveySection isOpen={isOpen("measurements")} onToggle={() => toggle("measurements")} subtitle="Enter the simple runs you measure on site. The app calculates the working summary and you can override it." title="Measurements">
+        {jobId ? (
+          <div className="mb-4">
+            <ImportFromTakeoffButton
+              jobId={jobId}
+              onImport={(m) => {
+                patch({
+                  ...(m.ridge_length_m !== null ? { ridge_length_m: m.ridge_length_m } : {}),
+                  ...(m.eaves_length_m !== null ? { eaves_length_m: m.eaves_length_m } : {}),
+                  ...(m.verge_length_m !== null ? { verge_length_m: m.verge_length_m } : {}),
+                  ...(m.total_hip_metres !== null ? { total_hip_metres: m.total_hip_metres } : {}),
+                  ...(m.total_valley_metres !== null ? { total_valley_metres: m.total_valley_metres } : {}),
+                  ...(m.roof_area_override_m2 !== null ? { roof_area_override_m2: m.roof_area_override_m2 } : {})
+                });
+              }}
+            />
+          </div>
+        ) : null}
         <div className="grid gap-4 md:grid-cols-2">
           <NumberField label="Pitch Angle" onChange={(next) => patch({ pitch_angle_deg: toNumber(next) })} unit="°" value={numberInput(value.pitch_angle_deg)} />
           <NumberField label="Single Ridge Length" onChange={(next) => patch({ ridge_length_m: toNumber(next) })} unit="m" value={numberInput(value.ridge_length_m)} />
@@ -632,16 +698,18 @@ function defaultAdaptiveSections(initialSurvey?: SurveyRecord | null): SurveyAda
 }
 
 function SpecialistSurveyBody({
+  jobId,
   selectedSurveyType,
   adaptiveSections,
   onChange
 }: {
+  jobId: string;
   selectedSurveyType: SurveyType;
   adaptiveSections: SurveyAdaptiveSections;
   onChange: (next: SurveyAdaptiveSections) => void;
 }) {
   if (selectedSurveyType === "Pitched / Tiled") {
-    return <SpecialistSectionPitched onChange={(next) => onChange({ ...adaptiveSections, pitched_roof: next })} value={adaptiveSections.pitched_roof ?? {}} />;
+    return <SpecialistSectionPitched jobId={jobId} onChange={(next) => onChange({ ...adaptiveSections, pitched_roof: next })} value={adaptiveSections.pitched_roof ?? {}} />;
   }
   if (selectedSurveyType === "Flat Roof") {
     return <SpecialistSectionFlat onChange={(next) => onChange({ ...adaptiveSections, flat_roof: next })} value={adaptiveSections.flat_roof ?? {}} />;
@@ -830,7 +898,7 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
         <p className="mt-3 text-sm text-[var(--muted)]">{surveyMeta?.description}</p>
       </div>
 
-      <SpecialistSurveyBody adaptiveSections={adaptiveSections} onChange={setAdaptiveSections} selectedSurveyType={selectedSurveyType} />
+      <SpecialistSurveyBody jobId={jobId} adaptiveSections={adaptiveSections} onChange={setAdaptiveSections} selectedSurveyType={selectedSurveyType} />
 
       <div className="card sticky bottom-4 z-10 p-5">
         <div className="flex flex-wrap items-center gap-3">
