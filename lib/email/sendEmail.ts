@@ -2,6 +2,8 @@ import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
+import { findOrCreateConversation } from "@/lib/comms/findOrCreateConversation";
+import { startNurtureSequence } from "@/lib/email/nurture";
 
 type SendEmailParams = {
   to: string;
@@ -178,7 +180,42 @@ async function logEmail({
 }) {
   if (!canPersistToSupabase()) return;
 
-  await createSupabaseAdminClient().from("email_logs").insert({
+  const supabase = createSupabaseAdminClient();
+
+  // Create or find conversation to track in Comms
+  try {
+    const conversation = await findOrCreateConversation({
+      customerEmail: to,
+      channel: "email",
+      subject,
+      jobId: jobId ?? null,
+      quoteId: quoteId ?? null
+    });
+
+    // Create message record so it appears in Comms thread
+    await supabase.from("messages").insert({
+      conversation_id: conversation.id,
+      direction: "outbound",
+      channel: "email",
+      sender_type: "business",
+      sender_name: "Andy @ We Are Roofing",
+      sender_email: "werroofinguk@gmail.com",
+      body: text || html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+      html_body: html,
+      subject,
+      status: status === "Sent" ? "delivered" : "failed",
+      sent_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error("Failed to create message/conversation for email:", {
+      to,
+      jobId,
+      quoteId,
+      error: err instanceof Error ? err.message : String(err)
+    });
+  }
+
+  await supabase.from("email_logs").insert({
     job_id: jobId ?? null,
     quote_id: quoteId ?? null,
     to_email: to,
@@ -192,4 +229,16 @@ async function logEmail({
     sent_at: new Date().toISOString(),
     status
   });
+
+  // Start nurture sequence if this is a quote email (and successful send)
+  if (quoteId && status === "Sent" && !sequenceDay) {
+    try {
+      await startNurtureSequence(quoteId);
+    } catch (err) {
+      console.error("Failed to start nurture sequence:", {
+        quoteId,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
 }

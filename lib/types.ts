@@ -871,6 +871,39 @@ export type QuoteTemplate = {
   updated_at: string;
 };
 
+export type NurtureSequence = {
+  id: string;
+  business_id?: string | null;
+  quote_id: string;
+  job_id: string;
+  customer_id?: string | null;
+  started_at: string;
+  current_day: number;
+  last_email_sent_at?: string | null;
+  completed_at?: string | null;
+  completion_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NurtureEmail = {
+  id: string;
+  sequence_id: string;
+  quote_id: string;
+  job_id: string;
+  day_number: number;
+  template_name: string;
+  subject: string;
+  body: string;
+  customer_email: string;
+  status: "pending" | "sent" | "delivered" | "failed" | "bounced" | "opened" | "clicked";
+  sent_at?: string | null;
+  delivery_status_checked_at?: string | null;
+  message_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PricingRule = {
   id: string;
   business_id: string;

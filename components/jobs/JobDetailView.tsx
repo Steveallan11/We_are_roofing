@@ -16,6 +16,7 @@ import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { FieldActionBar } from "@/components/jobs/FieldActionBar";
+import { NurtureSequenceStatus } from "@/components/jobs/NurtureSequenceStatus";
 
 import {
   Badge,
@@ -444,6 +445,12 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
           <span className="text-[var(--text-second)]">{getNextActionLabel(job)}</span>
         </div>
       </div>
+
+      {quote.status === "Sent" && (
+        <div className="mt-4 border-t border-[var(--border)] pt-4">
+          <NurtureSequenceStatus quoteId={quote.id} />
+        </div>
+      )}
 
       {quote.options?.length ? (
         <div className="mt-4 space-y-3 border-t border-[var(--border)] pt-4">
