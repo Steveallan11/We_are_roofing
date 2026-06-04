@@ -835,6 +835,24 @@ export type DiaryEntry = {
   updated_at: string;
 };
 
+export type StickyNote = {
+  id: string;
+  business_id: string;
+  user_id: string | null;
+  content: string;
+  color: string;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+  z_index: number;
+  linked_job_id: string | null;
+  linked_customer_id: string | null;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type QuoteTemplate = {
   id: string;
   business_id: string;
