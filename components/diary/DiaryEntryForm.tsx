@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/primitives";
+import { JobPicker } from "./JobPicker";
+import { VoiceRecorder } from "./VoiceRecorder";
 import type { DiaryEntryType } from "@/lib/types";
 
 type Props = {
@@ -19,6 +21,16 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
   const [jobId, setJobId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [amount, setAmount] = useState("");
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+
+  const handleTranscript = (transcript: string) => {
+    setVoiceTranscript(transcript);
+    if (!body) {
+      setBody(transcript);
+    } else {
+      setBody((prev) => `${prev}\n${transcript}`);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +42,8 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
         entry_type: entryType,
         title: title || null,
         body: body || null,
-        linked_job_id: jobId || null
+        linked_job_id: jobId || null,
+        voice_transcript: voiceTranscript || null
       };
 
       if (entryType === "task" || entryType === "reminder") {
@@ -67,6 +80,8 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
     <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
       <h3 className="font-semibold capitalize">{entryType.replace("_", " ")}</h3>
 
+      {entryType === "voice_note" && <VoiceRecorder onTranscript={handleTranscript} />}
+
       {["voice_note", "text_note", "photo", "reminder"].includes(entryType) && (
         <div>
           <label className="block text-sm font-medium text-[var(--text)]">Title (optional)</label>
@@ -86,8 +101,8 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="What did you capture?"
-            rows={3}
+            placeholder={entryType === "voice_note" ? "Transcript appears here. Edit if needed." : "What did you capture?"}
+            rows={entryType === "voice_note" ? 5 : 3}
             className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
           />
         </div>
@@ -133,16 +148,7 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
         </div>
       )}
 
-      <div>
-        <label className="block text-sm font-medium text-[var(--text)]">Link to job (optional)</label>
-        <input
-          type="text"
-          value={jobId}
-          onChange={(e) => setJobId(e.target.value)}
-          placeholder="Paste job ID or leave empty"
-          className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
-        />
-      </div>
+      <JobPicker value={jobId} onChange={(id) => setJobId(id)} />
 
       {error && <div className="rounded bg-[#ef4444]/15 p-2 text-sm text-[#fca5a5]">{error}</div>}
 

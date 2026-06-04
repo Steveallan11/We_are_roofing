@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getDiaryColor, getDiaryIcon } from "./diaryConstants";
 import type { DiaryEntry, DiaryEntryType } from "@/lib/types";
 
 type Props = {
@@ -75,40 +76,40 @@ function DiaryEntryCard({ entry }: { entry: DiaryEntry }) {
     minute: "2-digit"
   });
 
-  const typeIcon: Record<string, string> = {
-    voice_note: "🎤",
-    text_note: "📝",
-    photo: "📸",
-    reminder: "⏰",
-    task: "✓",
-    expense: "💷",
-    payment: "💳"
-  };
-
-  const icon = typeIcon[entry.entry_type] || "•";
+  const icon = getDiaryIcon(entry.entry_type);
+  const color = getDiaryColor(entry.entry_type);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+    <div
+      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3"
+      style={{ borderLeft: `3px solid ${color}` }}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex gap-2">
-          <span className="text-xl">{icon}</span>
+          <span className="text-xl" style={{ color }}>
+            {icon}
+          </span>
           <div className="min-w-0">
             {entry.title && <p className="font-semibold text-[var(--text)]">{entry.title}</p>}
             {entry.body && <p className="mt-1 text-sm text-[var(--text-muted)] line-clamp-2">{entry.body}</p>}
             {entry.entry_type === "task" && entry.task_due_date && (
-              <p className="mt-1 text-xs text-[#f59e0b]">
+              <p className="mt-1 text-xs" style={{ color }}>
                 Due: {new Date(entry.task_due_date).toLocaleDateString("en-GB")}
               </p>
             )}
             {entry.entry_type === "expense" && entry.expense_amount ? (
-              <p className="mt-1 text-xs text-[#ef4444]">£{entry.expense_amount.toFixed(2)}</p>
+              <p className="mt-1 text-xs font-medium" style={{ color }}>
+                £{entry.expense_amount.toFixed(2)}
+              </p>
             ) : null}
             {entry.entry_type === "payment" && entry.payment_amount && entry.payment_to_name ? (
-              <p className="mt-1 text-xs text-[#6366f1]">
+              <p className="mt-1 text-xs font-medium" style={{ color }}>
                 £{entry.payment_amount.toFixed(2)} to {entry.payment_to_name}
               </p>
             ) : entry.entry_type === "payment" && entry.payment_amount ? (
-              <p className="mt-1 text-xs text-[#6366f1]">£{entry.payment_amount.toFixed(2)}</p>
+              <p className="mt-1 text-xs font-medium" style={{ color }}>
+                £{entry.payment_amount.toFixed(2)}
+              </p>
             ) : null}
           </div>
         </div>

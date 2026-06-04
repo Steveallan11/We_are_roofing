@@ -29,6 +29,49 @@ const VALID_JOB_STATUSES = [
   "Archived"
 ] as const;
 
+export async function GET(request: Request) {
+  if (!canPersistToSupabase()) return NextResponse.json({ ok: true, jobs: [] });
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const { searchParams } = new URL(request.url);
+  const search = (searchParams.get("q") ?? "").trim();
+  const limit = Math.min(Number(searchParams.get("limit") || 20), 100);
+
+  const supabase = createSupabaseAdminClient();
+  let query = supabase
+    .from("jobs")
+    .select("id, job_ref, job_title, property_address, status, customers(full_name, business_name)")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (search) {
+    const term = `%${search.replace(/[%_]/g, "\\$&")}%`;
+    query = query.or(`job_title.ilike.${term},job_ref.ilike.${term},property_address.ilike.${term}`);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  const jobs = (data ?? []).map((row: Record<string, unknown>) => {
+    const customer = row.customers as { full_name?: string; business_name?: string } | null;
+    const customerName = customer?.business_name || customer?.full_name || "—";
+    return {
+      id: String(row.id),
+      job_ref: row.job_ref as string | null,
+      job_title: row.job_title as string,
+      property_address: row.property_address as string | null,
+      status: row.status as string,
+      customer_name: customerName
+    };
+  });
+
+  return NextResponse.json({ ok: true, jobs });
+}
+
 function splitPersonName(fullName: string) {
   const trimmed = fullName.trim();
   if (!trimmed) {
