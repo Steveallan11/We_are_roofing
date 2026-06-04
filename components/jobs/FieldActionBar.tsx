@@ -17,6 +17,8 @@ interface FieldActionBarProps {
   showVoice?: boolean;
   showNote?: boolean;
   showTask?: boolean;
+  showExpense?: boolean;
+  showTimer?: boolean;
 }
 
 export function FieldActionBar({
@@ -25,10 +27,13 @@ export function FieldActionBar({
   showVoice = true,
   showNote = true,
   showTask = true,
+  showExpense = false,
+  showTimer = false,
 }: FieldActionBarProps) {
   const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   const actions: FieldModeAction[] = [];
 
@@ -84,6 +89,28 @@ export function FieldActionBar({
         router.push(`/jobs/${jobId}/create-task` as Route);
       },
       color: "bg-[#f59e0b]",
+    });
+  }
+
+  if (showExpense) {
+    actions.push({
+      icon: "💷",
+      label: "Log Expense",
+      action: () => {
+        router.push(`/jobs/${jobId}/log-expense` as Route);
+      },
+      color: "bg-[#ef4444]",
+    });
+  }
+
+  if (showTimer) {
+    actions.push({
+      icon: "⏱️",
+      label: isTimerRunning ? "Stop Timer" : "Start Timer",
+      action: () => {
+        setIsTimerRunning(!isTimerRunning);
+      },
+      color: isTimerRunning ? "bg-[#ef4444]" : "bg-[#8b5cf6]",
     });
   }
 
@@ -143,8 +170,14 @@ export function FieldActionBar({
         </div>
       )}
 
+      {isTimerRunning && (
+        <div className="absolute bottom-20 right-4 bg-[#8b5cf6] text-white rounded-lg px-3 py-1 text-xs font-semibold whitespace-nowrap">
+          Timer active ⏱️
+        </div>
+      )}
+
       <div className="absolute bottom-0 right-0 text-[10px] text-[var(--text-muted)] pointer-events-none whitespace-nowrap bg-[var(--surface)] rounded px-2 py-1">
-        Alt+C/V/N
+        {showCamera || showVoice || showNote ? "Alt+C/V/N for quick actions" : "Field mode enabled"}
       </div>
     </div>
   );
