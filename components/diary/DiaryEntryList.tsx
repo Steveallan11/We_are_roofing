@@ -63,14 +63,20 @@ function DiaryEntryCard({ entry }: { entry: DiaryEntry }) {
             {entry.title && <p className="font-semibold text-[var(--text)]">{entry.title}</p>}
             {entry.body && <p className="mt-1 text-sm text-[var(--text-muted)] line-clamp-2">{entry.body}</p>}
             {entry.entry_type === "task" && entry.task_due_date && (
-              <p className="mt-1 text-xs text-[#f59e0b]">Due: {new Date(entry.task_due_date).toLocaleDateString("en-GB")}</p>
+              <p className="mt-1 text-xs text-[#f59e0b]">
+                Due: {new Date(entry.task_due_date).toLocaleDateString("en-GB")}
+              </p>
             )}
-            {entry.entry_type === "expense" && entry.expense_amount && (
+            {entry.entry_type === "expense" && entry.expense_amount ? (
               <p className="mt-1 text-xs text-[#ef4444]">£{entry.expense_amount.toFixed(2)}</p>
-            )}
-            {entry.entry_type === "payment" && entry.payment_amount && (
-              <p className="mt-1 text-xs text-[#6366f1]">£{entry.payment_amount.toFixed(2)} to {entry.payment_to_name}</p>
-            )}
+            ) : null}
+            {entry.entry_type === "payment" && entry.payment_amount && entry.payment_to_name ? (
+              <p className="mt-1 text-xs text-[#6366f1]">
+                £{entry.payment_amount.toFixed(2)} to {entry.payment_to_name}
+              </p>
+            ) : entry.entry_type === "payment" && entry.payment_amount ? (
+              <p className="mt-1 text-xs text-[#6366f1]">£{entry.payment_amount.toFixed(2)}</p>
+            ) : null}
           </div>
         </div>
         <span className="shrink-0 text-xs text-[var(--text-muted)]">{date}</span>
