@@ -19,6 +19,7 @@ import type { RoofSurveyRecord } from "@/lib/survey/types";
 import { buildTakeoffDrawingSvg, printDrawing, type DrawingQuoteSection } from "@/lib/survey/cadDrawing";
 import { currency } from "@/lib/utils";
 import { TakeoffQuotePreview } from "@/components/jobs/takeoff-quote-preview";
+import { PricingValidation } from "@/components/jobs/pricing-validation";
 
 type Props = {
   jobId: string;
@@ -727,6 +728,8 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
           </div>
         </div>
       </div>
+
+      <PricingValidation costBreakdown={costBreakdown} jobId={jobId} />
 
       <div className="card border-[var(--gold)]/30 bg-[rgba(212,175,55,0.05)] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
