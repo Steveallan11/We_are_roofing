@@ -119,6 +119,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const [applying, setApplying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -643,7 +644,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   return (
     <div className="h-[calc(100dvh-286px)] min-h-[460px] overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] max-lg:h-[calc(100dvh-220px-var(--bottomnav-height))] max-lg:min-h-[520px]">
       <div className="flex h-full min-h-0 flex-col lg:flex-row">
-        <aside className="max-h-[42dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-b border-[var(--border)] bg-card2 lg:h-full lg:max-h-none lg:w-[320px] lg:border-b-0 lg:border-r">
+        <aside className={`max-h-[42dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-b border-[var(--border)] bg-card2 lg:h-full lg:max-h-none lg:w-[320px] lg:border-b-0 lg:border-r ${sidebarOpen ? "max-lg:flex" : "max-lg:hidden"}`}>
           <div className="space-y-4 p-4 pb-6">
             <GoogleEarthGuide />
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
@@ -812,6 +813,13 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
               {drawMode === "section" ? "Click around the roof - double-click to finish polygon" : drawMode === "line" ? "Click along the run - double-click to finish line" : "Click the roof to place this item"}
             </div>
           ) : null}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="absolute top-4 left-4 z-30 lg:hidden rounded-full bg-[var(--gold)] text-black px-4 py-2 text-sm font-semibold hover:bg-[var(--gold)]/90 transition-colors shadow-lg"
+            title={sidebarOpen ? "Hide controls" : "Show controls"}
+          >
+            {sidebarOpen ? "Hide" : "Controls"}
+          </button>
           {message ? <Toast tone="success">{message}</Toast> : null}
           {error ? <Toast tone="error">{error}</Toast> : null}
         </div>

@@ -551,10 +551,16 @@ a[role="button"]:active,
   background: var(--surface-deep);
   color: var(--text-second);
   font-family: var(--font-ui);
-  font-size: 0.875rem;
+  font-size: 1rem;
   outline: none;
   padding: 0.55rem 0.75rem;
   transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+@media (min-width: 768px) {
+  .field {
+    font-size: 0.875rem;
+  }
 }
 
 .field:focus {
