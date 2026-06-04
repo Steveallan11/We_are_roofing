@@ -1,4 +1,6 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+"use client";
+
+import { useEffect, useState } from "react";
 import type { DiaryEntry, DiaryEntryType } from "@/lib/types";
 
 type Props = {
@@ -6,19 +8,50 @@ type Props = {
   refreshTrigger?: number;
 };
 
-export async function DiaryEntryList({ entryType, refreshTrigger }: Props) {
-  const supabase = createSupabaseAdminClient();
+export function DiaryEntryList({ entryType, refreshTrigger }: Props) {
+  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  let query = supabase.from("diary_entries").select("*").order("created_at", { ascending: false }).limit(50);
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-  if (entryType) {
-    query = query.eq("entry_type", entryType);
+    const params = new URLSearchParams();
+    params.set("limit", "50");
+    if (entryType) params.set("entry_type", entryType);
+
+    fetch(`/api/diary/entries?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (!data?.ok) {
+          setError(data?.error || "Unable to load entries");
+          setEntries([]);
+        } else {
+          setEntries((data.entries ?? []) as DiaryEntry[]);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Unable to load entries");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entryType, refreshTrigger]);
+
+  if (isLoading) {
+    return <p className="text-sm text-[var(--text-muted)]">Loading entries…</p>;
   }
 
-  const { data: entries, error } = await query;
-
-  if (error || !entries) {
-    return <p className="text-sm text-[var(--text-muted)]">No entries yet. Start capturing!</p>;
+  if (error) {
+    return <p className="text-sm text-[#fca5a5]">{error}</p>;
   }
 
   if (entries.length === 0) {
@@ -27,7 +60,7 @@ export async function DiaryEntryList({ entryType, refreshTrigger }: Props) {
 
   return (
     <div className="space-y-2">
-      {(entries as DiaryEntry[]).map((entry) => (
+      {entries.map((entry) => (
         <DiaryEntryCard key={entry.id} entry={entry} />
       ))}
     </div>

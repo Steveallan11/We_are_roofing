@@ -76,7 +76,7 @@ export function DiaryClientWrapper() {
             </button>
           ))}
         </div>
-        <DiaryEntryList entryType={filterType} key={refreshTrigger} />
+        <DiaryEntryList entryType={filterType} refreshTrigger={refreshTrigger} />
       </PageSection>
     </div>
   );

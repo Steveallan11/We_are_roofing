@@ -1,9 +1,8 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button, PageSection } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/primitives";
 import { DiaryClientWrapper } from "@/components/diary/DiaryClientWrapper";
-import { DiaryEntryList } from "@/components/diary/DiaryEntryList";
 
 export default function DiaryPage() {
   return (
