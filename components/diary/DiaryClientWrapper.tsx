@@ -6,14 +6,14 @@ import { DiaryEntryForm } from "./DiaryEntryForm";
 import { DiaryEntryList } from "./DiaryEntryList";
 import type { DiaryEntryType } from "@/lib/types";
 
-const QUICK_ACTIONS: Array<{ type: DiaryEntryType; label: string; icon: string; color: string; description: string }> = [
-  { type: "voice_note", label: "Voice Note", icon: "🎤", color: "bg-[#3b82f6]", description: "Record yourself" },
-  { type: "text_note", label: "Text Note", icon: "📝", color: "bg-[var(--gold)]", description: "Write a note" },
-  { type: "photo", label: "Photo", icon: "📸", color: "bg-[#10b981]", description: "Capture receipt" },
-  { type: "task", label: "Task", icon: "✓", color: "bg-[#f59e0b]", description: "Create a task" },
-  { type: "reminder", label: "Reminder", icon: "⏰", color: "bg-[#ec4899]", description: "Set reminder" },
-  { type: "expense", label: "Expense", icon: "💷", color: "bg-[#ef4444]", description: "Log expense" },
-  { type: "payment", label: "Payment", icon: "💳", color: "bg-[#6366f1]", description: "Log payment" }
+const QUICK_ACTIONS: Array<{ type: DiaryEntryType; label: string; icon: string; bgColor: string; description: string }> = [
+  { type: "voice_note", label: "Voice Note", icon: "🎤", bgColor: "#3b82f6", description: "Record yourself" },
+  { type: "text_note", label: "Text Note", icon: "📝", bgColor: "var(--gold)", description: "Write a note" },
+  { type: "photo", label: "Photo", icon: "📸", bgColor: "#10b981", description: "Capture receipt" },
+  { type: "task", label: "Task", icon: "✓", bgColor: "#f59e0b", description: "Create a task" },
+  { type: "reminder", label: "Reminder", icon: "⏰", bgColor: "#ec4899", description: "Set reminder" },
+  { type: "expense", label: "Expense", icon: "💷", bgColor: "#ef4444", description: "Log expense" },
+  { type: "payment", label: "Payment", icon: "💳", bgColor: "#6366f1", description: "Log payment" }
 ];
 
 export function DiaryClientWrapper() {
@@ -38,7 +38,8 @@ export function DiaryClientWrapper() {
             <button
               key={action.type}
               onClick={() => setSelectedType(action.type)}
-              className={`rounded-lg p-3 text-center transition-transform ${action.color} text-white hover:scale-105`}
+              className="rounded-lg p-3 text-center transition-transform hover:scale-105 cursor-pointer text-white font-medium active:opacity-80"
+              style={{ backgroundColor: action.bgColor }}
             >
               <div className="text-3xl">{action.icon}</div>
               <p className="mt-2 text-sm font-semibold">{action.label}</p>
