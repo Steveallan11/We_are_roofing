@@ -289,7 +289,7 @@ function TemplatesTab({ templates, newTemplate, setNewTemplate, onAdd, isPending
         <div>
           <h3 className="font-semibold text-[var(--text)]">Existing Templates</h3>
           <div className="mt-4 space-y-2">
-            {templates.map((t) => (
+            {templates.map((t: QuoteTemplate) => (
               <div key={t.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-deep)] p-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -357,7 +357,7 @@ function PricingTab({ rules, newRule, setNewRule, onAdd, isPending }: any) {
                 </tr>
               </thead>
               <tbody>
-                {rules.map((r) => (
+                {rules.map((r: PricingRule) => (
                   <tr key={r.id} className="border-b border-[var(--border)]/30">
                     <td className="py-2">{r.item_category}</td>
                     <td className="py-2">{r.minimum_price ? `£${r.minimum_price}` : "—"}</td>
@@ -417,7 +417,7 @@ function KnowledgeTab({ examples, newExample, setNewExample, onAdd, isPending }:
         <div>
           <h3 className="font-semibold text-[var(--text)]">Knowledge Base</h3>
           <div className="mt-4 space-y-3 max-h-96 overflow-y-auto">
-            {examples.map((ex) => (
+            {examples.map((ex: KnowledgeExample) => (
               <div key={ex.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-deep)] p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">

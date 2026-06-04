@@ -4,6 +4,7 @@ import { getBusiness } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Quote Templates & Rules" };
+export const dynamic = "force-dynamic";
 
 async function getTemplatesData(businessId: string) {
   const supabase = createSupabaseAdminClient();

@@ -277,6 +277,9 @@ export type Business = {
   bank_sort_code?: string | null;
   bank_account?: string | null;
   bank_account_name?: string | null;
+  guarantee_text?: string | null;
+  default_exclusions?: string | null;
+  default_terms?: string | null;
 };
 
 export type Customer = {
