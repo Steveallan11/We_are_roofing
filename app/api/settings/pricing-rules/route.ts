@@ -7,7 +7,7 @@ export async function GET() {
     const supabase = createSupabaseAdminClient();
 
     const { data, error } = await supabase
-      .from("pricing_rules")
+      .from("quote_pricing_bounds")
       .select("*")
       .eq("business_id", business.id)
       .order("item_category");
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
-      .from("pricing_rules")
+      .from("quote_pricing_bounds")
       .insert({
         business_id: business.id,
         item_category: body.item_category,
@@ -69,7 +69,7 @@ export async function DELETE(request: Request) {
 
     const supabase = createSupabaseAdminClient();
     const { error } = await supabase
-      .from("pricing_rules")
+      .from("quote_pricing_bounds")
       .delete()
       .eq("id", id);
 

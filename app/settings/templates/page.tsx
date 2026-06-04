@@ -11,7 +11,7 @@ async function getTemplatesData(businessId: string) {
 
   const [templates, pricingRules, examples] = await Promise.all([
     supabase.from("quote_templates").select("*").eq("business_id", businessId).order("roof_type"),
-    supabase.from("pricing_rules").select("*").eq("business_id", businessId).order("item_category"),
+    supabase.from("quote_pricing_bounds").select("*").eq("business_id", businessId).order("item_category"),
     supabase.from("knowledge_examples").select("*").eq("business_id", businessId).order("created_at", { ascending: false }).limit(50)
   ]);
 

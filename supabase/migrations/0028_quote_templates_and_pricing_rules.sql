@@ -28,8 +28,9 @@ CREATE TABLE IF NOT EXISTS public.quote_templates (
 CREATE INDEX IF NOT EXISTS quote_templates_business_roof_type_idx
   ON public.quote_templates (business_id, roof_type);
 
--- Create pricing rules table for bounds checking
-CREATE TABLE IF NOT EXISTS public.pricing_rules (
+-- Create quote pricing bounds table for min/max validation
+-- (Separate from pricing_rules which is used by the rate card system)
+CREATE TABLE IF NOT EXISTS public.quote_pricing_bounds (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
   item_category text NOT NULL,
@@ -44,8 +45,8 @@ CREATE TABLE IF NOT EXISTS public.pricing_rules (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS pricing_rules_business_category_idx
-  ON public.pricing_rules (business_id, item_category);
+CREATE INDEX IF NOT EXISTS quote_pricing_bounds_business_category_idx
+  ON public.quote_pricing_bounds (business_id, item_category);
 
 -- Create knowledge base examples table for AI training
 CREATE TABLE IF NOT EXISTS public.knowledge_examples (
@@ -66,10 +67,9 @@ CREATE INDEX IF NOT EXISTS knowledge_examples_business_type_idx
   ON public.knowledge_examples (business_id, example_type);
 
 ALTER TABLE public.quote_templates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pricing_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quote_pricing_bounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.knowledge_examples ENABLE ROW LEVEL SECURITY;
 
--- RLS policies
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -81,9 +81,9 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public' AND tablename = 'pricing_rules' AND policyname = 'Admin access'
+    WHERE schemaname = 'public' AND tablename = 'quote_pricing_bounds' AND policyname = 'Admin access'
   ) THEN
-    CREATE POLICY "Admin access" ON public.pricing_rules FOR ALL USING (auth.role() = 'authenticated');
+    CREATE POLICY "Admin access" ON public.quote_pricing_bounds FOR ALL USING (auth.role() = 'authenticated');
   END IF;
 
   IF NOT EXISTS (
