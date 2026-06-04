@@ -382,19 +382,15 @@ function lineColor(line: RoofSurveyLine, fallbackIndex: number) {
   return line.color || PALETTE[fallbackIndex % PALETTE.length];
 }
 
-function isCustomerChoiceLine(line: RoofSurveyLine) {
-  return /\b(ridge|hip)\b/i.test(`${line.type || ""} ${line.label || ""}`);
-}
-
 function customerAreaLabel(index: number) {
   return `Area ${markerCode(index)}`;
 }
 
 function customerLineLabel(line: RoofSurveyLine, index: number) {
-  const key = `${line.type || ""} ${line.label || ""}`.toLowerCase();
-  const type = key.includes("hip") ? "Hip" : "Ridge";
+  const label = line.label || line.type || `Line ${index + 1}`;
   const length = Number(line.length_lm || 0);
-  return `${type} ${markerCode(index)}${length > 0 ? ` - ${length.toFixed(1)} lm` : ""}`;
+  if (length <= 0) return label;
+  return `${label} - ${length.toFixed(1)} lm`;
 }
 
 function markerCode(index: number) {
@@ -505,8 +501,8 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         sectionMarkers.push({ x: cx, y: cy, code: markerCode(idx), color });
       });
 
-      // Customer plan only shows ridge/hip choice lines. Everything else belongs on the technical drawing.
-      const customerLines = opts.lines.filter(isCustomerChoiceLine);
+      // Customer plan shows the lines selected in the export panel. Technical clutter is controlled before export.
+      const customerLines = opts.lines;
       customerLines.forEach((line, idx) => {
         const ll = line.points.map(toLatLng).filter(Boolean) as LatLng[];
         if (ll.length < 2) return;
@@ -887,9 +883,9 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
   }
 
   if (customerSummary) {
-    const customerLines = lines.filter(isCustomerChoiceLine);
+    const customerLines = lines;
     if (customerLines.length) {
-      parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="10" font-weight="800" letter-spacing="1.6" fill="#D4AF37">RIDGES &amp; HIPS</text>`);
+      parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="10" font-weight="800" letter-spacing="1.6" fill="#D4AF37">SELECTED ROOF LINES</text>`);
       y += 18;
       customerLines.forEach((line, idx) => {
         const color = lineColor(line, idx);
@@ -907,7 +903,7 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
       y += 8;
     }
 
-    const hiddenCount = lines.length - customerLines.length + features.length;
+    const hiddenCount = features.length;
     if (hiddenCount > 0) {
     parts.push(`
       <g transform="translate(${layout.legendX + 20} ${y})">
