@@ -35,12 +35,12 @@ export async function DiaryEntryList({ entryType, refreshTrigger }: Props) {
 }
 
 function DiaryEntryCard({ entry }: { entry: DiaryEntry }) {
-  const date = new Date(entry.created_at).toLocaleDateString("en-GB", {
+  const date = new Date(entry.created_at).toLocaleString("en-GB", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  } as any);
+  });
 
   const typeIcon: Record<string, string> = {
     voice_note: "🎤",
