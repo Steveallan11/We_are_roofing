@@ -5,6 +5,7 @@ import { Button, PageSection } from "@/components/ui/primitives";
 import { DiaryEntryForm } from "./DiaryEntryForm";
 import { DiaryEntryList } from "./DiaryEntryList";
 import { StickyNotesBoard } from "./StickyNotesBoard";
+import { ReminderList } from "./ReminderList";
 import { DIARY_TYPES, DIARY_TYPE_CONFIG, getDiaryLabel } from "./diaryConstants";
 import type { DiaryEntryType } from "@/lib/types";
 
@@ -26,6 +27,10 @@ export function DiaryClientWrapper() {
       {selectedType && (
         <DiaryEntryForm entryType={selectedType} onSuccess={handleEntryCreated} onCancel={() => setSelectedType(null)} />
       )}
+
+      <PageSection kicker="Reminders" title="Your reminders" description="">
+        <ReminderList />
+      </PageSection>
 
       <PageSection kicker="Quick actions" title="What do you want to capture?" description="">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     linked_customer_id?: string;
     task_due_date?: string;
     task_assigned_to?: string;
+    reminder_time?: string;
     expense_amount?: number;
     expense_category?: string;
     expense_receipt_url?: string;
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
       linked_customer_id: body.linked_customer_id || null,
       task_due_date: body.task_due_date || null,
       task_assigned_to: body.task_assigned_to || "Andy",
+      reminder_time: body.reminder_time || null,
       expense_amount: body.expense_amount ? Number(body.expense_amount) : null,
       expense_category: body.expense_category || null,
       expense_receipt_url: String(body.expense_receipt_url ?? "").trim() || null,

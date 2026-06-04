@@ -25,6 +25,8 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [photos, setPhotos] = useState<Array<{ url: string; caption?: string }>>([]);
   const [showMediaEditor, setShowMediaEditor] = useState(false);
+  const [reminderTime, setReminderTime] = useState("");
+  const [reminderDate, setReminderDate] = useState("");
 
   const handleTranscript = (transcript: string) => {
     setVoiceTranscript(transcript);
@@ -50,13 +52,20 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
     setError(null);
 
     try {
+      let reminderIso: string | null = null;
+      if (reminderDate && reminderTime) {
+        const dt = new Date(`${reminderDate}T${reminderTime}`);
+        reminderIso = dt.toISOString();
+      }
+
       const payload: Record<string, unknown> = {
         entry_type: entryType,
         title: title || null,
         body: body || null,
         linked_job_id: jobId || null,
         voice_transcript: voiceTranscript || null,
-        photos: photos.length > 0 ? photos : []
+        photos: photos.length > 0 ? photos : [],
+        reminder_time: reminderIso
       };
 
       if (entryType === "task" || entryType === "reminder") {
@@ -206,6 +215,43 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
         )}
 
         <JobPicker value={jobId} onChange={(id) => setJobId(id)} />
+
+        <div className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--ink)] p-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-[var(--text)]">
+            <input
+              type="checkbox"
+              checked={reminderDate !== ""}
+              onChange={(e) => {
+                if (!e.target.checked) {
+                  setReminderDate("");
+                  setReminderTime("");
+                } else {
+                  const today = new Date().toISOString().split("T")[0];
+                  setReminderDate(today);
+                  setReminderTime("09:00");
+                }
+              }}
+              className="h-4 w-4 cursor-pointer"
+            />
+            Set a reminder ⏰
+          </label>
+          {reminderDate !== "" && (
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={reminderDate}
+                onChange={(e) => setReminderDate(e.target.value)}
+                className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)]"
+              />
+              <input
+                type="time"
+                value={reminderTime}
+                onChange={(e) => setReminderTime(e.target.value)}
+                className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)]"
+              />
+            </div>
+          )}
+        </div>
 
         {error && <div className="rounded bg-[#ef4444]/15 p-2 text-sm text-[#fca5a5]">{error}</div>}
 

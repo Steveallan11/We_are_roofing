@@ -823,6 +823,9 @@ export type DiaryEntry = {
   task_completed: boolean;
   task_assigned_to: string | null;
 
+  reminder_time: string | null;
+  reminder_completed: boolean;
+
   expense_amount: number | null;
   expense_category: ExpenseCategory | null;
   expense_receipt_url: string | null;
