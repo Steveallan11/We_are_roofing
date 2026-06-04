@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/primitives";
 import { JobPicker } from "./JobPicker";
 import { VoiceRecorder } from "./VoiceRecorder";
+import { MediaEditor } from "./MediaEditor";
 import type { DiaryEntryType } from "@/lib/types";
 
 type Props = {
@@ -22,6 +23,8 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
   const [dueDate, setDueDate] = useState("");
   const [amount, setAmount] = useState("");
   const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [photos, setPhotos] = useState<Array<{ url: string; caption?: string }>>([]);
+  const [showMediaEditor, setShowMediaEditor] = useState(false);
 
   const handleTranscript = (transcript: string) => {
     setVoiceTranscript(transcript);
@@ -30,6 +33,15 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
     } else {
       setBody((prev) => `${prev}\n${transcript}`);
     }
+  };
+
+  const handleMediaAdded = (url: string, caption?: string) => {
+    setPhotos((prev) => [...prev, { url, caption }]);
+    setShowMediaEditor(false);
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +55,8 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
         title: title || null,
         body: body || null,
         linked_job_id: jobId || null,
-        voice_transcript: voiceTranscript || null
+        voice_transcript: voiceTranscript || null,
+        photos: photos.length > 0 ? photos : []
       };
 
       if (entryType === "task" || entryType === "reminder") {
@@ -77,89 +90,134 @@ export function DiaryEntryForm({ entryType, onSuccess, onCancel }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h3 className="font-semibold capitalize">{entryType.replace("_", " ")}</h3>
-
-      {entryType === "voice_note" && <VoiceRecorder onTranscript={handleTranscript} />}
-
-      {["voice_note", "text_note", "photo", "reminder"].includes(entryType) && (
-        <div>
-          <label className="block text-sm font-medium text-[var(--text)]">Title (optional)</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder='e.g. "Bedford project notes"'
-            className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
-          />
-        </div>
+    <>
+      {showMediaEditor && (
+        <MediaEditor
+          onMediaAdded={handleMediaAdded}
+          onClose={() => setShowMediaEditor(false)}
+        />
       )}
 
-      {["text_note", "voice_note", "photo"].includes(entryType) && (
-        <div>
-          <label className="block text-sm font-medium text-[var(--text)]">Notes</label>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={entryType === "voice_note" ? "Transcript appears here. Edit if needed." : "What did you capture?"}
-            rows={entryType === "voice_note" ? 5 : 3}
-            className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
-          />
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h3 className="font-semibold capitalize">{entryType.replace("_", " ")}</h3>
+
+        {entryType === "voice_note" && <VoiceRecorder onTranscript={handleTranscript} />}
+
+        {["voice_note", "text_note", "photo", "reminder"].includes(entryType) && (
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)]">Title (optional)</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder='e.g. "Bedford project notes"'
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
+            />
+          </div>
+        )}
+
+        {["text_note", "voice_note", "photo"].includes(entryType) && (
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)]">Notes</label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={entryType === "voice_note" ? "Transcript appears here. Edit if needed." : "What did you capture?"}
+              rows={entryType === "voice_note" ? 5 : 3}
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
+            />
+          </div>
+        )}
+
+        {["task", "reminder", "expense", "payment"].includes(entryType) && (
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)]">Description</label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="What is this for?"
+              rows={2}
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
+            />
+          </div>
+        )}
+
+        {["task", "reminder"].includes(entryType) && (
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)]">Due date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
+            />
+          </div>
+        )}
+
+        {["expense", "payment"].includes(entryType) && (
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)]">Amount (£)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
+            />
+          </div>
+        )}
+
+        {["photo", "text_note", "voice_note"].includes(entryType) && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-sm font-medium text-[var(--text)]">Media</label>
+              <button
+                type="button"
+                onClick={() => setShowMediaEditor(true)}
+                className="text-xs font-medium text-[var(--gold)] hover:text-[#fbbf24]"
+              >
+                + Add photo/drawing
+              </button>
+            </div>
+            {photos.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {photos.map((photo, idx) => (
+                  <div key={idx} className="relative overflow-hidden rounded-lg bg-[var(--ink)]">
+                    {photo.url.startsWith("data:") ? (
+                      <img src={photo.url} alt={photo.caption || "Media"} className="h-20 w-full object-cover" />
+                    ) : (
+                      <img src={photo.url} alt={photo.caption || "Media"} className="h-20 w-full object-cover" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(idx)}
+                      className="absolute right-1 top-1 rounded-full bg-[#ef4444]/80 text-[10px] text-white hover:bg-[#ef4444]"
+                      aria-label="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <JobPicker value={jobId} onChange={(id) => setJobId(id)} />
+
+        {error && <div className="rounded bg-[#ef4444]/15 p-2 text-sm text-[#fca5a5]">{error}</div>}
+
+        <div className="flex gap-2">
+          <Button variant="primary" size="md" type="submit" disabled={isLoading}>
+            {isLoading ? "Saving..." : "Save"}
+          </Button>
+          <Button variant="ghost" size="md" type="button" onClick={onCancel}>
+            Cancel
+          </Button>
         </div>
-      )}
-
-      {["task", "reminder", "expense", "payment"].includes(entryType) && (
-        <div>
-          <label className="block text-sm font-medium text-[var(--text)]">Description</label>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="What is this for?"
-            rows={2}
-            className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
-          />
-        </div>
-      )}
-
-      {["task", "reminder"].includes(entryType) && (
-        <div>
-          <label className="block text-sm font-medium text-[var(--text)]">Due date</label>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
-          />
-        </div>
-      )}
-
-      {["expense", "payment"].includes(entryType) && (
-        <div>
-          <label className="block text-sm font-medium text-[var(--text)]">Amount (£)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--gold)] focus:outline-none"
-          />
-        </div>
-      )}
-
-      <JobPicker value={jobId} onChange={(id) => setJobId(id)} />
-
-      {error && <div className="rounded bg-[#ef4444]/15 p-2 text-sm text-[#fca5a5]">{error}</div>}
-
-      <div className="flex gap-2">
-        <Button variant="primary" size="md" type="submit" disabled={isLoading}>
-          {isLoading ? "Saving..." : "Save"}
-        </Button>
-        <Button variant="ghost" size="md" type="button" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+      </form>
+    </>
   );
 }

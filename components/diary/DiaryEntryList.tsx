@@ -111,6 +111,23 @@ function DiaryEntryCard({ entry }: { entry: DiaryEntry }) {
                 £{entry.payment_amount.toFixed(2)}
               </p>
             ) : null}
+            {entry.photos && entry.photos.length > 0 && (
+              <div className="mt-2 flex gap-1">
+                {entry.photos.slice(0, 3).map((photo, idx) => (
+                  <img
+                    key={idx}
+                    src={photo.url}
+                    alt={photo.caption || "Photo"}
+                    className="h-12 w-12 rounded object-cover"
+                  />
+                ))}
+                {entry.photos.length > 3 && (
+                  <div className="flex h-12 w-12 items-center justify-center rounded bg-[var(--ink)] text-xs font-medium text-[var(--text-muted)]">
+                    +{entry.photos.length - 3}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <span className="shrink-0 text-xs text-[var(--text-muted)]">{date}</span>
