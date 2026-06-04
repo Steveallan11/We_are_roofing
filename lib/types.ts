@@ -831,3 +831,47 @@ export type DiaryEntry = {
   created_at: string;
   updated_at: string;
 };
+
+export type QuoteTemplate = {
+  id: string;
+  business_id: string;
+  roof_type: string;
+  job_type?: string | null;
+  template_name: string;
+  roof_report_template?: string | null;
+  scope_of_works_template?: string | null;
+  guarantee_override?: string | null;
+  exclusions_override?: string | null;
+  terms_override?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PricingRule = {
+  id: string;
+  business_id: string;
+  item_category: string;
+  roof_type?: string | null;
+  job_type?: string | null;
+  minimum_price?: number | null;
+  maximum_price?: number | null;
+  unit_type?: string | null;
+  notes?: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KnowledgeExample = {
+  id: string;
+  business_id: string;
+  example_type: "roof_report" | "scope_of_works" | "guarantee" | "exclusions" | "terms" | "email_subject" | "email_body";
+  roof_type?: string | null;
+  job_type?: string | null;
+  title: string;
+  content: string;
+  quality_score?: number | null;
+  uses_count?: number | null;
+  created_at: string;
+  updated_at: string;
+};
