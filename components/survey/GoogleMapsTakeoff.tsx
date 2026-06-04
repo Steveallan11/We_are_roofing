@@ -642,9 +642,9 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   }
 
   return (
-    <div className="h-[calc(100dvh-286px)] min-h-[460px] overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] max-lg:h-[calc(100dvh-220px-var(--bottomnav-height))] max-lg:min-h-[520px]">
+    <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] lg:h-[calc(100dvh-286px)] lg:min-h-[460px] lg:overflow-hidden">
       <div className="flex h-full min-h-0 flex-col lg:flex-row">
-        <aside className={`max-h-[42dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-b border-[var(--border)] bg-card2 lg:h-full lg:max-h-none lg:w-[320px] lg:border-b-0 lg:border-r ${sidebarOpen ? "max-lg:flex" : "max-lg:hidden"}`}>
+        <aside className={`w-full shrink-0 overflow-y-auto overscroll-contain border-b border-[var(--border)] bg-card2 lg:h-full lg:max-h-none lg:w-[320px] lg:border-b-0 lg:border-r ${sidebarOpen ? "max-h-[42dvh] max-lg:block" : "max-lg:hidden"}`}>
           <div className="space-y-4 p-4 pb-6">
             <GoogleEarthGuide />
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
@@ -804,26 +804,160 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
           </div>
         </aside>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden">
-          {loading ? <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--surface)] text-sm text-[var(--muted)]">Loading satellite map...</div> : null}
-          <div className="h-full min-h-[360px] w-full overscroll-contain lg:min-h-0" ref={mapElRef} style={{ touchAction: "none" }} />
-          <KmzUploadButton mapRef={mapRef} onShapesLoaded={handleKmlShapes} />
-          {drawMode !== "none" ? (
-            <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-[rgba(212,175,55,0.45)] bg-black/80 px-5 py-2 text-xs font-bold text-[var(--gold)]">
-              {drawMode === "section" ? "Click around the roof - double-click to finish polygon" : drawMode === "line" ? "Click along the run - double-click to finish line" : "Click the roof to place this item"}
-            </div>
-          ) : null}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="absolute top-4 left-4 z-30 lg:hidden rounded-full bg-[var(--gold)] text-black px-4 py-2 text-sm font-semibold hover:bg-[var(--gold)]/90 transition-colors shadow-lg"
-            title={sidebarOpen ? "Hide controls" : "Show controls"}
-          >
-            {sidebarOpen ? "Hide" : "Controls"}
-          </button>
-          {message ? <Toast tone="success">{message}</Toast> : null}
-          {error ? <Toast tone="error">{error}</Toast> : null}
+        <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+          {/* Map */}
+          <div className="relative min-h-0 flex-1 overflow-hidden max-lg:h-[58dvh] max-lg:min-h-[300px]">
+            {loading ? <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--surface)] text-sm text-[var(--muted)]">Loading satellite map...</div> : null}
+            <div className="h-full min-h-[300px] w-full overscroll-contain lg:min-h-0" ref={mapElRef} style={{ touchAction: "none" }} />
+            <KmzUploadButton mapRef={mapRef} onShapesLoaded={handleKmlShapes} />
+            {drawMode !== "none" ? (
+              <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-[rgba(212,175,55,0.45)] bg-black/80 px-5 py-2 text-xs font-bold text-[var(--gold)]">
+                {drawMode === "section" ? "Click around the roof - double-click to finish polygon" : drawMode === "line" ? "Click along the run - double-click to finish line" : "Click the roof to place this item"}
+              </div>
+            ) : null}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="absolute top-4 left-4 z-30 lg:hidden rounded-full bg-[var(--gold)] text-black px-4 py-2 text-sm font-semibold hover:bg-[var(--gold)]/90 transition-colors shadow-lg"
+              title={sidebarOpen ? "Hide controls" : "Show controls"}
+            >
+              {sidebarOpen ? "Hide" : "Controls"}
+            </button>
+            {message ? <Toast tone="success">{message}</Toast> : null}
+            {error ? <Toast tone="error">{error}</Toast> : null}
+          </div>
+
+          {/* Mobile dimensions summary — visible below map on scroll */}
+          <div className="lg:hidden border-t border-[var(--border)] bg-[var(--surface)]">
+            <MobileTakeoffSummary
+              sections={sections}
+              lines={lines}
+              features={features}
+              totalArea={totalArea}
+              totalLength={totalLength}
+              onFocusSection={focusSection}
+              onFocusLine={focusLine}
+              onFocusFeature={focusFeature}
+            />
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MobileTakeoffSummary({
+  sections,
+  lines,
+  features,
+  totalArea,
+  totalLength,
+  onFocusSection,
+  onFocusLine,
+  onFocusFeature
+}: {
+  sections: DrawnSection[];
+  lines: DrawnLine[];
+  features: DrawnFeature[];
+  totalArea: number;
+  totalLength: number;
+  onFocusSection: (id: string) => void;
+  onFocusLine: (id: string) => void;
+  onFocusFeature: (id: string) => void;
+}) {
+  const hasData = sections.length > 0 || lines.length > 0 || features.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="px-4 py-5 text-center text-sm text-[var(--text-muted)]">
+        Draw sections and lines on the map above to see measurements here.
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-[var(--border)] pb-4">
+      {/* Totals bar */}
+      <div className="grid grid-cols-2 divide-x divide-[var(--border)]">
+        <div className="px-4 py-3">
+          <p className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Total Area</p>
+          <p className="mt-0.5 text-xl font-bold text-[var(--gold)]">{totalArea.toFixed(1)} m²</p>
+        </div>
+        <div className="px-4 py-3">
+          <p className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Total Length</p>
+          <p className="mt-0.5 text-xl font-bold text-[var(--gold)]">{totalLength.toFixed(1)} lm</p>
+        </div>
+      </div>
+
+      {/* Sections */}
+      {sections.length > 0 && (
+        <div>
+          <div className="bg-[var(--surface-deep)] px-4 py-2">
+            <p className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Sections ({sections.length})</p>
+          </div>
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => onFocusSection(section.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5 active:bg-white/10"
+            >
+              <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: section.color }} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[var(--text)]">{section.label}</p>
+                <p className="text-xs text-[var(--text-muted)]">{section.type}</p>
+              </div>
+              <p className="shrink-0 text-sm font-bold text-[var(--gold)]">{section.area_m2.toFixed(1)} m²</p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Lines */}
+      {lines.length > 0 && (
+        <div>
+          <div className="bg-[var(--surface-deep)] px-4 py-2">
+            <p className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Lines ({lines.length})</p>
+          </div>
+          {lines.map((line) => (
+            <button
+              key={line.id}
+              onClick={() => onFocusLine(line.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5 active:bg-white/10"
+            >
+              <span className="h-0.5 w-6 shrink-0 rounded" style={{ backgroundColor: line.color }} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[var(--text)]">{line.label}</p>
+                <p className="text-xs text-[var(--text-muted)]">{line.type}</p>
+              </div>
+              <p className="shrink-0 text-sm font-bold text-[var(--gold)]">{line.length_lm.toFixed(1)} lm</p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Features */}
+      {features.length > 0 && (
+        <div>
+          <div className="bg-[var(--surface-deep)] px-4 py-2">
+            <p className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Features ({features.length})</p>
+          </div>
+          {features.map((feature) => (
+            <button
+              key={feature.id}
+              onClick={() => onFocusFeature(feature.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5 active:bg-white/10"
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.6rem] font-bold text-black" style={{ backgroundColor: feature.color }}>
+                {feature.type.slice(0, 2).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[var(--text)]">{feature.label}</p>
+                <p className="text-xs text-[var(--text-muted)]">{feature.type}</p>
+              </div>
+              {feature.notes ? <p className="max-w-[100px] truncate text-xs text-[var(--text-muted)]">{feature.notes}</p> : null}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
