@@ -1157,7 +1157,7 @@ function buildDrawingContentItems(rows: DrawingExportRows): DrawingContentItem[]
 }
 
 function isDrawingItemSelected(selection: DrawingContentSelection, kind: DrawingContentItem["kind"], id: string) {
-  return selection[drawingContentKey(kind, id)] !== false;
+  return selection[drawingContentKey(kind, id)] ?? true;
 }
 
 function filterDrawingRows(rows: DrawingExportRows, selection: DrawingContentSelection): DrawingExportRows {
@@ -1170,6 +1170,14 @@ function filterDrawingRows(rows: DrawingExportRows, selection: DrawingContentSel
 
 function buildDrawingSelection(rows: DrawingExportRows, shouldInclude: (item: DrawingContentItem) => boolean): DrawingContentSelection {
   return Object.fromEntries(buildDrawingContentItems(rows).map((item) => [item.key, shouldInclude(item)]));
+}
+
+function syncDrawingSelection(items: DrawingContentItem[], current: DrawingContentSelection) {
+  const next: DrawingContentSelection = {};
+  items.forEach((item) => {
+    next[item.key] = current[item.key] ?? true;
+  });
+  return next;
 }
 
 function isCustomerCleanItem(item: DrawingContentItem) {
@@ -1229,13 +1237,19 @@ function DrawingPackExports(props: {
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
   const drawingItems = useMemo(() => buildDrawingContentItems(props.rows), [props.rows]);
   const selectedRows = useMemo(() => filterDrawingRows(props.rows, contentSelection), [contentSelection, props.rows]);
+  const selectedDrawingItems = useMemo(() => drawingItems.filter((item) => isDrawingItemSelected(contentSelection, item.kind, item.id)), [contentSelection, drawingItems]);
   const selectedItems = selectedRows.sections.length + selectedRows.lines.length + selectedRows.features.length;
   const totalItems = props.rows.sections.length + props.rows.lines.length + props.rows.features.length;
+  const excludedItems = Math.max(totalItems - selectedItems, 0);
   const canExport = totalItems > 0;
   const canExportSelected = selectedItems > 0;
   const totalArea = selectedRows.sections.reduce((sum, section) => sum + (Number(section.area_m2) || 0), 0);
   const totalLength = selectedRows.lines.reduce((sum, line) => sum + (Number(line.length_lm) || 0), 0);
   const busy = Boolean(busyAction);
+
+  useEffect(() => {
+    setContentSelection((current) => syncDrawingSelection(drawingItems, current));
+  }, [drawingItems]);
 
   function makeKml() {
     return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: selectedRows.sections, lines: selectedRows.lines, features: selectedRows.features });
@@ -1354,7 +1368,7 @@ function DrawingPackExports(props: {
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--gold-l)]">Drawing Pack</p>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Customer roof plan, technical takeoff plan, CSV and KML from the measured roof geometry.</p>
         </div>
-        <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[10px] text-[var(--muted)]">{totalItems} items</span>
+        <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[10px] text-[var(--muted)]">{selectedItems}/{totalItems} items</span>
       </div>
 
       <div className="grid grid-cols-3 gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 text-center">
@@ -1371,6 +1385,12 @@ function DrawingPackExports(props: {
           <p className="text-sm font-bold text-[var(--text-primary)]">{selectedRows.features.length}</p>
         </div>
       </div>
+      <div className={`rounded-xl border p-3 text-xs leading-5 ${canExportSelected ? "border-[var(--gold)]/30 bg-[var(--surface)] text-[var(--muted)]" : "border-red-500/40 bg-red-500/10 text-red-200"}`}>
+        <span className="font-bold text-[var(--text-primary)]">Export preview:</span>{" "}
+        {canExportSelected
+          ? `${selectedItems} selected, ${excludedItems} hidden. The next PDF/image/ZIP will only include the selected items below.`
+          : "Nothing is selected. Tick at least one item before creating the drawing."}
+      </div>
 
       <details className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" open>
         <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-[var(--gold-l)]">
@@ -1379,16 +1399,16 @@ function DrawingPackExports(props: {
         </summary>
         <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Choose what appears on this drawing before creating the PDF, image, ZIP, CSV or KML. This does not delete anything from the survey.</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button className="button-secondary !py-2 text-[10px]" onClick={() => setContentSelection({})} type="button">
+          <button className="button-secondary !py-2 text-[10px]" onClick={() => { setContentSelection(buildDrawingSelection(props.rows, () => true)); setMessage({ type: "info", text: "All measured items will be included in the next drawing." }); }} type="button">
             Technical all
           </button>
-          <button className="button-secondary !py-2 text-[10px]" onClick={() => setContentSelection(buildDrawingSelection(props.rows, isCustomerCleanItem))} type="button">
+          <button className="button-secondary !py-2 text-[10px]" onClick={() => { setContentSelection(buildDrawingSelection(props.rows, isCustomerCleanItem)); setMessage({ type: "info", text: "Customer clean preset applied. Only quote-friendly items are selected." }); }} type="button">
             Customer clean
           </button>
-          <button className="button-ghost !py-2 text-[10px]" onClick={() => setContentSelection(buildDrawingSelection(props.rows, isRoofAndAccessItem))} type="button">
+          <button className="button-ghost !py-2 text-[10px]" onClick={() => { setContentSelection(buildDrawingSelection(props.rows, isRoofAndAccessItem)); setMessage({ type: "info", text: "Roof works and scaffold/access items are selected." }); }} type="button">
             Roof + scaffold
           </button>
-          <button className="button-ghost !py-2 text-[10px]" onClick={() => setContentSelection(buildDrawingSelection(props.rows, () => false))} type="button">
+          <button className="button-ghost !py-2 text-[10px]" onClick={() => { setContentSelection(buildDrawingSelection(props.rows, () => false)); setMessage({ type: "info", text: "All drawing items hidden. Tick items below to add them back." }); }} type="button">
             Clear all
           </button>
         </div>
@@ -1400,7 +1420,11 @@ function DrawingPackExports(props: {
                 <input
                   checked={checked}
                   className="h-4 w-4 accent-[var(--gold)]"
-                  onChange={(event) => setContentSelection((current) => ({ ...current, [item.key]: event.target.checked }))}
+                  onChange={(event) => {
+                    const isChecked = event.target.checked;
+                    setContentSelection((current) => ({ ...current, [item.key]: isChecked }));
+                    setMessage({ type: "info", text: `${item.label} ${isChecked ? "will be shown" : "will be hidden"} on the next drawing.` });
+                  }}
                   type="checkbox"
                 />
                 <span className="min-w-0 flex-1">
@@ -1413,6 +1437,19 @@ function DrawingPackExports(props: {
             );
           }) : <p className="text-xs text-[var(--muted)]">No measured items yet.</p>}
         </div>
+        {selectedDrawingItems.length ? (
+          <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-deep)] p-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Will appear on next drawing</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {selectedDrawingItems.slice(0, 8).map((item) => (
+                <span key={item.key} className="rounded-full border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-2 py-1 text-[10px] text-[var(--gold-l)]">
+                  {item.label}
+                </span>
+              ))}
+              {selectedDrawingItems.length > 8 ? <span className="rounded-full border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--muted)]">+ {selectedDrawingItems.length - 8} more</span> : null}
+            </div>
+          </div>
+        ) : null}
       </details>
 
       <label className="block">
