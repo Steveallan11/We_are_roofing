@@ -44,6 +44,7 @@ export default async function TodayPage() {
 
   const greeting = getGreeting(now);
   const ownerName = business.business_name?.trim() || "there";
+  const diaryRoute = "/diary" as Route;
 
   return (
     <AppShell
@@ -70,7 +71,7 @@ export default async function TodayPage() {
             description="Complete or reschedule."
             actions={
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/diary">View Diary</Link>
+                <Link href={diaryRoute}>View Diary</Link>
               </Button>
             }
           >
@@ -78,7 +79,7 @@ export default async function TodayPage() {
               {upcomingTasks.slice(0, 3).map((task) => (
                 <Link
                   className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 p-3 text-sm transition-colors hover:border-[#f59e0b]"
-                  href={task.linked_job_id ? (`/jobs/${task.linked_job_id}` as Route) : "/diary"}
+                  href={task.linked_job_id ? (`/jobs/${task.linked_job_id}` as Route) : diaryRoute}
                   key={task.id}
                 >
                   <div className="flex items-baseline justify-between gap-2">

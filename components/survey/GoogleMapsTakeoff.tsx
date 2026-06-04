@@ -1106,6 +1106,97 @@ function buildMapKml(opts: { projectName: string; jobRef: string; address: strin
   return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(opts.projectName)}</name><description>${escapeXml(`${opts.jobRef} - ${opts.address}`)}</description>${polygonPlacemarks}${linePlacemarks}${featurePlacemarks}</Document></kml>`;
 }
 
+type DrawingExportRows = {
+  sections: ReturnType<typeof serialiseSections>;
+  lines: ReturnType<typeof serialiseLines>;
+  features: ReturnType<typeof serialiseFeatures>;
+};
+
+type DrawingContentItem = {
+  id: string;
+  key: string;
+  kind: "section" | "line" | "feature";
+  label: string;
+  meta: string;
+  value: string;
+};
+
+type DrawingContentSelection = Record<string, boolean>;
+
+function drawingContentKey(kind: DrawingContentItem["kind"], id: string) {
+  return `${kind}:${id}`;
+}
+
+function buildDrawingContentItems(rows: DrawingExportRows): DrawingContentItem[] {
+  return [
+    ...rows.sections.map((section) => ({
+      id: section.id,
+      key: drawingContentKey("section", section.id),
+      kind: "section" as const,
+      label: section.label || section.type || "Roof area",
+      meta: section.type || "Roof area",
+      value: `${Number(section.area_m2 || 0).toFixed(1)} m2`
+    })),
+    ...rows.lines.map((line) => ({
+      id: line.id,
+      key: drawingContentKey("line", line.id),
+      kind: "line" as const,
+      label: line.label || line.type || "Measured line",
+      meta: line.type || "Measured line",
+      value: `${Number(line.length_lm || 0).toFixed(1)} lm`
+    })),
+    ...rows.features.map((feature) => ({
+      id: feature.id,
+      key: drawingContentKey("feature", feature.id),
+      kind: "feature" as const,
+      label: feature.label || feature.type || "Roof item",
+      meta: feature.type || "Roof item",
+      value: "1 no."
+    }))
+  ];
+}
+
+function isDrawingItemSelected(selection: DrawingContentSelection, kind: DrawingContentItem["kind"], id: string) {
+  return selection[drawingContentKey(kind, id)] !== false;
+}
+
+function filterDrawingRows(rows: DrawingExportRows, selection: DrawingContentSelection): DrawingExportRows {
+  return {
+    sections: rows.sections.filter((section) => isDrawingItemSelected(selection, "section", section.id)),
+    lines: rows.lines.filter((line) => isDrawingItemSelected(selection, "line", line.id)),
+    features: rows.features.filter((feature) => isDrawingItemSelected(selection, "feature", feature.id))
+  };
+}
+
+function buildDrawingSelection(rows: DrawingExportRows, shouldInclude: (item: DrawingContentItem) => boolean): DrawingContentSelection {
+  return Object.fromEntries(buildDrawingContentItems(rows).map((item) => [item.key, shouldInclude(item)]));
+}
+
+function isCustomerCleanItem(item: DrawingContentItem) {
+  const text = `${item.label} ${item.meta}`.toLowerCase();
+  if (item.kind === "section") return true;
+  if (item.kind === "feature") return false;
+  return text.includes("roof work") || text.includes("scaffold") || text.includes("access") || text.includes("section");
+}
+
+function isRoofAndAccessItem(item: DrawingContentItem) {
+  const text = `${item.label} ${item.meta}`.toLowerCase();
+  if (item.kind === "section") return true;
+  return item.kind === "line" && (text.includes("roof work") || text.includes("scaffold") || text.includes("access") || text.includes("section"));
+}
+
+function drawingItemTone(item: DrawingContentItem) {
+  if (item.kind === "section") return "Area";
+  if (item.kind === "feature") return "Item";
+  const text = `${item.label} ${item.meta}`.toLowerCase();
+  if (text.includes("scaffold") || text.includes("access")) return "Access";
+  if (text.includes("ridge")) return "Ridge";
+  if (text.includes("valley")) return "Valley";
+  if (text.includes("hip")) return "Hip";
+  if (text.includes("roof work") || text.includes("section")) return "Roof";
+  return "Line";
+}
+
 function escapeXml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
@@ -1129,24 +1220,29 @@ function DrawingPackExports(props: {
   surveyDate: string;
   surveyId: string;
   notes: string;
-  rows: { sections: ReturnType<typeof serialiseSections>; lines: ReturnType<typeof serialiseLines>; features: ReturnType<typeof serialiseFeatures> };
+  rows: DrawingExportRows;
 }) {
   const [customerFraming, setCustomerFraming] = useState<ProDrawingFraming>("close");
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const [contentSelection, setContentSelection] = useState<DrawingContentSelection>({});
   const staticMapsReady = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+  const drawingItems = useMemo(() => buildDrawingContentItems(props.rows), [props.rows]);
+  const selectedRows = useMemo(() => filterDrawingRows(props.rows, contentSelection), [contentSelection, props.rows]);
+  const selectedItems = selectedRows.sections.length + selectedRows.lines.length + selectedRows.features.length;
   const totalItems = props.rows.sections.length + props.rows.lines.length + props.rows.features.length;
   const canExport = totalItems > 0;
-  const totalArea = props.rows.sections.reduce((sum, section) => sum + (Number(section.area_m2) || 0), 0);
-  const totalLength = props.rows.lines.reduce((sum, line) => sum + (Number(line.length_lm) || 0), 0);
+  const canExportSelected = selectedItems > 0;
+  const totalArea = selectedRows.sections.reduce((sum, section) => sum + (Number(section.area_m2) || 0), 0);
+  const totalLength = selectedRows.lines.reduce((sum, line) => sum + (Number(line.length_lm) || 0), 0);
   const busy = Boolean(busyAction);
 
   function makeKml() {
-    return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features });
+    return buildMapKml({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: selectedRows.sections, lines: selectedRows.lines, features: selectedRows.features });
   }
 
   function makeCsv() {
-    return buildCsv({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features, surveyDate: props.surveyDate });
+    return buildCsv({ projectName: props.projectName, jobRef: props.jobRef, address: props.address, sections: selectedRows.sections, lines: selectedRows.lines, features: selectedRows.features, surveyDate: props.surveyDate });
   }
 
   async function makeProSvg(style: ProDrawingStyle, framing: ProDrawingFraming) {
@@ -1157,7 +1253,7 @@ function DrawingPackExports(props: {
 
     if (style === "satellite-pro" && apiKey) {
       const built = buildCleanSatellite(
-        { sections: props.rows.sections, lines: props.rows.lines, features: props.rows.features, framing },
+        { sections: selectedRows.sections, lines: selectedRows.lines, features: selectedRows.features, framing },
         apiKey,
         framing
       );
@@ -1180,9 +1276,9 @@ function DrawingPackExports(props: {
       customerName: props.customerName,
       surveyDate: props.surveyDate,
       notes: props.notes,
-      sections: props.rows.sections,
-      lines: props.rows.lines,
-      features: props.rows.features,
+      sections: selectedRows.sections,
+      lines: selectedRows.lines,
+      features: selectedRows.features,
       style,
       framing,
       satelliteImageHref,
@@ -1195,6 +1291,10 @@ function DrawingPackExports(props: {
   async function run(actionName: string, action: () => Promise<void>) {
     if (!canExport) {
       setMessage({ type: "error", text: "Add at least one roof section, line, or feature before exporting drawings." });
+      return;
+    }
+    if (!canExportSelected) {
+      setMessage({ type: "error", text: "Choose at least one item to show on the drawing before exporting." });
       return;
     }
 
@@ -1268,9 +1368,52 @@ function DrawingPackExports(props: {
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">Features</p>
-          <p className="text-sm font-bold text-[var(--text-primary)]">{props.rows.features.length}</p>
+          <p className="text-sm font-bold text-[var(--text-primary)]">{selectedRows.features.length}</p>
         </div>
       </div>
+
+      <details className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" open>
+        <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-[var(--gold-l)]">
+          Drawing contents
+          <span className="ml-2 normal-case tracking-normal text-[var(--muted)]">{selectedItems}/{totalItems} selected</span>
+        </summary>
+        <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Choose what appears on this drawing before creating the PDF, image, ZIP, CSV or KML. This does not delete anything from the survey.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button className="button-secondary !py-2 text-[10px]" onClick={() => setContentSelection({})} type="button">
+            Technical all
+          </button>
+          <button className="button-secondary !py-2 text-[10px]" onClick={() => setContentSelection(buildDrawingSelection(props.rows, isCustomerCleanItem))} type="button">
+            Customer clean
+          </button>
+          <button className="button-ghost !py-2 text-[10px]" onClick={() => setContentSelection(buildDrawingSelection(props.rows, isRoofAndAccessItem))} type="button">
+            Roof + scaffold
+          </button>
+          <button className="button-ghost !py-2 text-[10px]" onClick={() => setContentSelection(buildDrawingSelection(props.rows, () => false))} type="button">
+            Clear all
+          </button>
+        </div>
+        <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+          {drawingItems.length ? drawingItems.map((item) => {
+            const checked = isDrawingItemSelected(contentSelection, item.kind, item.id);
+            return (
+              <label key={item.key} className={`flex cursor-pointer items-center gap-3 rounded-lg border p-2 transition ${checked ? "border-[var(--gold)]/40 bg-[var(--gold)]/10" : "border-[var(--border)] bg-[var(--surface-deep)] opacity-70"}`}>
+                <input
+                  checked={checked}
+                  className="h-4 w-4 accent-[var(--gold)]"
+                  onChange={(event) => setContentSelection((current) => ({ ...current, [item.key]: event.target.checked }))}
+                  type="checkbox"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-[var(--text-primary)]">{item.label}</span>
+                  <span className="block truncate text-[10px] text-[var(--muted)]">{item.meta}</span>
+                </span>
+                <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--muted)]">{drawingItemTone(item)}</span>
+                <span className="w-14 shrink-0 text-right text-[10px] font-bold text-[var(--gold-l)]">{item.value}</span>
+              </label>
+            );
+          }) : <p className="text-xs text-[var(--muted)]">No measured items yet.</p>}
+        </div>
+      </details>
 
       <label className="block">
         <span className="label">Customer plan framing</span>
@@ -1290,7 +1433,7 @@ function DrawingPackExports(props: {
       <div className="grid grid-cols-1 gap-2">
         <button
           className="button-primary !py-3 text-xs"
-          disabled={busy || !canExport}
+          disabled={busy || !canExportSelected}
           onClick={() => void run("customer-pdf", async () => printProDrawing((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))}
           type="button"
         >
@@ -1298,18 +1441,18 @@ function DrawingPackExports(props: {
         </button>
         <button
           className="button-secondary !py-3 text-xs"
-          disabled={busy || !canExport}
+          disabled={busy || !canExportSelected}
           onClick={() => void run("technical-pdf", async () => printProDrawing((await makeProSvg("schematic-cad", "building")).svg, `${props.jobRef}-technical-takeoff-plan`))}
           type="button"
         >
           {busyAction === "technical-pdf" ? "Building..." : "Technical Takeoff Plan PDF"}
         </button>
-        <button className="button-ghost !py-3 text-xs" disabled={busy || !canExport} onClick={() => void run("pack", buildDrawingPack)} type="button">
+        <button className="button-ghost !py-3 text-xs" disabled={busy || !canExportSelected} onClick={() => void run("pack", buildDrawingPack)} type="button">
           {busyAction === "pack" ? "Packaging..." : "Download Drawing Pack"}
         </button>
         <button
           className="button-ghost !py-3 text-xs"
-          disabled={busy || !canExport}
+          disabled={busy || !canExportSelected}
           onClick={() =>
             void run("save-customer", async () => {
               const { svg } = await makeProSvg("satellite-pro", customerFraming);
@@ -1325,32 +1468,33 @@ function DrawingPackExports(props: {
       <details className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Advanced exports</summary>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("customer-svg", async () => downloadProSvg((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))} type="button">
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExportSelected} onClick={() => void run("customer-svg", async () => downloadProSvg((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))} type="button">
             Customer SVG
           </button>
-          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("customer-png", async () => downloadProPng((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))} type="button">
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExportSelected} onClick={() => void run("customer-png", async () => downloadProPng((await makeProSvg("satellite-pro", customerFraming)).svg, `${props.jobRef}-customer-roof-plan`))} type="button">
             Customer PNG
           </button>
-          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("technical-svg", async () => downloadProSvg((await makeProSvg("schematic-cad", "building")).svg, `${props.jobRef}-technical-takeoff-plan`))} type="button">
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExportSelected} onClick={() => void run("technical-svg", async () => downloadProSvg((await makeProSvg("schematic-cad", "building")).svg, `${props.jobRef}-technical-takeoff-plan`))} type="button">
             Technical SVG
           </button>
-          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExport} onClick={() => void run("bw-svg", async () => downloadProSvg((await makeProSvg("dimensioned-bw", "building")).svg, `${props.jobRef}-dimensioned-plan`))} type="button">
+          <button className="button-ghost !py-2 text-xs" disabled={busy || !canExportSelected} onClick={() => void run("bw-svg", async () => downloadProSvg((await makeProSvg("dimensioned-bw", "building")).svg, `${props.jobRef}-dimensioned-plan`))} type="button">
             B/W SVG
           </button>
-          <button className="button-ghost !py-2 text-xs" onClick={() => downloadCsv(makeCsv(), `${props.jobRef}-measurements`)} type="button">
+          <button className="button-ghost !py-2 text-xs" disabled={!canExportSelected} onClick={() => downloadCsv(makeCsv(), `${props.jobRef}-measurements`)} type="button">
             CSV
           </button>
-          <button className="button-ghost !py-2 text-xs" onClick={() => downloadText(makeKml(), `${props.jobRef}-roof-survey.kml`, "application/vnd.google-earth.kml+xml")} type="button">
+          <button className="button-ghost !py-2 text-xs" disabled={!canExportSelected} onClick={() => downloadText(makeKml(), `${props.jobRef}-roof-survey.kml`, "application/vnd.google-earth.kml+xml")} type="button">
             KML
           </button>
           <button
             className="button-ghost col-span-2 !py-2 text-xs"
             onClick={() =>
               printHtml(
-                `<h1>Roof Takeoff - ${escapeXml(props.jobRef)}</h1><p>${escapeXml(props.address)}</p><p>Total sections: ${props.rows.sections.length}</p><p>Total lines: ${props.rows.lines.length}</p><p>Total items: ${props.rows.features.length}</p><pre>${escapeXml(makeCsv())}</pre>`,
+                `<h1>Roof Takeoff - ${escapeXml(props.jobRef)}</h1><p>${escapeXml(props.address)}</p><p>Total sections: ${selectedRows.sections.length}</p><p>Total lines: ${selectedRows.lines.length}</p><p>Total items: ${selectedRows.features.length}</p><pre>${escapeXml(makeCsv())}</pre>`,
                 `${props.jobRef}-roof-takeoff`
               )
             }
+            disabled={!canExportSelected}
             type="button"
           >
             Measurement Table PDF

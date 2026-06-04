@@ -12,7 +12,7 @@ export default function DiaryPage() {
       subtitle="Capture voice notes, photos, tasks, expenses. Auto-linked to jobs."
       actions={
         <Button variant="ghost" size="md" asChild>
-          <Link href="/today">Back</Link>
+          <Link href={"/today" as Route}>Back</Link>
         </Button>
       }
     >
