@@ -15,6 +15,7 @@ import { JobTitleEditor } from "@/components/jobs/job-title-editor";
 import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { FieldActionBar } from "@/components/jobs/FieldActionBar";
 
 import {
   Badge,
@@ -179,6 +180,8 @@ export function JobDetailView(props: JobDetailViewProps) {
           <ActivityTab job={job} emailLogs={emailLogs} activity={activity ?? []} />
         </TabsContent>
       </Tabs>
+
+      <FieldActionBar jobId={job.id} />
     </div>
   );
 }
