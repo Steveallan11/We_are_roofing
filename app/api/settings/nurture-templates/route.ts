@@ -35,14 +35,14 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as {
+    const reqBody = (await req.json().catch(() => ({}))) as {
       templateId?: string;
       subject?: string;
       body?: string;
       is_active?: boolean;
     };
 
-    const { templateId, subject, body, is_active } = body;
+    const { templateId, subject, body, is_active } = reqBody;
 
     if (!templateId) {
       return Response.json({ error: "Missing templateId" }, { status: 400 });
