@@ -444,6 +444,12 @@ function lineColor(line: RoofSurveyLine, fallbackIndex: number) {
   return line.color || PALETTE[fallbackIndex % PALETTE.length];
 }
 
+function customerLineColor(line: RoofSurveyLine, index: number) {
+  const key = `${line.type || ""} ${line.label || ""}`.toLowerCase();
+  if (key.includes("scaffold") || key.includes("access")) return "#10B981";
+  return PALETTE[index % PALETTE.length];
+}
+
 function customerAreaLabel(index: number) {
   return `Area ${markerCode(index)}`;
 }
@@ -569,7 +575,7 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         const ll = line.points.map(toLatLng).filter(Boolean) as LatLng[];
         if (ll.length < 2) return;
         const pts = ll.map(project);
-        const color = lineColor(line, idx);
+        const color = customerLineColor(line, idx);
         overlay.push(`
           <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.84"/>
           <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="4.1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
@@ -955,7 +961,7 @@ function renderLegend({ layout, sections, lines, features, totalArea, totalLengt
       parts.push(`<text x="${layout.legendX + 20}" y="${y}" font-size="10" font-weight="800" letter-spacing="1.6" fill="#D4AF37">SELECTED ROOF LINES</text>`);
       y += 18;
       customerLines.forEach((line, idx) => {
-        const color = lineColor(line, idx);
+        const color = customerLineColor(line, idx);
         const codeIndex = sections.length + idx;
         const code = markerCode(codeIndex);
         parts.push(`
