@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { JobCard } from "@/components/jobs/job-card";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { WeatherStrip } from "@/components/weather/WeatherStrip";
+import { TodayJobsGrid } from "@/components/today/TodayJobsGrid";
 import { Button, Card, PageSection } from "@/components/ui/primitives";
 import { getBusiness, getJobs, getPricingRules, getUnreadCustomerReplies, getUpcomingDiaryTasks } from "@/lib/data";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
@@ -160,10 +161,10 @@ export default async function TodayPage() {
             kicker={surveysToday.length > 0 ? "Today" : "Coming Up"}
             title={
               surveysToday.length > 0
-                ? `${surveysToday.length} ${surveysToday.length === 1 ? "survey" : "surveys"} today`
+                ? `${surveysToday.length} ${surveysToday.length === 1 ? "site visit" : "site visits"} today`
                 : nextSurvey
-                  ? "Next survey"
-                  : "No surveys booked"
+                  ? "Next visit"
+                  : "No visits booked"
             }
             actions={
               <Button variant="ghost" size="sm" asChild>
@@ -172,21 +173,7 @@ export default async function TodayPage() {
             }
           >
             {surveysToday.length > 0 ? (
-              <div className="grid gap-2">
-                {surveysToday.map((survey) => (
-                  <Link
-                    className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm transition-colors hover:border-[var(--gold)]"
-                    href={`/jobs/${survey.id}/survey` as Route}
-                    key={survey.id}
-                  >
-                    <span className="text-[var(--text)]">
-                      <span className="font-semibold">{survey.customer?.full_name ?? survey.job_title}</span>
-                      <span className="ml-2 text-xs text-[var(--text-muted)]">{formatTime(survey.survey_date as string)}</span>
-                    </span>
-                    <span className="text-xs text-[var(--gold)]">Open</span>
-                  </Link>
-                ))}
-              </div>
+              <TodayJobsGrid jobs={surveysToday} />
             ) : nextSurvey ? (
               <div>
                 <p className="text-sm font-semibold text-[var(--text)]">
@@ -199,7 +186,7 @@ export default async function TodayPage() {
               </div>
             ) : (
               <p className="text-sm text-[var(--text-muted)]">
-                No survey booked. Use Jobs to book the next site visit.
+                No visit booked. Use the calendar to schedule site surveys.
               </p>
             )}
           </PageSection>
