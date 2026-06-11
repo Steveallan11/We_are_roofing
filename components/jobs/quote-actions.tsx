@@ -2,7 +2,8 @@
 
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { SendQuoteModal } from "@/components/quotes/SendQuoteModal";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import type { JobDocumentRecord, QuoteRecord } from "@/lib/types";
@@ -14,16 +15,20 @@ type Props = {
   customerName: string;
   customerEmail: string | null | undefined;
   documents?: JobDocumentRecord[];
+  autoGenerate?: boolean;
 };
 
-export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEmail, documents = [] }: Props) {
+export function QuoteActions({ autoGenerate = false, jobId, quote, jobTitle, customerName, customerEmail, documents = [] }: Props) {
   const router = useRouter();
+  const autoGenerateStarted = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeAction, setActiveAction] = useState<"generate" | "approve" | "send" | "pdf" | null>(null);
   const [overlayDismissed, setOverlayDismissed] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+  const canSend = Boolean(quote && (quote.status === "Approved" || quote.status === "Sent"));
 
   const workingCopy =
     activeAction === "generate"
@@ -55,6 +60,16 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
                 steps: ["Preparing the email", "Attaching the latest quote document", "Logging the send inside the job file"]
               }
             : null;
+
+  useEffect(() => {
+    if (!autoGenerate || quote || autoGenerateStarted.current) return;
+    autoGenerateStarted.current = true;
+    void runAction("generate");
+  }, [autoGenerate, quote]);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   async function runAction(action: "generate" | "approve" | "send" | "pdf") {
     setError(null);
@@ -162,7 +177,7 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
         </div>
       ) : null}
 
-      <div className="fixed bottom-[calc(var(--bottomnav-height)+10px+env(safe-area-inset-bottom))] left-3 right-3 z-40 flex gap-2 overflow-x-auto rounded-2xl border border-[var(--border-mid)] bg-[rgba(10,10,10,0.94)] p-2 shadow-2xl backdrop-blur lg:static lg:flex-wrap lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
+      <div className="flex max-w-[62vw] gap-2 overflow-x-auto overscroll-x-contain lg:max-w-none lg:flex-wrap lg:overflow-visible">
         {!quote ? (
           <button className="button-primary shrink-0" disabled={isPending} onClick={() => runAction("generate")} type="button">
             {isPending ? "Creating Quote..." : "Create Quote"}
@@ -204,27 +219,45 @@ export function QuoteActions({ jobId, quote, jobTitle, customerName, customerEma
       {!quote ? <p className="text-sm text-[var(--muted)]">Create the first draft once the survey details are ready.</p> : null}
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
       {success ? <p className="text-sm text-[#7ce3a6]">{success}</p> : null}
-      {quote && showSendModal ? (
-        <SendQuoteModal
-          customerEmail={customerEmail}
-          customerName={customerName}
-          defaultEmailBody={quote.customer_email_body}
-          defaultEmailSubject={quote.customer_email_subject}
-          documents={documents}
-          jobTitle={jobTitle}
-          isFromPrice={isQuoteFromOptionValue(quote)}
-          onClose={() => setShowSendModal(false)}
-          onSent={(message) => {
-            setShowSendModal(false);
-            setSuccess(message);
-            setError(null);
-            startTransition(() => router.refresh());
-          }}
-          quoteId={quote.id}
-          quoteRef={quote.quote_ref}
-          total={getQuotePipelineValue(quote) ?? 0}
-        />
-      ) : null}
+      {portalReady && quote && showSendModal
+        ? createPortal(
+            <SendQuoteModal
+              customerEmail={customerEmail}
+              customerName={customerName}
+              defaultEmailBody={quote.customer_email_body}
+              defaultEmailSubject={quote.customer_email_subject}
+              documents={documents}
+              jobTitle={jobTitle}
+              isFromPrice={isQuoteFromOptionValue(quote)}
+              onClose={() => setShowSendModal(false)}
+              onSent={(message) => {
+                setShowSendModal(false);
+                setSuccess(message);
+                setError(null);
+                startTransition(() => router.refresh());
+              }}
+              quoteId={quote.id}
+              quoteRef={quote.quote_ref}
+              total={getQuotePipelineValue(quote) ?? 0}
+            />,
+            document.body
+          )
+        : null}
+      {portalReady && canSend
+        ? createPortal(
+            <div className="fixed bottom-[calc(var(--bottomnav-height)+10px+env(safe-area-inset-bottom))] left-3 right-3 z-[55] lg:hidden">
+              <button
+                className="button-primary min-h-14 w-full rounded-2xl !text-base shadow-[0_12px_36px_rgba(0,0,0,0.5),0_0_0_2px_rgba(212,175,55,0.2)]"
+                disabled={isPending}
+                onClick={() => setShowSendModal(true)}
+                type="button"
+              >
+                {quote?.status === "Sent" ? "Resend Quote" : "Send Quote"}
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
