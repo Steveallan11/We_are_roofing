@@ -80,6 +80,29 @@ export function NurtureTemplatesEditor() {
     }
   };
 
+  const seedDefaults = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/nurture-templates/seed", {
+        method: "POST"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSuccess(`Created ${data.count} default templates`);
+        await loadTemplates();
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to create defaults");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-sm text-[var(--muted)]">Loading templates...</div>;
   }
@@ -104,6 +127,19 @@ export function NurtureTemplatesEditor() {
         <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-400">
           {success}
         </div>
+      )}
+
+      {templates.length === 0 && (
+        <Card padding="md" variant="outlined">
+          <div className="space-y-3 text-center py-6">
+            <p className="text-sm text-[var(--muted)]">
+              No nurture templates found. Click below to create the default 3-email sequence (Days 3, 7, 14).
+            </p>
+            <Button variant="primary" size="md" onClick={seedDefaults} disabled={saving}>
+              {saving ? "Creating..." : "Create Default Templates"}
+            </Button>
+          </div>
+        </Card>
       )}
 
       <div className="space-y-4">
