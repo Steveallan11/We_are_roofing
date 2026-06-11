@@ -54,12 +54,12 @@ export function ScheduleWorks({ job }: { job: Job }) {
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label>
           <span className="label">Start Date</span>
-          <input className="field min-h-11" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} />
+          <input className="field min-h-11" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} />
           <span className="mt-1 block text-xs text-[var(--muted)]">Can be updated any time. Roofing changes daily.</span>
         </label>
         <label>
           <span className="label">Expected Completion</span>
-          <input className="field min-h-11" min={startDate || new Date().toISOString().slice(0, 10)} onChange={(event) => setEndDate(event.target.value)} type="date" value={endDate} />
+          <input className="field min-h-11" min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} type="date" value={endDate} />
         </label>
       </div>
       {startDate ? (
