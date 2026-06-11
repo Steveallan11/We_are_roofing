@@ -904,6 +904,18 @@ export type NurtureEmail = {
   updated_at: string;
 };
 
+export type NurtureTemplate = {
+  id: string;
+  business_id?: string | null;
+  day_number: number;
+  template_name: string;
+  subject: string;
+  body: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PricingRule = {
   id: string;
   business_id: string;

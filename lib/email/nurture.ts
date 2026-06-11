@@ -1,53 +1,9 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { NurtureSequence } from "@/lib/types";
+import type { NurtureSequence, NurtureTemplate } from "@/lib/types";
 
-// Default nurture email sequence templates
-const DEFAULT_NURTURE_TEMPLATES = [
-  {
-    day: 3,
-    templateName: "follow_up_3days",
-    subject: "Checking in on your quote – Any questions?",
-    bodyTemplate: (customerName: string, jobTitle: string) =>
-      `Hi ${customerName},
-
-I hope you've had a chance to review the quote for ${jobTitle}.
-
-If you have any questions or need clarification on anything, I'm here to help. Just give me a call or reply to this email.
-
-Looking forward to working with you!
-
-Best regards,
-Andy @ We Are Roofing`
-  },
-  {
-    day: 7,
-    templateName: "follow_up_7days",
-    subject: "Following up on your ${jobTitle} quote",
-    bodyTemplate: (customerName: string, jobTitle: string) =>
-      `Hi ${customerName},
-
-Following up on the quote we sent a few days ago for ${jobTitle}.
-
-Would love to get this moving forward. Let me know if you'd like to proceed or if there's anything I can help clarify.
-
-Thanks!
-Andy`
-  },
-  {
-    day: 14,
-    templateName: "follow_up_14days",
-    subject: "Last reminder: Your roof quote is still valid",
-    bodyTemplate: (customerName: string, jobTitle: string) =>
-      `Hi ${customerName},
-
-Just a friendly reminder that the quote for ${jobTitle} is still valid and available.
-
-If you're ready to move forward or have any final questions, I'm happy to help. Otherwise, feel free to reach out if your timeline changes and you'd like to revisit the project.
-
-Best regards,
-Andy @ We Are Roofing`
-  }
-];
+// Template cache with TTL
+let templateCache: { templates: NurtureTemplate[]; timestamp: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function startNurtureSequence(quoteId: string): Promise<NurtureSequence | null> {
   const supabase = createSupabaseAdminClient();
@@ -124,10 +80,49 @@ export async function getNurtureSequence(quoteId: string): Promise<NurtureSequen
   return data as NurtureSequence | null;
 }
 
-export function getNurtureTemplate(dayNumber: number) {
-  return DEFAULT_NURTURE_TEMPLATES.find((t) => t.day === dayNumber);
+export async function getNurtureTemplates(): Promise<NurtureTemplate[]> {
+  // Check cache
+  if (templateCache && Date.now() - templateCache.timestamp < CACHE_TTL) {
+    return templateCache.templates;
+  }
+
+  const supabase = createSupabaseAdminClient();
+
+  // Get business ID
+  const { data: businesses } = await supabase.from("businesses").select("id").limit(1);
+  const businessId = businesses?.[0]?.id;
+
+  if (!businessId) {
+    console.warn("No business found, using empty templates");
+    return [];
+  }
+
+  const { data: templates, error } = await supabase
+    .from("nurture_templates")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("is_active", true)
+    .order("day_number", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch nurture templates:", error);
+    return [];
+  }
+
+  const result = (templates || []) as NurtureTemplate[];
+
+  // Cache the result
+  templateCache = { templates: result, timestamp: Date.now() };
+
+  return result;
 }
 
-export function getAllNurtureTemplateDays() {
-  return DEFAULT_NURTURE_TEMPLATES.map((t) => t.day).sort((a, b) => a - b);
+export async function getNurtureTemplate(dayNumber: number): Promise<NurtureTemplate | null> {
+  const templates = await getNurtureTemplates();
+  return templates.find((t) => t.day_number === dayNumber) || null;
+}
+
+export async function getAllNurtureTemplateDays(): Promise<number[]> {
+  const templates = await getNurtureTemplates();
+  return templates.map((t) => t.day_number).sort((a, b) => a - b);
 }

@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       const daysSinceStart = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
       // Get all template days
-      const templateDays = getAllNurtureTemplateDays();
+      const templateDays = await getAllNurtureTemplateDays();
 
       // Find the next email to send
       let nextEmailDay: number | null = null;
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
       if (!nextEmailDay) {
         // Check if sequence is complete
-        const maxDay = Math.max(...templateDays);
+        const maxDay = templateDays.length > 0 ? Math.max(...templateDays) : 0;
         if (daysSinceStart >= maxDay && sequence.current_day >= maxDay) {
           // Mark sequence as completed
           await supabase
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       }
 
       // Get template
-      const template = getNurtureTemplate(nextEmailDay);
+      const template = await getNurtureTemplate(nextEmailDay);
       if (!template) continue;
 
       // Get quote and job details
@@ -93,11 +93,15 @@ export async function POST(req: Request) {
         continue;
       }
 
-      // Generate email body
+      // Generate email by replacing placeholders
       const customerName = customer.full_name || customer.first_name || "there";
       const jobTitle = job.job_title || "your project";
-      const subject = template.subject.replace("${jobTitle}", jobTitle);
-      const body = template.bodyTemplate(customerName, jobTitle);
+      const subject = template.subject
+        .replace("{customer_name}", customerName)
+        .replace("{job_title}", jobTitle);
+      const body = template.body
+        .replace("{customer_name}", customerName)
+        .replace("{job_title}", jobTitle);
 
       // Send email
       try {
@@ -108,7 +112,7 @@ export async function POST(req: Request) {
           text: body,
           jobId: sequence.job_id,
           quoteId: sequence.quote_id,
-          templateType: template.templateName,
+          templateType: template.template_name,
           sequenceDay: nextEmailDay
         });
 
@@ -118,7 +122,7 @@ export async function POST(req: Request) {
           quote_id: sequence.quote_id,
           job_id: sequence.job_id,
           day_number: nextEmailDay,
-          template_name: template.templateName,
+          template_name: template.template_name,
           subject,
           body,
           customer_email: customer.email,
