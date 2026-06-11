@@ -310,7 +310,11 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
     }
 
     let cancelled = false;
-    setOptions({ key: apiKey, v: "weekly", libraries: ["drawing", "geometry", "places"] });
+    // Temporary compatibility pin:
+    // Google removed DrawingManager from newer Maps JS releases, and this
+    // takeoff tool still relies on the drawing library. Pin to the last
+    // pre-removal version until we replace DrawingManager with a custom flow.
+    setOptions({ key: apiKey, v: "3.64", libraries: ["drawing", "geometry", "places"] });
 
     Promise.all([importLibrary("maps"), importLibrary("drawing"), importLibrary("geometry"), importLibrary("places")])
       .then(() => {
