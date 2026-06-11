@@ -194,7 +194,7 @@ export function buildCleanSatellite(
   if (!bounds) return null;
 
   const cfg = framing === "close"
-    ? { paddingMeters: 4, zoomBoost: 1 }
+    ? { paddingMeters: 2, zoomBoost: 2 }
     : framing === "context"
     ? { paddingMeters: 28, zoomBoost: -1 }
     : { paddingMeters: 10, zoomBoost: 0 };
@@ -346,7 +346,7 @@ function northArrow(x: number, y: number, theme: "light" | "dark") {
 /* Marker placement (avoid overlap)                                          */
 /* ------------------------------------------------------------------------ */
 
-type Marker = { x: number; y: number; code: string; color: string; href?: string };
+type Marker = { x: number; y: number; code: string; color: string; anchorX?: number; anchorY?: number; href?: string };
 
 function distributeMarkers(markers: Marker[], radius = 22) {
   const placed: Marker[] = [];
@@ -364,6 +364,40 @@ function distributeMarkers(markers: Marker[], radius = 22) {
     placed.push({ ...m, x, y });
   }
   return placed;
+}
+
+function offsetLineMarker(points: Pixel[], bounds: { x: number; y: number; w: number; h: number }, distance = 34) {
+  const midIdx = Math.floor(points.length / 2);
+  const anchor = points[midIdx] ?? points[0];
+  const start = points[0] ?? anchor;
+  const end = points[points.length - 1] ?? anchor;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const normal = { x: -dy / len, y: dx / len };
+  const preferredX = anchor.x + normal.x * distance;
+  const preferredY = anchor.y + normal.y * distance;
+  const alternateX = anchor.x - normal.x * distance;
+  const alternateY = anchor.y - normal.y * distance;
+
+  const preferred = {
+    x: clamp(preferredX, bounds.x + 34, bounds.x + bounds.w - 34),
+    y: clamp(preferredY, bounds.y + 34, bounds.y + bounds.h - 34)
+  };
+  const alternate = {
+    x: clamp(alternateX, bounds.x + 34, bounds.x + bounds.w - 34),
+    y: clamp(alternateY, bounds.y + 34, bounds.y + bounds.h - 34)
+  };
+
+  // Prefer the side that needed less clamping, so bubbles stay neatly alongside the line.
+  const preferredClamp = Math.hypot(preferred.x - preferredX, preferred.y - preferredY);
+  const alternateClamp = Math.hypot(alternate.x - alternateX, alternate.y - alternateY);
+  const bubble = preferredClamp <= alternateClamp ? preferred : alternate;
+  return { anchor, bubble };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 /* ------------------------------------------------------------------------ */
@@ -511,10 +545,12 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         overlay.push(`
           <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.86"/>
           <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="4.8" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>`);
-        const midIdx = Math.floor(pts.length / 2);
+        const marker = offsetLineMarker(pts, { x: layout.drawingX, y: layout.drawingY, w: layout.drawingW, h: layout.drawingH }, 38);
         lineMarkers.push({
-          x: pts[midIdx].x,
-          y: pts[midIdx].y,
+          x: marker.bubble.x,
+          y: marker.bubble.y,
+          anchorX: marker.anchor.x,
+          anchorY: marker.anchor.y,
           code: markerCode(opts.sections.length + idx),
           color
         });
@@ -524,6 +560,8 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
       const allMarkers = distributeMarkers([...sectionMarkers, ...lineMarkers], 28);
       allMarkers.forEach((m) => {
         overlay.push(`
+          ${typeof m.anchorX === "number" && typeof m.anchorY === "number" ? `<line x1="${m.anchorX.toFixed(1)}" y1="${m.anchorY.toFixed(1)}" x2="${m.x.toFixed(1)}" y2="${m.y.toFixed(1)}" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+          <line x1="${m.anchorX.toFixed(1)}" y1="${m.anchorY.toFixed(1)}" x2="${m.x.toFixed(1)}" y2="${m.y.toFixed(1)}" stroke="${m.color}" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>` : ""}
           <g transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})">
             <circle r="24" fill="#0a0a0a" fill-opacity="0.58"/>
             <circle r="20" fill="${m.color}" stroke="#ffffff" stroke-width="3"/>
