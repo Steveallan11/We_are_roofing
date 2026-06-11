@@ -92,6 +92,7 @@ const NAV: NavGroup[] = [
           { label: "Rate Card", href: "/settings/rates" },
           { label: "Labour", href: "/settings/labour" },
           { label: "Suppliers", href: "/settings/suppliers" },
+          { label: "Nurture Templates", href: "/settings/nurture" },
           { label: "Knowledge Base", href: "/knowledge" }
         ]
       }

@@ -4,7 +4,7 @@
   "installCommand": "npm install",
   "crons": [
     {
-      "path": "/api/comms/nurture-tick",
+      "path": "/api/nurture/send",
       "schedule": "0 8 * * *"
     }
   ]

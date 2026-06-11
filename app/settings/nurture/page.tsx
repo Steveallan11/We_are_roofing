@@ -1,13 +1,13 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { NurtureTemplatesEditor } from "@/components/settings/NurtureTemplatesEditor";
 
-export default function SettingsPage() {
+export default function NurtureTemplatesPage() {
   return (
     <AppShell
-      title="Settings"
-      subtitle="Manage your business settings, email templates, and configurations."
+      title="Nurture Email Templates"
+      subtitle="Customize the follow-up emails sent to customers after quotes are sent."
     >
-      <div className="stack max-w-3xl">
+      <div className="stack max-w-4xl">
         <NurtureTemplatesEditor />
       </div>
     </AppShell>
