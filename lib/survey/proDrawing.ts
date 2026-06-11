@@ -396,6 +396,34 @@ function offsetLineMarker(points: Pixel[], bounds: { x: number; y: number; w: nu
   return { anchor, bubble };
 }
 
+function lineEndpointMarkers(points: Pixel[], color: string) {
+  if (points.length < 2) return "";
+  const start = points[0];
+  const end = points[points.length - 1];
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const tick = 10;
+
+  const tickLine = (point: Pixel) => {
+    const x1 = point.x - nx * tick;
+    const y1 = point.y - ny * tick;
+    const x2 = point.x + nx * tick;
+    const y2 = point.y + ny * tick;
+    return `
+      <line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+      <line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-width="2.6" stroke-linecap="round"/>`;
+  };
+
+  return `
+    ${tickLine(start)}
+    ${tickLine(end)}
+    <circle cx="${start.x.toFixed(1)}" cy="${start.y.toFixed(1)}" r="5.5" fill="#ffffff" stroke="${color}" stroke-width="2.4"/>
+    <circle cx="${end.x.toFixed(1)}" cy="${end.y.toFixed(1)}" r="5.5" fill="${color}" stroke="#ffffff" stroke-width="2.4"/>`;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -543,8 +571,9 @@ function buildSatelliteProSvg(opts: ProDrawingOpts) {
         const pts = ll.map(project);
         const color = lineColor(line, idx);
         overlay.push(`
-          <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.86"/>
-          <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="4.8" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>`);
+          <path d="${pointsToPath(pts, false)}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.84"/>
+          <path d="${pointsToPath(pts, false)}" fill="none" stroke="${color}" stroke-width="4.1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+          ${lineEndpointMarkers(pts, color)}`);
         const marker = offsetLineMarker(pts, { x: layout.drawingX, y: layout.drawingY, w: layout.drawingW, h: layout.drawingH }, 38);
         lineMarkers.push({
           x: marker.bubble.x,
