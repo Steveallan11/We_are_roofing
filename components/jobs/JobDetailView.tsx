@@ -40,6 +40,7 @@ import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-
 import { currency, formatDate, cn } from "@/lib/utils";
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { NextActionButton } from "@/components/jobs/NextActionButton";
+import { JobDiaryTab } from "@/components/diary/JobDiaryTab";
 import type { ActivityRecord } from "@/lib/activity/types";
 import {
   getDocumentDisplayType,
@@ -76,10 +77,11 @@ export type JobDetailViewProps = {
   paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 };
 
-type TabId = "overview" | "survey" | "quote" | "materials" | "labour" | "documents" | "activity";
+type TabId = "overview" | "diary" | "survey" | "quote" | "materials" | "labour" | "documents" | "activity";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
+  { value: "diary", label: "Diary" },
   { value: "survey", label: "Survey" },
   { value: "quote", label: "Quote" },
   { value: "materials", label: "Materials" },
@@ -149,6 +151,10 @@ export function JobDetailView(props: JobDetailViewProps) {
             quote={quote}
             paymentSchedule={paymentSchedule}
           />
+        </TabsContent>
+
+        <TabsContent value="diary">
+          <JobDiaryTab jobId={job.id} />
         </TabsContent>
 
         <TabsContent value="survey">
