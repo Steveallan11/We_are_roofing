@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
-import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
 import type { QuoteOption, QuoteRecord } from "@/lib/types";
-import { currency } from "@/lib/utils";
 
 type Props = {
   params: Promise<{ quoteId: string }>;
@@ -24,7 +22,6 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
   if (!access.ok) notFound();
 
   const options = (record.options ?? []) as QuoteOption[];
-  const displayTotal = getQuotePipelineValue(record) ?? 0;
   const roofPlan = access.mode === "token" ? await getInlineRoofPlanHref(supabase, record.id) : null;
 
   return (
@@ -78,12 +75,6 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
             <PublicQuoteActions costBreakdown={record.cost_breakdown ?? []} options={options} quoteId={record.id} token={access.mode === "token" ? token : null} />
           </div>
         </div>
-
-        {!options.length ? (
-          <div className="card mt-5 p-5">
-            <p className="font-display text-3xl text-[var(--gold-l)]">{currency(displayTotal)}</p>
-          </div>
-        ) : null}
 
         <details className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl md:p-7">
           <summary className="cursor-pointer font-ui text-sm font-bold uppercase tracking-[0.16em] text-[var(--gold)]">

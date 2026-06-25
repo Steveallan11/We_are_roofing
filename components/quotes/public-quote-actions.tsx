@@ -17,17 +17,22 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
   const useSectionSelection = shouldUseSectionSelection(sectionChoices, options);
   const hasOptionSelection = !useSectionSelection && options.length > 1;
   const hasSingleQuote = !useSectionSelection && options.length === 0 && sectionChoices.length > 0;
+  const optionalLineIndexes = getOptionalLineIndexes(costBreakdown);
+  const hasOptionalExtras = hasSingleQuote && optionalLineIndexes.length > 0;
+  const useLineSelection = useSectionSelection || hasOptionalExtras;
   const [message, setMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
     useSectionSelection ? null : options.find((option) => option.recommended)?.id ?? options[0]?.id ?? null
   );
-  const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>(() => sectionChoices.flatMap((section) => section.indexes));
+  const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>(() =>
+    sectionChoices.flatMap((section) => section.indexes).filter((index) => !optionalLineIndexes.includes(index))
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const selectedOption = useSectionSelection ? null : options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
-  const hasSelection = useSectionSelection ? selectedLineIndexes.length > 0 : options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
+  const hasSelection = useLineSelection ? selectedLineIndexes.length > 0 : options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
   const hasName = customerName.trim().length >= 2;
   const hasValidEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
   const acceptanceHelper = getAcceptanceHelper({ hasName, hasSelectedOption: hasSelection, hasValidEmail });
@@ -56,8 +61,8 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        option_id: useSectionSelection ? null : selectedOptionId,
-        selected_line_indexes: useSectionSelection ? selectedLineIndexes : [],
+        option_id: useLineSelection ? null : selectedOptionId,
+        selected_line_indexes: useLineSelection ? selectedLineIndexes : [],
         customer_name: customerName.trim(),
         customer_email: customerEmail.trim()
       })
@@ -163,7 +168,12 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
           );
           })
         ) : hasSingleQuote ? (
-          <SingleQuoteSummary sections={sectionChoices} />
+          <SingleQuoteSummary
+            lines={costBreakdown}
+            optionalLineIndexes={optionalLineIndexes}
+            selectedLineIndexes={selectedLineIndexes}
+            setSelectedLineIndexes={setSelectedLineIndexes}
+          />
         ) : (
           <p className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 font-ui text-base text-[var(--text-second)]">
             Ready to proceed? Confirm your details, then accept below.
@@ -374,6 +384,21 @@ function isInternalSectionName(value: string) {
   ].includes(normalised);
 }
 
+function getOptionalLineIndexes(lines: CostLineItem[]) {
+  return lines.flatMap((line, index) => (isOptionalQuoteLine(line) && Number(line.cost || 0) > 0 ? [index] : []));
+}
+
+function isOptionalQuoteLine(line: CostLineItem) {
+  const identity = `${line.item ?? ""} ${line.notes ?? ""} ${line.pricing_category ?? ""}`.toLowerCase();
+  return identity.includes("insulation") || identity.includes("optional extra") || identity.includes("optional upgrade");
+}
+
+function getCustomerLineLabel(line: CostLineItem) {
+  const item = line.item?.trim();
+  if (item && !isInternalSectionName(item)) return item;
+  return getLineDisplayLabel(line);
+}
+
 function getLineDisplayLabel(line: CostLineItem) {
   const category = (line.pricing_category ?? "").toLowerCase();
   if (category === "roof_works") return "Roof works";
@@ -404,25 +429,99 @@ function shouldUseSectionSelection(sections: SectionChoice[], options: QuoteOpti
   return sections.every((section) => section.name !== "Quoted works");
 }
 
-function SingleQuoteSummary({ sections }: { sections: SectionChoice[] }) {
-  const lines = sections.flatMap((section) => section.lines);
-  const roofNet = lines.filter((line) => lineSortOrder(line) === 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
-  const accessNet = lines.filter((line) => lineSortOrder(line) > 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
-  const net = sections.reduce((sum, section) => sum + section.net, 0);
-  const vat = sections.reduce((sum, section) => sum + section.vat, 0);
+function SingleQuoteSummary({
+  lines,
+  optionalLineIndexes,
+  selectedLineIndexes,
+  setSelectedLineIndexes
+}: {
+  lines: CostLineItem[];
+  optionalLineIndexes: number[];
+  selectedLineIndexes: number[];
+  setSelectedLineIndexes: (indexes: number[]) => void;
+}) {
+  const pricedLines = lines.map((line, index) => ({ ...line, originalIndex: index })).filter((line) => Number(line.cost || 0) > 0);
+  const baseLines = pricedLines.filter((line) => !optionalLineIndexes.includes(line.originalIndex));
+  const optionalLines = pricedLines.filter((line) => optionalLineIndexes.includes(line.originalIndex));
+  const selectedLines = pricedLines.filter((line) => selectedLineIndexes.includes(line.originalIndex));
+  const net = selectedLines.reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const vat = selectedLines.reduce((sum, line) => sum + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0), 0);
+
+  function toggleOptionalLine(index: number) {
+    if (selectedLineIndexes.includes(index)) {
+      setSelectedLineIndexes(selectedLineIndexes.filter((selectedIndex) => selectedIndex !== index));
+      return;
+    }
+    setSelectedLineIndexes([...selectedLineIndexes, index]);
+  }
 
   return (
-    <div className="rounded-[1.4rem] border-2 border-[var(--gold)] bg-[var(--gold)] p-5 text-black shadow-[0_0_0_4px_rgba(212,175,55,0.16)] md:col-span-2 md:p-6">
-      <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-black/65">Quote price</p>
-      <h3 className="mt-2 font-display text-3xl leading-tight">Quoted works</h3>
-      <p className="mt-2 font-ui text-sm leading-6 text-black/70">Roof works and any scaffold/access charges are shown separately below.</p>
-      <div className="mt-5 space-y-3 border-t border-black/20 pt-4 font-ui">
-        {roofNet > 0 ? <OptionCardPriceRow isSelected label="Roof works" value={roofNet} /> : null}
-        {accessNet > 0 ? <OptionCardPriceRow isSelected label="Scaffold/access" value={accessNet} /> : null}
-        <OptionCardPriceRow isSelected label="VAT" value={vat} />
-        <span className="block border-t border-black/20 pt-3">
-          <OptionCardPriceRow isSelected label="Total including VAT" strong value={net + vat} />
-        </span>
+    <div className="space-y-3 md:col-span-2">
+      <div className="rounded-[1.4rem] border-2 border-[var(--gold)] bg-[var(--gold)] p-5 text-black shadow-[0_0_0_4px_rgba(212,175,55,0.16)] md:p-6">
+        <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-black/65">Your quote before VAT</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <h3 className="font-display text-3xl leading-tight">Quoted works</h3>
+          <strong className="font-display text-4xl leading-none">{currency(net)}</strong>
+        </div>
+        <p className="mt-3 font-ui text-sm leading-6 text-black/70">The main figure is shown before VAT. The full VAT total is clearly confirmed below.</p>
+        <div className="mt-5 space-y-3 border-t border-black/20 pt-4 font-ui">
+          {baseLines.map((line) => (
+            <OptionCardPriceRow isSelected key={`base-${line.originalIndex}`} label={getCustomerLineLabel(line)} value={Number(line.cost || 0)} />
+          ))}
+          <span className="block border-t border-black/20 pt-3">
+            <OptionCardPriceRow isSelected label="Total before VAT" strong value={net} />
+          </span>
+        </div>
+      </div>
+
+      {optionalLines.length ? (
+        <div className="rounded-[1.4rem] border border-[var(--gold)]/40 bg-[#101010] p-5 md:p-6">
+          <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--gold)]">Optional upgrades</p>
+          <p className="mt-2 font-ui text-sm leading-6 text-[#d6d6d6]">Add any upgrade you would like included before accepting the quote.</p>
+          <div className="mt-4 space-y-3">
+            {optionalLines.map((line) => {
+              const selected = selectedLineIndexes.includes(line.originalIndex);
+              return (
+                <button
+                  className={`flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition ${
+                    selected ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-white/15 bg-white/[0.03] text-white"
+                  }`}
+                  key={`optional-${line.originalIndex}`}
+                  onClick={() => toggleOptionalLine(line.originalIndex)}
+                  type="button"
+                >
+                  <span>
+                    <span className="block font-ui text-base font-extrabold">{getCustomerLineLabel(line)}</span>
+                    <span className={`mt-1 block font-ui text-xs ${selected ? "text-black/65" : "text-[#bdbdbd]"}`}>
+                      {selected ? "Included in your selected total" : "Tap to add this upgrade"}
+                    </span>
+                  </span>
+                  <span className="text-right">
+                    <strong className="block font-display text-2xl">{currency(Number(line.cost || 0))}</strong>
+                    <span className={`font-ui text-[0.65rem] font-bold uppercase tracking-[0.12em] ${selected ? "text-black/60" : "text-[var(--gold)]"}`}>
+                      before VAT
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="rounded-2xl border border-[var(--gold)]/30 bg-[#17130a] p-4 font-ui md:p-5">
+        <div className="flex items-center justify-between gap-4 text-sm text-[#d6d6d6]">
+          <span>Selected price before VAT</span>
+          <strong className="text-white">{currency(net)}</strong>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-4 text-sm text-[#d6d6d6]">
+          <span>VAT</span>
+          <strong className="text-white">{currency(vat)}</strong>
+        </div>
+        <div className="mt-3 flex items-end justify-between gap-4 border-t border-[var(--gold)]/35 pt-3">
+          <span className="text-base font-bold text-white">Total including VAT</span>
+          <strong className="font-display text-3xl text-[var(--gold-l)]">{currency(net + vat)}</strong>
+        </div>
       </div>
     </div>
   );
