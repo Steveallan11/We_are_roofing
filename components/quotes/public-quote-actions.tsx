@@ -399,6 +399,10 @@ function getCustomerLineLabel(line: CostLineItem) {
   return getLineDisplayLabel(line);
 }
 
+function isPriceToBeConfirmed(line: CostLineItem) {
+  return line.notes?.toLowerCase().includes("price to be confirmed") ?? false;
+}
+
 function getLineDisplayLabel(line: CostLineItem) {
   const category = (line.pricing_category ?? "").toLowerCase();
   if (category === "roof_works") return "Roof works";
@@ -466,7 +470,7 @@ function SingleQuoteSummary({
         <p className="mt-3 font-ui text-sm leading-6 text-black/70">The main figure is shown before VAT. The full VAT total is clearly confirmed below.</p>
         <div className="mt-5 space-y-3 border-t border-black/20 pt-4 font-ui">
           {baseLines.map((line) => (
-            <OptionCardPriceRow isSelected key={`base-${line.originalIndex}`} label={getCustomerLineLabel(line)} value={Number(line.cost || 0)} />
+            <CustomerQuoteLine key={`base-${line.originalIndex}`} line={line} />
           ))}
           <span className="block border-t border-black/20 pt-3">
             <OptionCardPriceRow isSelected label="Total before VAT" strong value={net} />
@@ -524,6 +528,27 @@ function SingleQuoteSummary({
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomerQuoteLine({ line }: { line: CostLineItem }) {
+  const isTbc = isPriceToBeConfirmed(line);
+
+  return (
+    <span className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 font-ui text-sm font-semibold">
+      <span className="min-w-0">
+        <span className="block leading-5 text-black/80">{getCustomerLineLabel(line)}</span>
+        {isTbc ? (
+          <span className="mt-1 inline-flex rounded-full bg-black px-2.5 py-1 text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-[var(--gold)]">
+            Price to be confirmed
+          </span>
+        ) : null}
+      </span>
+      <span className="shrink-0 text-right text-black">
+        {currency(Number(line.cost || 0))}
+        {isTbc ? <span className="mt-1 block text-[0.62rem] font-bold uppercase tracking-[0.08em] text-black/55">Current allowance</span> : null}
+      </span>
+    </span>
   );
 }
 

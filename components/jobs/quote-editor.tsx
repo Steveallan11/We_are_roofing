@@ -104,6 +104,12 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
     setCostBreakdown((current) => current.map((item, itemIndex) => (itemIndex === index ? normaliseCostLine({ ...item, ...updates }, updates) : item)));
   }
 
+  function toggleLinePriceToBeConfirmed(index: number) {
+    const line = costBreakdown[index];
+    if (!line) return;
+    updateLine(index, { notes: setPriceToBeConfirmed(line.notes, !isPriceToBeConfirmed(line)) });
+  }
+
   function deleteLine(index: number) {
     setCostBreakdown((current) => current.filter((_, itemIndex) => itemIndex !== index));
     setSuccess("Line item removed. Save changes to keep this cost breakdown.");
@@ -267,6 +273,13 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
         return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
       })
     );
+  }
+
+  function toggleOptionLinePriceToBeConfirmed(optionId: string, index: number) {
+    const option = options.find((item) => item.id === optionId);
+    const line = option?.cost_breakdown[index];
+    if (!line) return;
+    updateOptionLine(optionId, index, { notes: setPriceToBeConfirmed(line.notes, !isPriceToBeConfirmed(line)) });
   }
 
   function addOptionLine(optionId: string) {
@@ -877,6 +890,17 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                         <span className="label">Notes</span>
                         <textarea className="field min-h-16" onChange={(event) => updateOptionLine(option.id, index, { notes: event.target.value })} value={line.notes} />
                       </label>
+                      <button
+                        className={`mt-3 min-h-10 w-full rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                          isPriceToBeConfirmed(line)
+                            ? "border-[#f59e0b] bg-[#f59e0b] text-black"
+                            : "border-[var(--border-mid)] bg-transparent text-[var(--text-second)]"
+                        }`}
+                        onClick={() => toggleOptionLinePriceToBeConfirmed(option.id, index)}
+                        type="button"
+                      >
+                        {isPriceToBeConfirmed(line) ? "Price to be confirmed ✓" : "Mark price to be confirmed"}
+                      </button>
                     </div>
                   ))}
                   <div className="flex flex-wrap gap-2">
@@ -1165,6 +1189,17 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                   <input checked={line.vat_applicable} onChange={(event) => updateLine(index, { vat_applicable: event.target.checked })} type="checkbox" />
                   VAT applies to this line
                 </label>
+                <button
+                  className={`min-h-10 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                    isPriceToBeConfirmed(line)
+                      ? "border-[#f59e0b] bg-[#f59e0b] text-black"
+                      : "border-[var(--border-mid)] bg-transparent text-[var(--text-second)]"
+                  }`}
+                  onClick={() => toggleLinePriceToBeConfirmed(index)}
+                  type="button"
+                >
+                  {isPriceToBeConfirmed(line) ? "Price to be confirmed ✓" : "Mark price to be confirmed"}
+                </button>
                 <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
                   <span className="text-[var(--muted)]">Net: <strong className="text-white">{currency(Number(line.cost || 0))}</strong></span>
                   <span className="text-[var(--muted)]">VAT: <strong className="text-white">{currency(line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0)}</strong></span>
@@ -1304,6 +1339,20 @@ function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = 
     unit_rate: unitRate,
     cost: shouldRecalculate ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0)
   };
+}
+
+const PRICE_TO_BE_CONFIRMED_NOTE = "Price to be confirmed by company.";
+
+function isPriceToBeConfirmed(line: CostLineItem) {
+  return line.notes?.toLowerCase().includes("price to be confirmed") ?? false;
+}
+
+function setPriceToBeConfirmed(notes: string | null | undefined, enabled: boolean) {
+  const cleaned = (notes ?? "")
+    .replace(/(?:^|\n)\s*Price to be confirmed by company\.?\s*(?=\n|$)/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return enabled ? [cleaned, PRICE_TO_BE_CONFIRMED_NOTE].filter(Boolean).join("\n") : cleaned;
 }
 
 function groupQuoteSections(lines: CostLineItem[]) {
