@@ -837,7 +837,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                 </div>
                 <div className="mt-4 space-y-3">
                   {option.cost_breakdown.map((line, index) => (
-                      <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-${line.item}-${index}`}>
+                      <div className="rounded-xl border border-[var(--border)] p-3" key={`${option.id}-line-${index}`}>
                         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px_150px_120px] xl:grid-cols-[minmax(0,1fr)_150px_150px_120px_92px_96px]">
                           <label className="block">
                             <span className="label">Item</span>
@@ -1033,7 +1033,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
             const isScaffoldLine = (line.pricing_category || "").includes("scaffold") || line.item.toLowerCase().includes("scaffold");
             const canAddScaffoldLine = Boolean(line.source_id || line.quote_section) && !isScaffoldLine;
             return (
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-deep)] p-5" key={`${line.item}-${index}`}>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-deep)] p-5" key={`quote-line-${index}`}>
               {line.source_type || line.measurement_label || line.quote_section ? (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-black/15 p-3 text-xs text-[var(--muted)]">
                   {line.source_color ? <span aria-hidden="true" className="h-3 w-3 rounded-full" style={{ background: line.source_color }} /> : null}
