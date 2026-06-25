@@ -4,6 +4,7 @@ import { getJobBundle } from "@/lib/data";
 import { requireAdminApi } from "@/lib/auth";
 import { getLatestRoofSurvey } from "@/lib/roof-surveys";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
 import { calculateOptionNet, calculateOptionVat, normaliseQuoteCostLine } from "@/lib/quotes/value";
 import { canPersistToSupabase } from "@/lib/workflows";
 import type { CostLineItem } from "@/lib/types";
@@ -81,6 +82,7 @@ export async function POST(request: Request, { params }: Props) {
   };
 
   const wording = process.env.OPENAI_API_KEY ? await polishWithOpenAI({ bundle, draft, roofSurvey }) : buildFallbackWording(draft);
+  wording.customer_email_body = cleanCustomerEmailBody(wording.customer_email_body);
   const canUpdateCostBreakdown = draft.mode === "build_from_context" && Boolean(wording.cost_breakdown?.length);
   const nextCostBreakdown = canUpdateCostBreakdown ? (wording.cost_breakdown ?? []).map(normaliseQuoteCostLine) : draft.cost_breakdown.map(normaliseQuoteCostLine);
   const nextTotals = canUpdateCostBreakdown ? calculateTotals(nextCostBreakdown) : null;

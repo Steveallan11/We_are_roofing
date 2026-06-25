@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
 import { currency } from "@/lib/utils";
 import type { JobDocumentRecord } from "@/lib/types";
 
@@ -36,7 +37,9 @@ export function SendQuoteModal({
   const [email, setEmail] = useState(customerEmail ?? "");
   const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
   const [emailSubject, setEmailSubject] = useState(defaultEmailSubject || `Your We Are Roofing quotation - ${quoteRef}`);
-  const [emailBody, setEmailBody] = useState(defaultEmailBody || "Your roofing quotation is ready to review. Please use the button below to view the quote online.");
+  const [emailBody, setEmailBody] = useState(
+    cleanCustomerEmailBody(defaultEmailBody) || "Your roofing quotation is ready to review. Please use the button below to view the quote online."
+  );
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [includeRoofPlan, setIncludeRoofPlan] = useState(false);
   const [roofPlanDocumentId, setRoofPlanDocumentId] = useState("");

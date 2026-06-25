@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 import { createQuotePublicToken } from "@/lib/public-quote";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
 import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
@@ -63,7 +64,8 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const subject = body.subject?.trim() || quote.customer_email_subject || `Your We Are Roofing quotation - ${quote.quote_ref}`;
-  const messageBody = body.body?.trim() || quote.customer_email_body || "Please find our quotation below.";
+  const messageBody =
+    cleanCustomerEmailBody(body.body?.trim() || quote.customer_email_body) || "Please find our quotation below.";
   const emailCustomerName = body.email_customer_name?.trim() || bundle.customer.full_name;
 
   const artifacts = await persistQuoteArtifacts(supabase, { ...bundle, quote }, quote);

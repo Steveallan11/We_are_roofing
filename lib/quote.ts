@@ -7,6 +7,7 @@ import type {
   MaterialLineItem,
   PricingRuleRecord
 } from "@/lib/types";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
 import { getComparableHistoricalQuotes } from "@/lib/quote-engine";
 import { calculateOptionNet, calculateOptionVat, normaliseQuoteCostLine } from "@/lib/quotes/value";
 
@@ -149,6 +150,7 @@ The quote should sound like Andrew: practical, direct, customer-facing, diagnost
 Prioritise knowledge entries tagged andrew-style, quote-wording, and roof-report-style for phrasing and structure.
 Use the historical quotes as style and comparable-price anchors only. Do not blindly copy old totals; instead apply the uplifted totals and current survey facts.
 Never copy an old customer's address, name, or job-specific details into the new quote. Reuse style and structure, not irrelevant facts.
+In the customer email, mention only work and roof features explicitly included in this quote's priced scope. Do not mention chimneys, dormers, skylights, or other features unless they are specifically being worked on.
 Return JSON only.
 
 Business:
@@ -312,6 +314,7 @@ function normalizeQuote(
 
   return {
     ...quote,
+    customer_email_body: cleanCustomerEmailBody(quote.customer_email_body),
     cost_breakdown: costBreakdown,
     subtotal,
     vat_amount: vatAmount,

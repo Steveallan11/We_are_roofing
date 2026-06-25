@@ -15,6 +15,7 @@ import {
   normaliseQuoteCostLine,
   normaliseQuoteOption
 } from "@/lib/quotes/value";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
 import { buildTakeoffDrawingSvg, printDrawing, type DrawingQuoteSection } from "@/lib/survey/cadDrawing";
 import { currency } from "@/lib/utils";
@@ -40,7 +41,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   const [exclusions, setExclusions] = useState(quote?.exclusions ?? "");
   const [terms, setTerms] = useState(quote?.terms ?? "");
   const [emailSubject, setEmailSubject] = useState(quote?.customer_email_subject ?? "");
-  const [emailBody, setEmailBody] = useState(quote?.customer_email_body ?? "");
+  const [emailBody, setEmailBody] = useState(cleanCustomerEmailBody(quote?.customer_email_body));
   const [confidence, setConfidence] = useState<QuoteRecord["confidence"]>(quote?.confidence ?? "Medium");
   const [pricingNotes, setPricingNotes] = useState((quote?.pricing_notes ?? []).join("\n"));
   const [missingInfo, setMissingInfo] = useState((quote?.missing_info ?? []).join("\n"));
