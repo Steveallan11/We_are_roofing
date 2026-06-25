@@ -15,6 +15,8 @@ type Props = {
 export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token }: Props) {
   const sectionChoices = buildSectionChoices(costBreakdown);
   const useSectionSelection = shouldUseSectionSelection(sectionChoices, options);
+  const hasOptionSelection = !useSectionSelection && options.length > 1;
+  const hasSingleQuote = !useSectionSelection && options.length === 0 && sectionChoices.length > 0;
   const [message, setMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -90,12 +92,18 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
   return (
     <div className="mt-6 space-y-5">
       <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#f8f3e3] p-5 shadow-2xl md:p-7">
-        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">{useSectionSelection ? "Choose your roof sections" : "Choose your preferred option"}</p>
-        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-5xl">{useSectionSelection ? "Choose the sections you want done" : "Choose the option that suits you best"}</h2>
+        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">
+          {useSectionSelection ? "Choose your roof sections" : hasOptionSelection ? "Choose your preferred option" : "Your quotation"}
+        </p>
+        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-5xl">
+          {useSectionSelection ? "Choose the sections you want done" : hasOptionSelection ? "Choose the option that suits you best" : "Your quoted price"}
+        </h2>
         <p className="mt-3 font-ui text-base leading-7 text-[#4a4a4a] md:text-lg md:leading-8">
           {useSectionSelection
             ? "Select the roof sections you would like us to carry out now. Each section shows the roof works price and any scaffold/access cost separately."
-            : "Below are your two quote options. Option B is our recommended choice if you want the best weather protection during the works."}
+            : hasOptionSelection
+              ? "Below are your quote options. Select the option you would like us to carry out."
+              : "The price below covers the quoted works described in the roof report and scope of works."}
         </p>
       </section>
 
@@ -154,12 +162,8 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
             </button>
           );
           })
-        ) : sectionChoices.length ? (
-          <SectionChoiceList
-            sections={sectionChoices}
-            selectedLineIndexes={selectedLineIndexes}
-            setSelectedLineIndexes={setSelectedLineIndexes}
-          />
+        ) : hasSingleQuote ? (
+          <SingleQuoteSummary sections={sectionChoices} />
         ) : (
           <p className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 font-ui text-base text-[var(--text-second)]">
             Ready to proceed? Confirm your details, then accept below.
@@ -323,7 +327,7 @@ function buildSectionChoices(lines: CostLineItem[]): SectionChoice[] {
 
   lines.forEach((line, originalIndex) => {
     if (Number(line.cost || 0) <= 0) return;
-    const name = line.quote_section?.trim() || line.source_label?.trim() || line.item || "Quote section";
+    const name = getCustomerSectionName(line);
     const existing =
       groups.get(name) ??
       ({
@@ -349,7 +353,32 @@ function buildSectionChoices(lines: CostLineItem[]): SectionChoice[] {
     .sort((left, right) => Math.min(...left.indexes) - Math.min(...right.indexes));
 }
 
+function getCustomerSectionName(line: CostLineItem) {
+  const candidates = [line.quote_section, line.source_label];
+  const customerName = candidates.find((candidate) => candidate?.trim() && !isInternalSectionName(candidate));
+  return customerName?.trim() || "Quoted works";
+}
+
+function isInternalSectionName(value: string) {
+  const normalised = value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  return [
+    "roof works",
+    "access",
+    "scaffold",
+    "scaffold access",
+    "standard scaffold",
+    "temporary roof protection",
+    "temporary roof weather protection",
+    "additional works",
+    "general works"
+  ].includes(normalised);
+}
+
 function getLineDisplayLabel(line: CostLineItem) {
+  const category = (line.pricing_category ?? "").toLowerCase();
+  if (category === "roof_works") return "Roof works";
+  if (category === "temporary_roof_protection") return "Temporary roof protection";
+  if (category === "standard_scaffold" || category === "access") return "Scaffold/access";
   const identity = `${line.item ?? ""} ${line.pricing_category ?? ""} ${line.notes ?? ""}`.toLowerCase();
   if (identity.includes("scaffold") || identity.includes("access")) return "Scaffold/access";
   if (identity.includes("temporary roof") || identity.includes("weather protection")) return "Temporary roof protection";
@@ -371,11 +400,32 @@ function getSectionPackageSummary(section: SectionChoice) {
 }
 
 function shouldUseSectionSelection(sections: SectionChoice[], options: QuoteOption[]) {
-  if (!sections.length) return false;
-  const hasTakeoffLinkedSections = sections.some((section) =>
-    section.lines.some((line) => Boolean(line.quote_section || line.source_label || line.measurement_label || line.source_id || line.source_type))
+  if (options.length > 1 || sections.length <= 1) return false;
+  return sections.every((section) => section.name !== "Quoted works");
+}
+
+function SingleQuoteSummary({ sections }: { sections: SectionChoice[] }) {
+  const lines = sections.flatMap((section) => section.lines);
+  const roofNet = lines.filter((line) => lineSortOrder(line) === 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const accessNet = lines.filter((line) => lineSortOrder(line) > 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const net = sections.reduce((sum, section) => sum + section.net, 0);
+  const vat = sections.reduce((sum, section) => sum + section.vat, 0);
+
+  return (
+    <div className="rounded-[1.4rem] border-2 border-[var(--gold)] bg-[var(--gold)] p-5 text-black shadow-[0_0_0_4px_rgba(212,175,55,0.16)] md:col-span-2 md:p-6">
+      <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-black/65">Quote price</p>
+      <h3 className="mt-2 font-display text-3xl leading-tight">Quoted works</h3>
+      <p className="mt-2 font-ui text-sm leading-6 text-black/70">Roof works and any scaffold/access charges are shown separately below.</p>
+      <div className="mt-5 space-y-3 border-t border-black/20 pt-4 font-ui">
+        {roofNet > 0 ? <OptionCardPriceRow isSelected label="Roof works" value={roofNet} /> : null}
+        {accessNet > 0 ? <OptionCardPriceRow isSelected label="Scaffold/access" value={accessNet} /> : null}
+        <OptionCardPriceRow isSelected label="VAT" value={vat} />
+        <span className="block border-t border-black/20 pt-3">
+          <OptionCardPriceRow isSelected label="Total including VAT" strong value={net + vat} />
+        </span>
+      </div>
+    </div>
   );
-  return hasTakeoffLinkedSections && (sections.length > 1 || options.length > 0);
 }
 
 function sortSectionLines(lines: Array<CostLineItem & { originalIndex: number }>) {
@@ -383,6 +433,10 @@ function sortSectionLines(lines: Array<CostLineItem & { originalIndex: number }>
 }
 
 function lineSortOrder(line: CostLineItem) {
+  const category = (line.pricing_category ?? "").toLowerCase();
+  if (category === "roof_works") return 1;
+  if (category === "standard_scaffold" || category === "access") return 2;
+  if (category === "temporary_roof_protection") return 3;
   const identity = `${line.item ?? ""} ${line.pricing_category ?? ""} ${line.notes ?? ""}`.toLowerCase();
   if (identity.includes("scaffold") || identity.includes("access")) return 2;
   if (identity.includes("temporary roof") || identity.includes("weather protection")) return 3;
