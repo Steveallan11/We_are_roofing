@@ -1,4 +1,5 @@
 import type { QuoteRecord } from "@/lib/types";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
 import { currency } from "@/lib/utils";
 
 type BusinessFooter = {
@@ -82,8 +83,9 @@ export function quoteSentEmail(props: {
   businessEmail?: string | null;
 }) {
   const helloName = greetingName(props.customerName);
-  const messageHtml = props.messageBody?.trim()
-    ? paragraphsToHtml(props.messageBody)
+  const cleanMessageBody = cleanCustomerEmailBody(props.messageBody);
+  const messageHtml = cleanMessageBody
+    ? paragraphsToHtml(cleanMessageBody)
     : `<p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
         Your roofing quotation is ready to review. We have laid it out in clear sections so you can read the roof report, understand the proposed works, and choose the next step without digging through small print.
       </p>`;
