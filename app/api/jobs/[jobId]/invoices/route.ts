@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
 import { getJobBundle } from "@/lib/data";
-import { buildInvoiceLineItemsFromQuote, persistInvoiceArtifacts, round2, splitVatFromGross, sumLiveInvoiceTotal } from "@/lib/invoice-engine";
+import {
+  buildInvoiceLineItemsFromQuote,
+  calculateQuoteInvoiceableTotals,
+  persistInvoiceArtifacts,
+  round2,
+  splitVatFromGross,
+  sumLiveInvoiceTotal
+} from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceLineItem, InvoiceRecord, InvoiceType } from "@/lib/types";
 import { canPersistToSupabase, getNextInvoiceRef } from "@/lib/workflows";
@@ -45,6 +52,18 @@ export async function POST(request: Request, { params }: Props) {
 
   const quote = bundle.quote;
   const liveInvoicesForQuote = bundle.invoices.filter((invoice) => invoice.quote_id === quote.id && invoice.status !== "Void");
+  const invoiceable = calculateQuoteInvoiceableTotals(quote, bundle.business.vat_rate);
+  const provisionalWarning =
+    invoiceable.excludedCount > 0
+      ? `${invoiceable.excludedCount} price-to-be-confirmed line${invoiceable.excludedCount === 1 ? " was" : "s were"} excluded from this invoice.`
+      : null;
+
+  if (invoiceable.total <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "All quote lines are marked price to be confirmed. Confirm the prices before raising an invoice." },
+      { status: 400 }
+    );
+  }
 
   let lineItems: InvoiceLineItem[];
   let subtotal: number;
@@ -67,21 +86,21 @@ export async function POST(request: Request, { params }: Props) {
       return NextResponse.json({ ok: false, error: "Deposit percentage must be between 1 and 99." }, { status: 400 });
     }
 
-    total = round2((Number(quote.total ?? 0) * percentage) / 100);
+    total = round2((invoiceable.total * percentage) / 100);
     if (total <= 0) {
       return NextResponse.json({ ok: false, error: "The quote total is zero — nothing to invoice." }, { status: 400 });
     }
     const alreadyInvoicedForDeposit = sumLiveInvoiceTotal(liveInvoicesForQuote);
-    if (alreadyInvoicedForDeposit + total > Number(quote.total ?? 0) + 0.01) {
+    if (alreadyInvoicedForDeposit + total > invoiceable.total + 0.01) {
       return NextResponse.json(
         {
           ok: false,
-          error: `That deposit would take invoicing past the quote total. £${alreadyInvoicedForDeposit.toFixed(2)} already invoiced of £${Number(quote.total ?? 0).toFixed(2)}.`
+          error: `That deposit would take invoicing past the firm quote total. £${alreadyInvoicedForDeposit.toFixed(2)} already invoiced of £${invoiceable.total.toFixed(2)}.`
         },
         { status: 400 }
       );
     }
-    ({ subtotal, vatAmount } = splitVatFromGross(total, quote.subtotal, quote.vat_amount));
+    ({ subtotal, vatAmount } = splitVatFromGross(total, invoiceable.subtotal, invoiceable.vatAmount));
     lineItems = [
       {
         description: `Deposit (${percentage}%) — ${bundle.job.job_title} (quote ${quote.quote_ref})`,
@@ -104,14 +123,14 @@ export async function POST(request: Request, { params }: Props) {
     }
 
     const alreadyInvoiced = sumLiveInvoiceTotal(liveInvoicesForQuote);
-    total = round2(Number(quote.total ?? 0) - alreadyInvoiced);
+    total = round2(invoiceable.total - alreadyInvoiced);
     if (total <= 0) {
       return NextResponse.json(
-        { ok: false, error: `The full quote value (£${Number(quote.total ?? 0).toFixed(2)}) has already been invoiced.` },
+        { ok: false, error: `The firm quote value (£${invoiceable.total.toFixed(2)}) has already been invoiced.` },
         { status: 400 }
       );
     }
-    ({ subtotal, vatAmount } = splitVatFromGross(total, quote.subtotal, quote.vat_amount));
+    ({ subtotal, vatAmount } = splitVatFromGross(total, invoiceable.subtotal, invoiceable.vatAmount));
     lineItems = [
       {
         description: `Final balance — ${bundle.job.job_title} (quote ${quote.quote_ref})`,
@@ -135,7 +154,7 @@ export async function POST(request: Request, { params }: Props) {
     if (fixedAmount > 0) {
       total = round2(fixedAmount);
     } else if (percentage > 0 && percentage < 100) {
-      total = round2((Number(quote.total ?? 0) * percentage) / 100);
+      total = round2((invoiceable.total * percentage) / 100);
     } else {
       return NextResponse.json({ ok: false, error: "Enter an amount or a percentage for this invoice." }, { status: 400 });
     }
@@ -144,18 +163,18 @@ export async function POST(request: Request, { params }: Props) {
     }
 
     const alreadyInvoicedForInterim = sumLiveInvoiceTotal(liveInvoicesForQuote);
-    if (alreadyInvoicedForInterim + total > Number(quote.total ?? 0) + 0.01) {
+    if (alreadyInvoicedForInterim + total > invoiceable.total + 0.01) {
       return NextResponse.json(
         {
           ok: false,
-          error: `That would take invoicing past the quote total. £${alreadyInvoicedForInterim.toFixed(2)} already invoiced of £${Number(quote.total ?? 0).toFixed(2)}.`
+          error: `That would take invoicing past the firm quote total. £${alreadyInvoicedForInterim.toFixed(2)} already invoiced of £${invoiceable.total.toFixed(2)}.`
         },
         { status: 400 }
       );
     }
 
     const description = body.description?.trim() || `Progress payment — ${bundle.job.job_title} (quote ${quote.quote_ref})`;
-    ({ subtotal, vatAmount } = splitVatFromGross(total, quote.subtotal, quote.vat_amount));
+    ({ subtotal, vatAmount } = splitVatFromGross(total, invoiceable.subtotal, invoiceable.vatAmount));
     lineItems = [
       {
         description,
@@ -190,7 +209,7 @@ export async function POST(request: Request, { params }: Props) {
 
     lineItems = buildInvoiceLineItemsFromQuote(quote);
     subtotal = sumLineItems(lineItems);
-    vatAmount = quote.vat_amount ?? calculateVat(lineItems, bundle.business.vat_rate);
+    vatAmount = invoiceable.vatAmount;
     total = round2(subtotal + vatAmount);
     notes = `Raised from quote ${quote.quote_ref}.`;
     dueInDays = 14;
@@ -261,7 +280,7 @@ export async function POST(request: Request, { params }: Props) {
     message: artifacts.pdfUrl ? `${typeLabel} created and filed in documents.` : `${typeLabel} created, but PDF filing needs attention.`,
     invoice,
     pdf_url: artifacts.pdfUrl,
-    warning: artifacts.error
+    warning: [provisionalWarning, artifacts.error].filter(Boolean).join(" ") || null
   });
 }
 
@@ -269,7 +288,3 @@ function sumLineItems(items: InvoiceLineItem[]) {
   return Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100) / 100;
 }
 
-function calculateVat(items: InvoiceLineItem[], vatRate: number) {
-  const taxable = items.filter((item) => item.vat_applicable).reduce((sum, item) => sum + item.total, 0);
-  return Math.round(taxable * (vatRate / 100) * 100) / 100;
-}

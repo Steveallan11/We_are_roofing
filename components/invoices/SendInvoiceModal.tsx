@@ -18,7 +18,7 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
   const [email, setEmail] = useState(customerEmail ?? "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
+  const [sendingMode, setSendingMode] = useState<"test" | "customer" | null>(null);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -29,25 +29,25 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  async function sendInvoice() {
+  async function sendInvoice(mode: "test" | "customer") {
     const nextEmail = email.trim();
     if (!nextEmail) {
-      setError("Add the customer's email address before sending this invoice.");
+      setError(mode === "test" ? "Add the email address to receive the test invoice." : "Add the customer's email address before sending this invoice.");
       return;
     }
 
-    setIsSending(true);
+    setSendingMode(mode);
     setError(null);
     setSuccess(null);
 
     const response = await fetch(`/api/invoices/${invoiceId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: nextEmail })
+      body: JSON.stringify({ to_email: nextEmail, test: mode === "test" })
     });
 
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
-    setIsSending(false);
+    setSendingMode(null);
 
     if (!response.ok || !result?.ok) {
       setError(result?.message || result?.error || "The invoice could not be sent.");
@@ -56,7 +56,7 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
 
     const message = result.message || "Invoice sent.";
     setSuccess(message);
-    onSent(message);
+    if (mode === "customer") onSent(message);
   }
 
   return (
@@ -116,7 +116,8 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
           <ul className="mt-3 space-y-2 text-sm text-[var(--text)]">
             <li>- Branded invoice email with due date and payment notes</li>
             <li>- Link to the latest invoice PDF or preview</li>
-            <li>- Invoice status updated to Sent in the job file</li>
+            <li>- Send test email lets you check it first without updating the invoice</li>
+            <li>- Send to customer updates the invoice status to Sent in the job file</li>
           </ul>
         </div>
 
@@ -124,11 +125,14 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
         {success ? <p className="mt-4 text-sm text-[#7ce3a6]">{success}</p> : null}
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <button className="button-ghost" disabled={isSending} onClick={onClose} type="button">
+          <button className="button-ghost" disabled={sendingMode !== null} onClick={onClose} type="button">
             Cancel
           </button>
-          <button className="button-primary" disabled={isSending} onClick={sendInvoice} type="button">
-            {isSending ? "Sending..." : "Send Invoice"}
+          <button className="button-secondary" disabled={sendingMode !== null} onClick={() => sendInvoice("test")} type="button">
+            {sendingMode === "test" ? "Sending test..." : "Send Test Email"}
+          </button>
+          <button className="button-primary" disabled={sendingMode !== null} onClick={() => sendInvoice("customer")} type="button">
+            {sendingMode === "customer" ? "Sending..." : "Send To Customer"}
           </button>
         </div>
       </div>

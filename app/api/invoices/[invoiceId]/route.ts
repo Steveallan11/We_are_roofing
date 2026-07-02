@@ -101,3 +101,68 @@ export async function PATCH(request: Request, { params }: Props) {
     invoice: update.data
   });
 }
+
+export async function DELETE(_request: Request, { params }: Props) {
+  const { invoiceId } = await params;
+
+  if (!canPersistToSupabase()) {
+    return NextResponse.json({ ok: true, message: "Invoice delete preview completed." });
+  }
+
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const supabase = createSupabaseAdminClient();
+  const { data: invoice, error } = await supabase.from("invoices").select("*").eq("id", invoiceId).single();
+  if (error || !invoice) {
+    return NextResponse.json({ ok: false, error: error?.message ?? "Invoice not found." }, { status: 404 });
+  }
+
+  if (invoice.status !== "Void") {
+    return NextResponse.json({ ok: false, error: "Only void invoices can be deleted." }, { status: 400 });
+  }
+
+  const paymentCheck = await supabase.from("invoice_payments").select("id").eq("invoice_id", invoiceId).limit(1);
+  if (paymentCheck.error) {
+    return NextResponse.json({ ok: false, error: paymentCheck.error.message }, { status: 500 });
+  }
+  if (Number(invoice.amount_paid ?? 0) > 0 || (paymentCheck.data?.length ?? 0) > 0) {
+    return NextResponse.json({ ok: false, error: "Invoices with recorded payments cannot be deleted." }, { status: 400 });
+  }
+
+  const { data: documents } = await supabase
+    .from("job_documents")
+    .select("id, storage_bucket, storage_path")
+    .eq("invoice_id", invoiceId);
+
+  for (const document of documents ?? []) {
+    const bucket = typeof document.storage_bucket === "string" ? document.storage_bucket : null;
+    const path = typeof document.storage_path === "string" ? document.storage_path : null;
+    if (bucket && path) {
+      await supabase.storage.from(bucket).remove([path]);
+    }
+  }
+
+  await createActivity(supabase, {
+    business_id: invoice.business_id ? String(invoice.business_id) : null,
+    job_id: invoice.job_id ? String(invoice.job_id) : null,
+    invoice_id: invoiceId,
+    activity_type: "status_changed",
+    message: `Void invoice ${invoice.invoice_ref} deleted`,
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    linked_entity_type: "invoice",
+    linked_entity_id: invoiceId,
+    details: { invoice_ref: invoice.invoice_ref, deleted: true }
+  });
+
+  await supabase.from("job_documents").delete().eq("invoice_id", invoiceId);
+  await supabase.from("invoice_payments").delete().eq("invoice_id", invoiceId);
+  const deleted = await supabase.from("invoices").delete().eq("id", invoiceId);
+  if (deleted.error) {
+    return NextResponse.json({ ok: false, error: deleted.error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, message: `${invoice.invoice_ref} deleted.` });
+}

@@ -136,6 +136,7 @@ export function invoiceSentEmail(props: {
   propertyAddress: string;
   dueDate: string;
   total: number;
+  invoiceType?: string | null;
   bankName?: string | null;
   bankSortCode?: string | null;
   bankAccount?: string | null;
@@ -144,17 +145,31 @@ export function invoiceSentEmail(props: {
   businessEmail?: string | null;
 }) {
   const helloName = greetingName(props.customerName);
+  const isDeposit = props.invoiceType === "deposit";
+  const introCopy = isDeposit
+    ? `
+      <p style="font-size:14px;line-height:1.7;color:#555">
+        Thank you for choosing We Are Roofing. We appreciate your custom, and you are in safe hands with Andy and the team.
+      </p>
+      <p style="font-size:14px;line-height:1.7;color:#555">
+        This deposit invoice secures your booking in our schedule and allows us to start arranging the items needed before work commences, including materials, scaffold/access, skips, welfare facilities, and other job preparation where required.
+      </p>
+      <p style="font-size:14px;line-height:1.7;color:#555">
+        Getting these in place early helps minimise delays and keeps the works moving smoothly once we start at ${props.propertyAddress}.
+      </p>`
+    : `
+      <p style="font-size:14px;line-height:1.6;color:#555">
+        Please find your invoice for ${props.jobTitle} at ${props.propertyAddress}.
+      </p>`;
   return shell(
-    "Your Roofing Invoice",
+    isDeposit ? "Your Roofing Deposit Invoice" : "Your Roofing Invoice",
     `
       <div style="background:#faf6e8;border:1px solid #e8d7a1;border-left:4px solid #D4AF37;border-radius:6px;padding:14px 18px;margin-bottom:22px">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00">Payment Due</div>
         <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-top:6px">Please pay by ${props.dueDate}</div>
       </div>
       <p style="font-size:16px;margin-top:0">Hi ${helloName},</p>
-      <p style="font-size:14px;line-height:1.6;color:#555">
-        Please find your invoice for ${props.jobTitle} at ${props.propertyAddress}.
-      </p>
+      ${introCopy}
       <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:16px 18px;margin:20px 0">
         <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#555">
           <span>Invoice reference</span>

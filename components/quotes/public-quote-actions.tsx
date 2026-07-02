@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CostLineItem, QuoteOption } from "@/lib/types";
 import { buildQuoteOptionCustomerRows, buildQuoteOptionDetailRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
+import { isPriceToBeConfirmed } from "@/lib/quotes/provisional";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -404,10 +405,6 @@ function getCustomerLineLabel(line: CostLineItem) {
   const item = line.item?.trim();
   if (item && !isInternalSectionName(item)) return item;
   return getLineDisplayLabel(line);
-}
-
-function isPriceToBeConfirmed(line: CostLineItem) {
-  return line.notes?.toLowerCase().includes("price to be confirmed") ?? false;
 }
 
 function getLineDisplayLabel(line: CostLineItem) {

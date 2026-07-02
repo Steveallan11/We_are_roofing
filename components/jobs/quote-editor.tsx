@@ -17,6 +17,7 @@ import {
   normaliseQuoteOption
 } from "@/lib/quotes/value";
 import { cleanCustomerEmailBody } from "@/lib/quotes/email";
+import { isPriceToBeConfirmed, setPriceToBeConfirmed } from "@/lib/quotes/provisional";
 import type { RoofSurveyRecord } from "@/lib/survey/types";
 import { buildTakeoffDrawingSvg, printDrawing, type DrawingQuoteSection } from "@/lib/survey/cadDrawing";
 import { currency } from "@/lib/utils";
@@ -1415,20 +1416,6 @@ function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = 
     unit_rate: unitRate,
     cost: shouldRecalculate ? Math.round(quantity * unitRate * 100) / 100 : Number(line.cost || 0)
   };
-}
-
-const PRICE_TO_BE_CONFIRMED_NOTE = "Price to be confirmed by company.";
-
-function isPriceToBeConfirmed(line: CostLineItem) {
-  return line.notes?.toLowerCase().includes("price to be confirmed") ?? false;
-}
-
-function setPriceToBeConfirmed(notes: string | null | undefined, enabled: boolean) {
-  const cleaned = (notes ?? "")
-    .replace(/(?:^|\n)\s*Price to be confirmed by company\.?\s*(?=\n|$)/gi, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return enabled ? [cleaned, PRICE_TO_BE_CONFIRMED_NOTE].filter(Boolean).join("\n") : cleaned;
 }
 
 function groupQuoteSections(lines: CostLineItem[]) {

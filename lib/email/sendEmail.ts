@@ -19,9 +19,10 @@ type SendEmailParams = {
   quoteId?: string | null;
   templateType: string;
   sequenceDay?: number | null;
+  log?: boolean;
 };
 
-export async function sendEmail({ to, subject, html, text, attachments, jobId, quoteId, templateType, sequenceDay }: SendEmailParams) {
+export async function sendEmail({ to, subject, html, text, attachments, jobId, quoteId, templateType, sequenceDay, log = true }: SendEmailParams) {
   const sender = getEmailSenderConfig(to);
   let resendId: string | null = null;
   let status = "Logged - no provider configured";
@@ -60,6 +61,24 @@ export async function sendEmail({ to, subject, html, text, attachments, jobId, q
     }
   } catch (error) {
     status = `Failed - ${error instanceof Error ? error.message : "provider rejected email"}`;
+    if (log) {
+      await logEmail({
+        jobId,
+        quoteId,
+        to,
+        subject,
+        html,
+        text,
+        templateType,
+        sequenceDay,
+        resendId,
+        status
+      });
+    }
+    throw error;
+  }
+
+  if (log) {
     await logEmail({
       jobId,
       quoteId,
@@ -72,21 +91,7 @@ export async function sendEmail({ to, subject, html, text, attachments, jobId, q
       resendId,
       status
     });
-    throw error;
   }
-
-  await logEmail({
-    jobId,
-    quoteId,
-    to,
-    subject,
-    html,
-    text,
-    templateType,
-    sequenceDay,
-    resendId,
-    status
-  });
 
   return { id: resendId, status };
 }

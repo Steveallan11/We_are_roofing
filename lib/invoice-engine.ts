@@ -1,6 +1,7 @@
 import { getDocumentFileHref, getInvoicePdfHref } from "@/lib/documents";
 import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import type { InvoiceLineItem, InvoiceRecord, JobBundle, QuoteRecord } from "@/lib/types";
 
 /**
@@ -26,7 +27,7 @@ export function round2(value: number) {
 }
 
 export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineItem[] {
-  return quote.cost_breakdown
+  return getFirmQuoteLines(quote.cost_breakdown)
     .filter((line) => Number(line.cost ?? 0) > 0 && !line.billed_separately)
     .map((line) => ({
     description: line.item,
@@ -36,6 +37,17 @@ export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineI
     vat_applicable: line.vat_applicable,
     total: line.cost
     }));
+}
+
+export function calculateQuoteInvoiceableTotals(quote: QuoteRecord, vatRate: number) {
+  const firmLines = getFirmQuoteLines(quote.cost_breakdown).filter((line) => !line.billed_separately);
+  const subtotal = round2(firmLines.reduce((sum, line) => sum + Number(line.cost ?? 0), 0));
+  const vatAmount = round2(
+    firmLines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost ?? 0) * (vatRate / 100), 0)
+  );
+  const total = round2(subtotal + vatAmount);
+  const excludedCount = (quote.cost_breakdown?.length ?? 0) - firmLines.length;
+  return { firmLines, subtotal, vatAmount, total, excludedCount };
 }
 
 export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceRecord) {

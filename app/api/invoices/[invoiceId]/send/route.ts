@@ -13,7 +13,8 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { invoiceId } = await params;
-  const body = (await request.json().catch(() => ({}))) as { to_email?: string };
+  const body = (await request.json().catch(() => ({}))) as { to_email?: string; test?: boolean };
+  const isTestSend = body.test === true;
 
   if (!canPersistToSupabase()) {
     return NextResponse.json({ ok: true, message: "Invoice send preview completed.", invoiceId });
@@ -39,7 +40,10 @@ export async function POST(request: Request, { params }: Props) {
 
   const toEmail = body.to_email?.trim() || bundle.customer.email?.trim();
   if (!toEmail) {
-    return NextResponse.json({ ok: false, error: "NO_EMAIL", message: "No customer email is saved for this job yet." }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "NO_EMAIL", message: isTestSend ? "Enter an email address for the test send." : "No customer email is saved for this job yet." },
+      { status: 400 }
+    );
   }
 
   const artifacts = await persistInvoiceArtifacts(supabase, bundle, invoice);
@@ -49,7 +53,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const emailResult = await sendEmail({
     to: toEmail,
-    subject: `Invoice ${invoice.invoice_ref} from We Are Roofing`,
+    subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing`,
     html: invoiceSentEmail({
       customerName: bundle.customer.full_name,
       invoiceRef: invoice.invoice_ref,
@@ -58,6 +62,7 @@ export async function POST(request: Request, { params }: Props) {
       propertyAddress: bundle.job.property_address,
       dueDate,
       total: Number(invoice.total ?? 0),
+      invoiceType: invoice.invoice_type,
       bankName: bundle.business.bank_name,
       bankSortCode: bundle.business.bank_sort_code,
       bankAccount: bundle.business.bank_account,
@@ -67,8 +72,19 @@ export async function POST(request: Request, { params }: Props) {
     }),
     text: `Your invoice ${invoice.invoice_ref} is ready. View it here: ${invoiceUrl}`,
     jobId: bundle.job.id,
-    templateType: "invoice_sent"
+    templateType: isTestSend ? "invoice_test" : "invoice_sent",
+    log: !isTestSend
   });
+
+  if (isTestSend) {
+    return NextResponse.json({
+      ok: true,
+      invoiceId,
+      provider_message_id: emailResult.id,
+      pdf_url: artifacts.pdfUrl,
+      message: "Test invoice email sent. Invoice status and customer records were not changed."
+    });
+  }
 
   await supabase
     .from("invoices")

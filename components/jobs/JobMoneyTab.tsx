@@ -7,6 +7,7 @@ import { useMemo, useState, useTransition } from "react";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
 import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
+import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { currency, formatDate } from "@/lib/utils";
 import type { InvoiceRecord, InvoiceType, JobExpense, JobExpenseCategory, QuoteRecord } from "@/lib/types";
 
@@ -58,6 +59,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceRecord | null>(null);
 
   const liveInvoices = invoices.filter((invoice) => invoice.status !== "Void");
+  const invoiceableQuoteTotal = quote ? calculateFirmQuoteTotal(quote) : 0;
   const summary = useMemo(() => {
     const quoteTotal = Number(quote?.total ?? 0);
     const quoteNet = Number(quote?.subtotal ?? 0);
@@ -135,6 +137,22 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
       return;
     }
     notify(`${invoice.invoice_ref} voided.`, null);
+    startTransition(() => router.refresh());
+  }
+
+  async function deleteVoidInvoice(invoice: InvoiceRecord) {
+    if (invoice.status !== "Void") return;
+    if (!window.confirm(`Permanently delete void invoice ${invoice.invoice_ref}? This is only for removing test/void invoices.`)) return;
+    notify(null, null);
+    setBusy(invoice.id);
+    const response = await fetch(`/api/invoices/${invoice.id}`, { method: "DELETE" });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      notify(null, result?.error || "Void invoice could not be deleted.");
+      return;
+    }
+    notify(result.message || `${invoice.invoice_ref} deleted.`, null);
     startTransition(() => router.refresh());
   }
 
@@ -219,7 +237,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
                 value={depositPct}
               />
               <span className="text-sm text-[var(--text-muted)]">
-                = {currency((Number(quote.total ?? 0) * (Number(depositPct) || 0)) / 100)}
+                = {currency((invoiceableQuoteTotal * (Number(depositPct) || 0)) / 100)}
               </span>
             </div>
             <div className="mt-3 flex gap-2">
@@ -283,7 +301,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
               />
               {interimMode === "percentage" ? (
                 <span className="text-sm text-[var(--text-muted)]">
-                  = {currency((Number(quote.total ?? 0) * (Number(interimValue) || 0)) / 100)}
+                  = {currency((invoiceableQuoteTotal * (Number(interimValue) || 0)) / 100)}
                 </span>
               ) : null}
             </div>
@@ -352,6 +370,11 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
                     </Button>
                   </>
                 ) : null}
+                {invoice.status === "Void" ? (
+                  <Button variant="ghost" size="sm" onClick={() => deleteVoidInvoice(invoice)} disabled={busy !== null}>
+                    {busy === invoice.id ? "Deleting..." : "Delete Void Invoice"}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -398,6 +421,13 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
       ) : null}
     </div>
   );
+}
+
+function calculateFirmQuoteTotal(quote: QuoteRecord) {
+  const firmLines = getFirmQuoteLines(quote.cost_breakdown);
+  const subtotal = firmLines.reduce((sum, line) => sum + Number(line.cost ?? 0), 0);
+  const vat = firmLines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost ?? 0) * 0.2, 0);
+  return Math.round((subtotal + vat) * 100) / 100;
 }
 
 /* -----------------  Record payment modal  ----------------- */
