@@ -38,8 +38,10 @@ export async function PATCH(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Invoice not found." }, { status: 404 });
   }
 
-  const paidAmount = body.status === "Paid" ? Number(body.amount_paid ?? invoice.total ?? 0) : Number(invoice.amount_paid ?? 0);
-  const balanceDue = Math.max(0, Number(invoice.total ?? 0) - paidAmount);
+  const invoiceTotal = Number(invoice.total ?? 0);
+  const paidAmount =
+    body.status === "Paid" ? Math.min(invoiceTotal, Number(body.amount_paid ?? invoiceTotal)) : Number(invoice.amount_paid ?? 0);
+  const balanceDue = Math.max(0, invoiceTotal - paidAmount);
   const payload = {
     status: body.status,
     amount_paid: paidAmount,

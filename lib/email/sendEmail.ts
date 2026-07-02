@@ -197,7 +197,7 @@ async function logEmail({
       conversation_id: conversation.id,
       direction: "outbound",
       channel: "email",
-      sender_type: "business",
+      sender_type: "admin",
       sender_name: "Andy @ We Are Roofing",
       sender_email: "werroofinguk@gmail.com",
       body: text || html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),

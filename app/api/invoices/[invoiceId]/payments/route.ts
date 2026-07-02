@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
+import { getJobBundle } from "@/lib/data";
+import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { InvoiceRecord } from "@/lib/types";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 type Props = {
@@ -126,10 +129,18 @@ export async function POST(request: Request, { params }: Props) {
     }
   });
 
+  const updatedInvoice = update.data as InvoiceRecord;
+  const bundle = await getJobBundle(updatedInvoice.job_id);
+  let pdfUrl = updatedInvoice.pdf_url ?? null;
+  if (bundle) {
+    const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [updatedInvoice, ...bundle.invoices] }, updatedInvoice);
+    pdfUrl = artifacts.pdfUrl ?? pdfUrl;
+  }
+
   return NextResponse.json({
     ok: true,
     message: fullyPaid ? "Payment recorded — invoice paid in full." : `Payment recorded. £${balanceDue.toFixed(2)} still outstanding.`,
-    invoice: update.data,
+    invoice: { ...updatedInvoice, pdf_url: pdfUrl },
     payment: paymentInsert.data
   });
 }

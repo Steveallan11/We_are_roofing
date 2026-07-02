@@ -103,6 +103,34 @@ export async function POST(req: Request) {
         .replace("{customer_name}", customerName)
         .replace("{job_title}", jobTitle);
 
+      // Claim this day before sending — the unique(sequence_id, day_number)
+      // index means a concurrent run trying the same day loses this race and
+      // skips, instead of both processes emailing the customer twice.
+      const claim = await supabase
+        .from("nurture_emails")
+        .insert({
+          sequence_id: sequence.id,
+          quote_id: sequence.quote_id,
+          job_id: sequence.job_id,
+          day_number: nextEmailDay,
+          template_name: template.template_name,
+          subject,
+          body,
+          customer_email: customer.email,
+          status: "pending"
+        })
+        .select("id")
+        .single();
+
+      if (claim.error) {
+        if (claim.error.code === "23505") {
+          results.push({ sequenceId: sequence.id, status: "skipped", reason: "already_sent", day: nextEmailDay });
+          continue;
+        }
+        results.push({ sequenceId: sequence.id, status: "failed", reason: claim.error.message });
+        continue;
+      }
+
       // Send email
       try {
         const emailResult = await sendEmail({
@@ -116,20 +144,10 @@ export async function POST(req: Request) {
           sequenceDay: nextEmailDay
         });
 
-        // Record nurture email
-        await supabase.from("nurture_emails").insert({
-          sequence_id: sequence.id,
-          quote_id: sequence.quote_id,
-          job_id: sequence.job_id,
-          day_number: nextEmailDay,
-          template_name: template.template_name,
-          subject,
-          body,
-          customer_email: customer.email,
-          status: "sent",
-          sent_at: new Date().toISOString(),
-          message_id: emailResult.id
-        });
+        await supabase
+          .from("nurture_emails")
+          .update({ status: "sent", sent_at: new Date().toISOString(), message_id: emailResult.id })
+          .eq("id", claim.data.id);
 
         // Update sequence
         await supabase
@@ -143,6 +161,9 @@ export async function POST(req: Request) {
         emailsSent++;
         results.push({ sequenceId: sequence.id, status: "sent", day: nextEmailDay });
       } catch (err) {
+        // Release the claim so this day is retried on the next run instead
+        // of being permanently skipped as "already sent".
+        await supabase.from("nurture_emails").delete().eq("id", claim.data.id);
         results.push({
           sequenceId: sequence.id,
           status: "failed",

@@ -20,8 +20,6 @@ const CATEGORIES: JobExpenseCategory[] = [
   "other"
 ];
 
-const BUSINESS_ID = process.env.NEXT_PUBLIC_BUSINESS_ID || "6f9a6dca-a747-4a20-ab87-111808577cc7";
-
 export async function GET(_request: Request, { params }: Props) {
   const { jobId } = await params;
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true, expenses: [] });
@@ -81,10 +79,15 @@ export async function POST(request: Request, { params }: Props) {
   if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
+  const { data: job, error: jobError } = await supabase.from("jobs").select("business_id").eq("id", jobId).single();
+  if (jobError || !job) {
+    return NextResponse.json({ ok: false, error: jobError?.message ?? "Job not found." }, { status: 404 });
+  }
+
   const { data, error } = await supabase
     .from("job_expenses")
     .insert({
-      business_id: BUSINESS_ID,
+      business_id: job.business_id,
       job_id: jobId,
       category,
       description,

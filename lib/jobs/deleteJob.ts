@@ -31,11 +31,21 @@ export async function deleteJobWithCleanup(supabase: SupabaseAdmin, jobId: strin
     supabase.from("job_documents").select("id, storage_bucket, storage_path").eq("job_id", jobId),
     supabase.from("roof_surveys").select("id, satellite_image_path").eq("job_id", jobId),
     supabase.from("quotes").select("id").eq("job_id", jobId),
-    supabase.from("invoices").select("id").eq("job_id", jobId)
+    supabase.from("invoices").select("id, invoice_ref, status, amount_paid").eq("job_id", jobId)
   ]);
 
+  const invoices = (invoiceResult.data as Array<{ id: string; invoice_ref: string; status: string; amount_paid: number }> | null) ?? [];
+  const paidInvoices = invoices.filter((invoice) => invoice.status === "Paid" || invoice.status === "Part Paid" || Number(invoice.amount_paid ?? 0) > 0);
+  if (paidInvoices.length > 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: `This job has payments recorded against ${paidInvoices.map((invoice) => invoice.invoice_ref).join(", ")}. Void the invoice(s) first if you still need to delete this job.`
+    };
+  }
+
   const quoteIds = ((quoteResult.data as Array<{ id: string }> | null) ?? []).map((item) => item.id);
-  const invoiceIds = ((invoiceResult.data as Array<{ id: string }> | null) ?? []).map((item) => item.id);
+  const invoiceIds = invoices.map((item) => item.id);
   const documentIds = ((documentResult.data as Array<{ id: string }> | null) ?? []).map((item) => item.id);
   const roofSurveyIds = ((roofSurveyResult.data as Array<{ id: string }> | null) ?? []).map((item) => item.id);
 

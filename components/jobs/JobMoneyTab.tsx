@@ -109,6 +109,20 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
     startTransition(() => router.refresh());
   }
 
+  async function regeneratePdf(invoice: InvoiceRecord) {
+    notify(null, null);
+    setBusy(invoice.id);
+    const response = await fetch(`/api/invoices/${invoice.id}/pdf`, { method: "POST" });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      notify(null, result?.error || "PDF could not be regenerated.");
+      return;
+    }
+    notify(result.message || "PDF regenerated.", null);
+    startTransition(() => router.refresh());
+  }
+
   const hasDeposit = liveInvoices.some((invoice) => invoice.invoice_type === "deposit");
   const hasFinal = liveInvoices.some((invoice) => invoice.invoice_type === "final");
 
@@ -220,6 +234,11 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
                     <a href={getInvoicePdfHref(invoice.id)} rel="noreferrer" target="_blank">
                       PDF
                     </a>
+                  </Button>
+                ) : null}
+                {invoice.status !== "Void" ? (
+                  <Button variant="ghost" size="sm" onClick={() => regeneratePdf(invoice)} disabled={busy !== null}>
+                    {busy === invoice.id ? "..." : "Regenerate PDF"}
                   </Button>
                 ) : null}
                 {invoice.status !== "Paid" && invoice.status !== "Void" ? (

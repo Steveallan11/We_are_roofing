@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { createActivity } from "@/lib/activity/createActivity";
 import { getJobBundle } from "@/lib/data";
+import { persistInvoiceArtifacts, splitVatFromGross, sumLiveInvoiceTotal } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { InvoiceRecord, InvoiceType } from "@/lib/types";
 import { canPersistToSupabase, getNextInvoiceRef } from "@/lib/workflows";
 
 type Props = {
@@ -78,22 +81,44 @@ export async function PATCH(request: Request, { params }: Props) {
     return NextResponse.json({ ok: true });
   }
 
-  const invoiceRef = await getNextInvoiceRef();
+  if (stage.invoice_id) {
+    return NextResponse.json({ ok: false, error: "This stage has already been invoiced." }, { status: 400 });
+  }
+
+  const quote = bundle.quote;
+  const liveInvoicesForQuote = bundle.invoices.filter((invoice) => invoice.quote_id === quote.id && invoice.status !== "Void");
+  const alreadyInvoiced = sumLiveInvoiceTotal(liveInvoicesForQuote);
   const total = Number(stage.amount ?? 0);
-  const vatAmount = Math.round((total / 1.2) * 0.2 * 100) / 100;
-  const subtotal = total - vatAmount;
+  if (alreadyInvoiced + total > Number(quote.total ?? 0) + 0.01) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Raising this stage would take invoicing past the quote total. £${alreadyInvoiced.toFixed(2)} already invoiced of £${Number(quote.total ?? 0).toFixed(2)}.`
+      },
+      { status: 400 }
+    );
+  }
+
+  const { data: siblingStages } = await supabase.from("payment_stages").select("stage_number").eq("schedule_id", stage.schedule_id);
+  const stageNumbers = (siblingStages ?? []).map((row) => Number(row.stage_number ?? 0));
+  const maxStageNumber = stageNumbers.length > 0 ? Math.max(...stageNumbers) : Number(stage.stage_number ?? 0);
+  const invoiceType: InvoiceType = Number(stage.stage_number) <= 1 ? "deposit" : Number(stage.stage_number) >= maxStageNumber ? "final" : "interim";
+
+  const { subtotal, vatAmount } = splitVatFromGross(total, quote.subtotal, quote.vat_amount);
+  const invoiceRef = await getNextInvoiceRef();
   const today = new Date().toISOString().slice(0, 10);
-  const invoice = await supabase
+  const insert = await supabase
     .from("invoices")
     .insert({
       business_id: bundle.business.id,
       job_id: jobId,
-      quote_id: bundle.quote.id,
+      quote_id: quote.id,
       invoice_ref: invoiceRef,
       status: "Draft",
+      invoice_type: invoiceType,
       issue_date: today,
       due_date: today,
-      line_items: [{ description: `${stage.stage_name} for quote ${bundle.quote.quote_ref}`, quantity: 1, unit: "item", unit_price: subtotal, vat_applicable: true, total: subtotal }],
+      line_items: [{ description: `${stage.stage_name} — ${bundle.job.job_title} (quote ${quote.quote_ref})`, quantity: 1, unit: "item", unit_price: subtotal, vat_applicable: vatAmount > 0, total: subtotal }],
       subtotal,
       vat_amount: vatAmount,
       total,
@@ -105,7 +130,28 @@ export async function PATCH(request: Request, { params }: Props) {
     .select("*")
     .single();
 
-  if (invoice.error || !invoice.data) return NextResponse.json({ ok: false, error: invoice.error?.message ?? "Invoice could not be raised." }, { status: 500 });
-  await supabase.from("payment_stages").update({ status: "invoiced", invoice_id: invoice.data.id }).eq("id", body.stage_id);
-  return NextResponse.json({ ok: true, invoice: invoice.data });
+  if (insert.error || !insert.data) return NextResponse.json({ ok: false, error: insert.error?.message ?? "Invoice could not be raised." }, { status: 500 });
+
+  const invoice = insert.data as InvoiceRecord;
+  await supabase.from("payment_stages").update({ status: "invoiced", invoice_id: invoice.id }).eq("id", body.stage_id);
+
+  const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [invoice, ...bundle.invoices] }, invoice);
+
+  await createActivity(supabase, {
+    business_id: bundle.business.id,
+    job_id: jobId,
+    customer_id: bundle.customer.id,
+    quote_id: quote.id,
+    invoice_id: invoice.id,
+    activity_type: "invoice_created",
+    message: `${stage.stage_name} invoice ${invoiceRef} created for £${total.toFixed(2)}`,
+    actor_type: "user",
+    actor_id: auth.session.user?.id ?? null,
+    actor_name: auth.session.user?.email ?? null,
+    linked_entity_type: "invoice",
+    linked_entity_id: invoice.id,
+    details: { invoice_ref: invoiceRef, total, quote_ref: quote.quote_ref, invoice_type: invoiceType, stage_name: stage.stage_name }
+  });
+
+  return NextResponse.json({ ok: true, invoice, pdf_url: artifacts.pdfUrl, warning: artifacts.error });
 }

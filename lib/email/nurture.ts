@@ -32,19 +32,9 @@ export async function startNurtureSequence(quoteId: string): Promise<NurtureSequ
     return null;
   }
 
-  // Check if sequence already exists
-  const { data: existing } = await supabase
-    .from("nurture_sequences")
-    .select("id")
-    .eq("quote_id", quoteId)
-    .maybeSingle();
-
-  if (existing) {
-    // Sequence already started
-    return null;
-  }
-
-  // Create nurture sequence
+  // Insert directly and rely on the unique(quote_id) index to catch races —
+  // a prior check-then-insert here allowed two concurrent triggers (e.g. the
+  // quote-send email path and a manual "start") to both create a sequence.
   const { data: sequence, error: seqError } = await supabase
     .from("nurture_sequences")
     .insert({
@@ -55,7 +45,11 @@ export async function startNurtureSequence(quoteId: string): Promise<NurtureSequ
     .select("*")
     .single();
 
-  if (seqError || !sequence) {
+  if (seqError) {
+    if (seqError.code === "23505") {
+      // Sequence already started by a concurrent request — not an error.
+      return null;
+    }
     console.error("Failed to create nurture sequence:", seqError);
     return null;
   }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
 import { getJobBundle } from "@/lib/data";
-import { buildInvoiceLineItemsFromQuote, persistInvoiceArtifacts } from "@/lib/invoice-engine";
+import { buildInvoiceLineItemsFromQuote, persistInvoiceArtifacts, round2, splitVatFromGross, sumLiveInvoiceTotal } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceLineItem, InvoiceRecord, InvoiceType } from "@/lib/types";
 import { canPersistToSupabase, getNextInvoiceRef } from "@/lib/workflows";
@@ -67,6 +67,16 @@ export async function POST(request: Request, { params }: Props) {
     if (total <= 0) {
       return NextResponse.json({ ok: false, error: "The quote total is zero — nothing to invoice." }, { status: 400 });
     }
+    const alreadyInvoicedForDeposit = sumLiveInvoiceTotal(liveInvoicesForQuote);
+    if (alreadyInvoicedForDeposit + total > Number(quote.total ?? 0) + 0.01) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `That deposit would take invoicing past the quote total. £${alreadyInvoicedForDeposit.toFixed(2)} already invoiced of £${Number(quote.total ?? 0).toFixed(2)}.`
+        },
+        { status: 400 }
+      );
+    }
     ({ subtotal, vatAmount } = splitVatFromGross(total, quote.subtotal, quote.vat_amount));
     lineItems = [
       {
@@ -89,7 +99,7 @@ export async function POST(request: Request, { params }: Props) {
       );
     }
 
-    const alreadyInvoiced = liveInvoicesForQuote.reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0);
+    const alreadyInvoiced = sumLiveInvoiceTotal(liveInvoicesForQuote);
     total = round2(Number(quote.total ?? 0) - alreadyInvoiced);
     if (total <= 0) {
       return NextResponse.json(
@@ -114,14 +124,23 @@ export async function POST(request: Request, { params }: Props) {
         : `Final balance for quote ${quote.quote_ref}.`;
     dueInDays = 14;
   } else {
-    const existingForQuote = liveInvoicesForQuote.find((invoice) => (invoice.invoice_type ?? "standard") === "standard");
-    if (existingForQuote) {
+    const existingStandard = liveInvoicesForQuote.find((invoice) => (invoice.invoice_type ?? "standard") === "standard");
+    if (existingStandard) {
       return NextResponse.json({
         ok: true,
         message: "Invoice already exists for this quote.",
-        invoice: existingForQuote,
-        pdf_url: existingForQuote.pdf_url
+        invoice: existingStandard,
+        pdf_url: existingStandard.pdf_url
       });
+    }
+    if (liveInvoicesForQuote.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Invoices already exist for this quote (deposit/interim/final). Raise the final balance instead, or void the existing invoices first."
+        },
+        { status: 400 }
+      );
     }
 
     lineItems = buildInvoiceLineItemsFromQuote(quote);
@@ -201,21 +220,4 @@ function sumLineItems(items: InvoiceLineItem[]) {
 function calculateVat(items: InvoiceLineItem[], vatRate: number) {
   const taxable = items.filter((item) => item.vat_applicable).reduce((sum, item) => sum + item.total, 0);
   return Math.round(taxable * (vatRate / 100) * 100) / 100;
-}
-
-/**
- * Split a VAT-inclusive amount into net + VAT using the quote's own effective
- * VAT ratio, so partial invoices stay consistent with the quote whatever the
- * business VAT setup is.
- */
-function splitVatFromGross(gross: number, quoteSubtotal?: number | null, quoteVat?: number | null) {
-  const net = Number(quoteSubtotal ?? 0);
-  const vat = Number(quoteVat ?? 0);
-  const ratio = net > 0 && vat > 0 ? vat / net : 0;
-  const subtotal = ratio > 0 ? round2(gross / (1 + ratio)) : gross;
-  return { subtotal, vatAmount: round2(gross - subtotal) };
-}
-
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
 }

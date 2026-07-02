@@ -3,6 +3,28 @@ import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceLineItem, InvoiceRecord, JobBundle, QuoteRecord } from "@/lib/types";
 
+/**
+ * Split a VAT-inclusive amount into net + VAT using the quote's own effective
+ * VAT ratio, so partial invoices (deposit/interim/final/stage) stay
+ * consistent with the quote whatever the business VAT setup is.
+ */
+export function splitVatFromGross(gross: number, quoteSubtotal?: number | null, quoteVat?: number | null) {
+  const net = Number(quoteSubtotal ?? 0);
+  const vat = Number(quoteVat ?? 0);
+  const ratio = net > 0 && vat > 0 ? vat / net : 0;
+  const subtotal = ratio > 0 ? round2(gross / (1 + ratio)) : gross;
+  return { subtotal, vatAmount: round2(gross - subtotal) };
+}
+
+/** Total already invoiced (excluding voided invoices) for a quote. */
+export function sumLiveInvoiceTotal(invoices: InvoiceRecord[]) {
+  return round2(invoices.filter((invoice) => invoice.status !== "Void").reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0));
+}
+
+export function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineItem[] {
   return quote.cost_breakdown
     .filter((line) => Number(line.cost ?? 0) > 0)
