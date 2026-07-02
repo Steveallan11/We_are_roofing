@@ -28,7 +28,9 @@ export async function POST(request: Request, { params }: Props) {
     attachment_document_ids?: string[];
     include_roof_plan?: boolean;
     roof_plan_document_id?: string | null;
+    test?: boolean;
   };
+  const isTestSend = body.test === true;
 
   if (!canPersistToSupabase()) {
     return NextResponse.json({
@@ -60,7 +62,10 @@ export async function POST(request: Request, { params }: Props) {
 
   const toEmail = body.to_email?.trim() || bundle.customer.email?.trim();
   if (!toEmail) {
-    return NextResponse.json({ ok: false, error: "NO_EMAIL", message: "No customer email is saved for this job yet." }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "NO_EMAIL", message: isTestSend ? "Enter an email address for the test send." : "No customer email is saved for this job yet." },
+      { status: 400 }
+    );
   }
 
   const subject = body.subject?.trim() || quote.customer_email_subject || `Your We Are Roofing quotation - ${quote.quote_ref}`;
@@ -75,13 +80,16 @@ export async function POST(request: Request, { params }: Props) {
       return NextResponse.json({ ok: false, error: "Choose the roof plan document you want linked inside the quote." }, { status: 400 });
     }
 
-    const roofPlanResult = await linkExistingRoofPlanDocument(supabase, quote.job_id, quoteId, selectedRoofPlanDocumentId).catch((roofPlanError) => ({
-      error: roofPlanError instanceof Error ? roofPlanError.message : "Could not link the selected roof plan document."
+    const roofPlanPromise = isTestSend
+      ? validateRoofPlanDocument(supabase, quote.job_id, selectedRoofPlanDocumentId)
+      : linkExistingRoofPlanDocument(supabase, quote.job_id, quoteId, selectedRoofPlanDocumentId);
+    const roofPlanResult = await roofPlanPromise.catch((roofPlanError) => ({
+      error: roofPlanError instanceof Error ? roofPlanError.message : "Could not prepare the selected roof plan document."
     }));
     if ("error" in roofPlanResult) {
       return NextResponse.json({ ok: false, error: roofPlanResult.error }, { status: 400 });
     }
-  } else {
+  } else if (!isTestSend) {
     await supabase.from("quote_attachments").delete().eq("quote_id", quoteId).eq("attachment_type", "inline_quote_roof_plan");
   }
 
@@ -93,7 +101,7 @@ export async function POST(request: Request, { params }: Props) {
   }
   const extraAttachments = extraAttachmentsResult;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
+  const appUrl = getAppUrl();
   const publicToken = quote.public_token || createQuotePublicToken();
   let quoteUrl = `${appUrl}/quote/${quoteId}?token=${encodeURIComponent(publicToken)}`;
 
@@ -116,7 +124,7 @@ export async function POST(request: Request, { params }: Props) {
   }
   const emailResult = await sendEmail({
     to: toEmail,
-    subject,
+    subject: `${isTestSend ? "[TEST] " : ""}${subject}`,
     html: quoteSentEmail({
       customerName: emailCustomerName,
       messageBody,
@@ -129,8 +137,21 @@ export async function POST(request: Request, { params }: Props) {
     attachments: extraAttachments,
     jobId: quote.job_id,
     quoteId,
-    templateType: "quote_sent"
+    templateType: isTestSend ? "quote_test" : "quote_sent",
+    log: !isTestSend
   });
+
+  if (isTestSend) {
+    return NextResponse.json({
+      ok: true,
+      quoteId,
+      provider_message_id: emailResult.id,
+      pdf_url: artifacts.pdfUrl,
+      message: "Test quote email sent. Quote status, job status, customer records, comms, SMS, and nurture were not changed.",
+      next_job_status: bundle.job.status,
+      next_quote_status: quote.status
+    });
+  }
 
   const { data: sentQuote, error: updateError } = await supabase
     .from("quotes")
@@ -276,6 +297,11 @@ export async function POST(request: Request, { params }: Props) {
   });
 }
 
+function getAppUrl() {
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "https://we-are-roofing-one.vercel.app").replace(/\/$/, "");
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
 async function buildDocumentAttachments(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   jobId: string,
@@ -350,6 +376,29 @@ async function linkExistingRoofPlanDocument(
     attachment_type: "inline_quote_roof_plan"
   });
   if (insertResult.error) throw new Error(insertResult.error.message);
+
+  return { documentId };
+}
+
+async function validateRoofPlanDocument(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  jobId: string,
+  documentId: string
+) {
+  const { data: document, error } = await supabase
+    .from("job_documents")
+    .select("id, storage_bucket, storage_path")
+    .eq("id", documentId)
+    .eq("job_id", jobId)
+    .single();
+
+  if (error || !document) {
+    throw new Error(error?.message ?? "The selected roof plan document could not be found on this job.");
+  }
+
+  if (!document.storage_bucket || !document.storage_path) {
+    throw new Error("The selected roof plan document is not stored correctly yet.");
+  }
 
   return { documentId };
 }

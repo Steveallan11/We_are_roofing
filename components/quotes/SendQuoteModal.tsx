@@ -45,7 +45,7 @@ export function SendQuoteModal({
   const [roofPlanDocumentId, setRoofPlanDocumentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
+  const [sendingMode, setSendingMode] = useState<"test" | "customer" | null>(null);
   const attachableDocuments = documents.filter(isAttachableDocument);
   const roofPlanDocuments = documents.filter(isRoofPlanDocument);
 
@@ -58,14 +58,14 @@ export function SendQuoteModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  async function sendQuote() {
+  async function sendQuote(mode: "test" | "customer") {
     const nextEmail = email.trim();
     if (!nextEmail) {
-      setError("Add the customer's email address before sending this quote.");
+      setError(mode === "test" ? "Add the email address to receive the test quote." : "Add the customer's email address before sending this quote.");
       return;
     }
 
-    setIsSending(true);
+    setSendingMode(mode);
     setError(null);
     setSuccess(null);
 
@@ -79,12 +79,13 @@ export function SendQuoteModal({
         email_customer_name: emailGreetingName.trim(),
         attachment_document_ids: selectedDocumentIds,
         include_roof_plan: includeRoofPlan,
-        roof_plan_document_id: includeRoofPlan ? roofPlanDocumentId || null : null
+        roof_plan_document_id: includeRoofPlan ? roofPlanDocumentId || null : null,
+        test: mode === "test"
       })
     });
 
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
-    setIsSending(false);
+    setSendingMode(null);
 
     if (!response.ok || !result?.ok) {
       setError(result?.message || result?.error || "The quote could not be sent.");
@@ -93,7 +94,7 @@ export function SendQuoteModal({
 
     const message = result.message || "Quote sent.";
     setSuccess(message);
-    onSent(message);
+    if (mode === "customer") onSent(message);
   }
 
   return (
@@ -202,7 +203,7 @@ export function SendQuoteModal({
             ))}
           </div>
           <p className="mt-4 text-sm leading-6 text-[var(--text)]">
-            This updates the job file and records the quote as sent. If the customer replies with a question, it will stay linked to this quote.
+            Send test email lets you check the customer email first without marking the quote as sent. Send to customer updates the job file and records the quote as sent.
           </p>
         </div>
 
@@ -307,11 +308,14 @@ export function SendQuoteModal({
 
         <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.25)] md:p-5">
           <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
-          <button className="button-ghost" disabled={isSending} onClick={onClose} type="button">
+          <button className="button-ghost" disabled={sendingMode !== null} onClick={onClose} type="button">
             Cancel
           </button>
-          <button className="button-primary" disabled={isSending} onClick={sendQuote} type="button">
-            {isSending ? "Sending..." : "Send secure quote link"}
+          <button className="button-secondary" disabled={sendingMode !== null} onClick={() => sendQuote("test")} type="button">
+            {sendingMode === "test" ? "Sending test..." : "Send Test Email"}
+          </button>
+          <button className="button-primary" disabled={sendingMode !== null} onClick={() => sendQuote("customer")} type="button">
+            {sendingMode === "customer" ? "Sending..." : "Send To Customer"}
           </button>
           </div>
         </div>
