@@ -47,8 +47,8 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const artifacts = await persistInvoiceArtifacts(supabase, bundle, invoice);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://we-are-roofing-one.vercel.app";
-  const invoiceUrl = artifacts.pdfUrl ?? `${appUrl}/jobs/${bundle.job.id}/invoice/${invoiceId}/preview`;
+  const appUrl = getAppUrl();
+  const invoiceUrl = toAbsoluteUrl(artifacts.pdfUrl ?? `/jobs/${bundle.job.id}/invoice/${invoiceId}/preview`, appUrl);
   const dueDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(invoice.due_date));
 
   const emailResult = await sendEmail({
@@ -109,4 +109,14 @@ export async function POST(request: Request, { params }: Props) {
       ? "Invoice email sent and saved."
       : "Invoice send logged in Supabase. RESEND_API_KEY not configured, so no provider email was sent."
   });
+}
+
+function getAppUrl() {
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "https://we-are-roofing-one.vercel.app").replace(/\/$/, "");
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
+function toAbsoluteUrl(pathOrUrl: string, appUrl: string) {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${appUrl}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
 }
