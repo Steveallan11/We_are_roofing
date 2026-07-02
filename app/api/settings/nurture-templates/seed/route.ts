@@ -1,3 +1,4 @@
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const DEFAULT_TEMPLATES = [
@@ -46,6 +47,9 @@ Andy @ We Are Roofing`
 
 export async function POST() {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const supabase = createSupabaseAdminClient();
 
     const { data: businesses } = await supabase.from("businesses").select("id").limit(1);
