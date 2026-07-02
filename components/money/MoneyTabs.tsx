@@ -1,15 +1,32 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useState } from "react";
-import type { Job, Customer, QuoteRecord, JobDocumentRecord, InvoiceRecord } from "@/lib/types";
+import type { Job, Customer, QuoteRecord, JobDocumentRecord, InvoiceRecord, JobExpense } from "@/lib/types";
 import { currency } from "@/lib/utils";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
 
+type ExpenseWithJob = JobExpense & { job?: { id: string; job_title: string; job_ref?: string | null } | null };
+
 interface MoneyTabsProps {
   jobs: Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null; documents?: JobDocumentRecord[]; invoices?: InvoiceRecord[] }>;
+  expenses?: ExpenseWithJob[];
 }
 
-export function MoneyTabs({ jobs }: MoneyTabsProps) {
+const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  materials: "Materials",
+  labour: "Labour",
+  subcontractor: "Subcontractor",
+  plant_hire: "Plant Hire",
+  skip_hire: "Skip Hire",
+  scaffolding: "Scaffolding",
+  fuel: "Fuel / Travel",
+  waste: "Waste",
+  other: "Other"
+};
+
+export function MoneyTabs({ jobs, expenses = [] }: MoneyTabsProps) {
   const [activeTab, setActiveTab] = useState<"revenue" | "expenses" | "invoices" | "forecast">("revenue");
 
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
@@ -141,11 +158,7 @@ export function MoneyTabs({ jobs }: MoneyTabsProps) {
           </div>
         )}
 
-        {activeTab === "expenses" && (
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
-            <p className="text-[var(--text-muted)]">Expense tracking coming soon. Log expenses in Diary.</p>
-          </div>
-        )}
+        {activeTab === "expenses" && <ExpensesTab expenses={expenses} />}
 
         {activeTab === "invoices" && (
           <div className="space-y-4">
@@ -239,6 +252,95 @@ export function MoneyTabs({ jobs }: MoneyTabsProps) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ExpensesTab({ expenses }: { expenses: ExpenseWithJob[] }) {
+  const now = new Date();
+  const monthKey = now.toISOString().slice(0, 7);
+  const totalAll = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
+  const totalThisMonth = expenses
+    .filter((expense) => (expense.expense_date || "").startsWith(monthKey))
+    .reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
+
+  const byCategory = new Map<string, number>();
+  for (const expense of expenses) {
+    const label = EXPENSE_CATEGORY_LABELS[expense.category] ?? "Other";
+    byCategory.set(label, (byCategory.get(label) ?? 0) + Number(expense.amount ?? 0));
+  }
+  const topCategories = [...byCategory.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  if (expenses.length === 0) {
+    return (
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+        <p className="text-[var(--text-muted)]">
+          No expenses logged yet. Open a job and use its <span className="font-semibold text-[var(--text)]">Money</span> tab to log materials, labour, hire, and other costs.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">This Month</p>
+          <p className="mt-2 text-2xl font-bold text-[var(--text)]">{currency(totalThisMonth)}</p>
+        </div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">All Time</p>
+          <p className="mt-2 text-2xl font-bold text-[var(--text)]">{currency(totalAll)}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{expenses.length} expenses</p>
+        </div>
+        {topCategories.slice(0, 2).map(([label, value]) => (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4" key={label}>
+            <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
+            <p className="mt-2 text-2xl font-bold text-[var(--text)]">{currency(value)}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] bg-[var(--surface-raised)]">
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Date</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Job</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Category</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Description</th>
+                <th className="px-4 py-3 text-right font-medium text-[var(--text-muted)]">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((expense) => (
+                <tr key={`${expense.source}-${expense.id}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-raised)]">
+                  <td className="px-4 py-3 whitespace-nowrap text-[var(--text-muted)]">
+                    {expense.expense_date ? new Date(expense.expense_date).toLocaleDateString("en-GB") : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {expense.job ? (
+                      <Link className="text-[var(--gold)] underline-offset-4 hover:underline" href={`/jobs/${expense.job.id}?tab=money` as Route}>
+                        {expense.job.job_title}
+                      </Link>
+                    ) : (
+                      <span className="text-[var(--text-muted)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--text-muted)]">{EXPENSE_CATEGORY_LABELS[expense.category] ?? "Other"}</td>
+                  <td className="px-4 py-3 text-[var(--text)]">
+                    {expense.description}
+                    {expense.supplier_name ? <span className="text-[var(--text-muted)]"> · {expense.supplier_name}</span> : null}
+                    {expense.source === "diary" ? <span className="ml-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">Diary</span> : null}
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium text-[var(--text)]">{currency(expense.amount ?? 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

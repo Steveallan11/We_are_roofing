@@ -22,6 +22,7 @@ import type {
   Job,
   JobBundle,
   JobDocumentRecord,
+  JobExpense,
   KanbanColumn,
   KnowledgeBaseRecord,
   LabourPersonRecord,
@@ -553,6 +554,71 @@ export async function getPaymentSchedule(jobId: string): Promise<PaymentSchedule
 
   const { data: stages } = await supabase.from("payment_stages").select("*").eq("schedule_id", schedule.id).order("stage_number", { ascending: true });
   return { ...(schedule as PaymentScheduleRecord), stages: (stages as PaymentStageRecord[] | null) ?? [] };
+}
+
+export async function getJobExpenses(jobId: string): Promise<JobExpense[]> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const [expensesResult, diaryResult] = await Promise.all([
+    supabase.from("job_expenses").select("*").eq("job_id", jobId).order("expense_date", { ascending: false }),
+    supabase
+      .from("diary_entries")
+      .select("id, linked_job_id, entry_type, title, body, expense_amount, expense_category, expense_receipt_url, created_at")
+      .eq("linked_job_id", jobId)
+      .eq("entry_type", "expense")
+      .order("created_at", { ascending: false })
+  ]);
+
+  const expenses = ((expensesResult.data as JobExpense[] | null) ?? []).map((row) => ({ ...row, source: "job" as const }));
+  const diaryExpenses = mapDiaryExpenses(diaryResult.data ?? []);
+  return [...expenses, ...diaryExpenses];
+}
+
+export async function getAllExpenses(): Promise<Array<JobExpense & { job?: { id: string; job_title: string; job_ref?: string | null } | null }>> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const [expensesResult, diaryResult] = await Promise.all([
+    supabase.from("job_expenses").select("*, jobs(id, job_title, job_ref)").order("expense_date", { ascending: false }).limit(500),
+    supabase
+      .from("diary_entries")
+      .select("id, linked_job_id, entry_type, title, body, expense_amount, expense_category, expense_receipt_url, created_at, jobs:linked_job_id(id, job_title, job_ref)")
+      .eq("entry_type", "expense")
+      .order("created_at", { ascending: false })
+      .limit(500)
+  ]);
+
+  const expenses = ((expensesResult.data as Array<Record<string, unknown>> | null) ?? []).map((row) => ({
+    ...(row as unknown as JobExpense),
+    source: "job" as const,
+    job: (row.jobs as { id: string; job_title: string; job_ref?: string | null } | null) ?? null
+  }));
+
+  const diaryExpenses = mapDiaryExpenses(diaryResult.data ?? []).map((expense, index) => {
+    const rawJob = (diaryResult.data ?? [])[index]?.jobs as unknown;
+    const job = (Array.isArray(rawJob) ? rawJob[0] : rawJob) as { id: string; job_title: string; job_ref?: string | null } | null;
+    return { ...expense, job: job ?? null };
+  });
+
+  return [...expenses, ...diaryExpenses].sort((a, b) => (b.expense_date || "").localeCompare(a.expense_date || ""));
+}
+
+function mapDiaryExpenses(entries: Array<Record<string, unknown>>): JobExpense[] {
+  return entries
+    .filter((entry) => Number(entry.expense_amount ?? 0) > 0)
+    .map((entry) => ({
+      id: String(entry.id),
+      job_id: String(entry.linked_job_id ?? ""),
+      category: (entry.expense_category === "travel" ? "fuel" : (entry.expense_category as JobExpense["category"])) || "other",
+      description: (entry.title as string | null) || (entry.body as string | null) || "Diary expense",
+      amount: Number(entry.expense_amount ?? 0),
+      vat_amount: 0,
+      expense_date: String(entry.created_at ?? "").slice(0, 10),
+      receipt_url: (entry.expense_receipt_url as string | null) ?? null,
+      created_at: entry.created_at as string,
+      source: "diary" as const
+    }));
 }
 
 export async function getKanbanColumns(): Promise<Array<KanbanColumn & { customer?: Customer | null; quote?: QuoteRecord | null }>> {
