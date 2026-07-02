@@ -158,7 +158,8 @@ function normaliseCostLine(line: CostLineItem): CostLineItem {
 }
 
 function calculateTotals(lines: CostLineItem[]) {
-  const subtotal = Math.round(lines.reduce((sum, line) => sum + Number(line.cost || 0), 0) * 100) / 100;
-  const vat_amount = Math.round(lines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0) * 100) / 100;
+  const billableLines = lines.filter((line) => !line.billed_separately);
+  const subtotal = Math.round(billableLines.reduce((sum, line) => sum + Number(line.cost || 0), 0) * 100) / 100;
+  const vat_amount = Math.round(billableLines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost || 0) * 0.2, 0) * 100) / 100;
   return { subtotal, vat_amount, total: subtotal + vat_amount };
 }

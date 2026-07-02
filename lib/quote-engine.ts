@@ -7,7 +7,7 @@ import type {
   QuoteRecord
 } from "@/lib/types";
 import { getDocumentFileHref, getQuotePdfHref } from "@/lib/documents";
-import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
+import { formatLineAmountForDisplay, getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -95,7 +95,7 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
             ${line.measurement_label ? `<strong>${escapeHtml(line.measurement_label)}</strong><br/>` : ""}
             ${escapeHtml(formatLineNotes(line))}
           </td>
-          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${formatCurrency(line.cost)}</td>
+          <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${escapeHtml(formatLineAmountForDisplay(line))}</td>
         </tr>`
     )
     .join("");
@@ -225,7 +225,7 @@ function renderCostLineRow(line: CostLineItem) {
       ${line.measurement_label ? `<strong>${escapeHtml(line.measurement_label)}</strong><br/>` : ""}
       ${escapeHtml(formatLineNotes(line))}
     </td>
-    <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${formatCurrency(line.cost)}</td>
+    <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;text-align:right;">${escapeHtml(formatLineAmountForDisplay(line))}</td>
   </tr>`;
 }
 
@@ -249,9 +249,12 @@ export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
   ];
 
   for (const item of quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0)) {
-    lines.push(`${item.quote_section || item.item} - ${item.measurement_label ? `${item.measurement_label} - ` : ""}${formatCurrency(item.cost)}`);
+    lines.push(`${item.quote_section || item.item} - ${item.measurement_label ? `${item.measurement_label} - ` : ""}${formatLineAmountForDisplay(item)}`);
     if (item.quote_section) {
       lines.push(...wrapText(`  ${item.item}`));
+    }
+    if (item.billed_separately) {
+      lines.push(...wrapText(`  ${item.billed_separately_note?.trim() || "Paid directly to the supplier — not included in this total."}`));
     }
     if (item.notes) {
       lines.push(...wrapText(`  ${item.notes}`));
@@ -477,7 +480,8 @@ function splitLongHtmlParagraph(text: string) {
 }
 
 function formatLineNotes(line: QuoteRecord["cost_breakdown"][number]) {
-  return [line.quote_section ? line.item : null, line.notes].filter(Boolean).join(" - ");
+  const directNote = line.billed_separately ? line.billed_separately_note?.trim() || "Paid directly to the supplier — not included in this total." : null;
+  return [line.quote_section ? line.item : null, directNote, line.notes].filter(Boolean).join(" - ");
 }
 
 function escapeHtml(value: string) {

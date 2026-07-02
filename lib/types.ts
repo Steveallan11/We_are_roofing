@@ -34,6 +34,9 @@ export type CostLineItem = {
   source_label?: string;
   source_color?: string;
   takeoff_notes?: string;
+  /** Customer pays a third party (e.g. the scaffold company) directly for this line — excluded from our invoice/job totals, but still shown on the quote for transparency. */
+  billed_separately?: boolean;
+  billed_separately_note?: string;
 };
 
 export type QuoteOption = {

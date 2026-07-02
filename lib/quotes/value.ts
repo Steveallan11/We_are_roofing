@@ -73,11 +73,22 @@ export function calculateLineItemGross(item: CostLineItem, vatRate = 0.2) {
 }
 
 export function calculateOptionNet(option: Pick<QuoteOption, "cost_breakdown">) {
-  return roundMoney((option.cost_breakdown ?? []).reduce((sum, item) => sum + getLineItemNet(item), 0));
+  return roundMoney((option.cost_breakdown ?? []).filter((item) => !item.billed_separately).reduce((sum, item) => sum + getLineItemNet(item), 0));
 }
 
 export function calculateOptionVat(option: Pick<QuoteOption, "cost_breakdown">, vatRate = 0.2) {
-  return roundMoney((option.cost_breakdown ?? []).reduce((sum, item) => sum + calculateLineVat(item, vatRate), 0));
+  return roundMoney(
+    (option.cost_breakdown ?? []).filter((item) => !item.billed_separately).reduce((sum, item) => sum + calculateLineVat(item, vatRate), 0)
+  );
+}
+
+/** Default note shown to the customer when a line is billed separately (customer pays the supplier directly). */
+export const BILLED_SEPARATELY_DEFAULT_NOTE = "Paid directly to the supplier — not included in this invoice.";
+
+/** Amount cell text for a cost line, flagging when it's excluded from what we invoice. */
+export function formatLineAmountForDisplay(item: CostLineItem) {
+  const amount = currency(Math.max(0, Number(item.cost || 0)));
+  return item.billed_separately ? `${amount} · paid direct` : amount;
 }
 
 export function calculateOptionTotal(option: Pick<QuoteOption, "cost_breakdown">) {
@@ -169,6 +180,7 @@ export function buildQuoteOptionPriceDetailRows(option: Pick<QuoteOption, "cost_
 export function buildQuoteOptionCustomerRows(option: Pick<QuoteOption, "cost_breakdown">): QuoteCustomerPriceRow[] {
   return (option.cost_breakdown ?? [])
     .map((item, index) => {
+      if (item.billed_separately) return null;
       const net = getLineItemNet(item);
       if (!net) return null;
       return {

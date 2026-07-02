@@ -27,7 +27,7 @@ export function round2(value: number) {
 
 export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineItem[] {
   return quote.cost_breakdown
-    .filter((line) => Number(line.cost ?? 0) > 0)
+    .filter((line) => Number(line.cost ?? 0) > 0 && !line.billed_separately)
     .map((line) => ({
     description: line.item,
     quantity: 1,

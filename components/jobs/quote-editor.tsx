@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import type { CostLineItem, LabourPlanRecord, QuoteOption, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
 import {
+  BILLED_SEPARATELY_DEFAULT_NOTE,
   buildDefaultQuoteOptionsFromLines,
   buildQuoteOptionPriceSummary,
   calculateOptionNet,
@@ -77,8 +78,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   }, [quote?.id]);
 
   const totals = useMemo(() => {
-    const subtotal = Math.round(costBreakdown.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
-    const vat = Math.round(costBreakdown.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
+    const billableLines = costBreakdown.filter((item) => !item.billed_separately);
+    const subtotal = Math.round(billableLines.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
+    const vat = Math.round(billableLines.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
     return { subtotal, vat, total: subtotal + vat };
   }, [costBreakdown]);
   const unpricedLines = useMemo(
@@ -109,6 +111,16 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
     const line = costBreakdown[index];
     if (!line) return;
     updateLine(index, { notes: setPriceToBeConfirmed(line.notes, !isPriceToBeConfirmed(line)) });
+  }
+
+  function toggleLineBilledSeparately(index: number) {
+    const line = costBreakdown[index];
+    if (!line) return;
+    const nextValue = !line.billed_separately;
+    updateLine(index, {
+      billed_separately: nextValue,
+      billed_separately_note: nextValue ? line.billed_separately_note || BILLED_SEPARATELY_DEFAULT_NOTE : line.billed_separately_note
+    });
   }
 
   function deleteLine(index: number) {
@@ -281,6 +293,17 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
     const line = option?.cost_breakdown[index];
     if (!line) return;
     updateOptionLine(optionId, index, { notes: setPriceToBeConfirmed(line.notes, !isPriceToBeConfirmed(line)) });
+  }
+
+  function toggleOptionLineBilledSeparately(optionId: string, index: number) {
+    const option = options.find((item) => item.id === optionId);
+    const line = option?.cost_breakdown[index];
+    if (!line) return;
+    const nextValue = !line.billed_separately;
+    updateOptionLine(optionId, index, {
+      billed_separately: nextValue,
+      billed_separately_note: nextValue ? line.billed_separately_note || BILLED_SEPARATELY_DEFAULT_NOTE : line.billed_separately_note
+    });
   }
 
   function addOptionLine(optionId: string) {
@@ -902,6 +925,29 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                       >
                         {isPriceToBeConfirmed(line) ? "Price to be confirmed ✓" : "Mark price to be confirmed"}
                       </button>
+                      <button
+                        className={`mt-2 min-h-10 w-full rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                          line.billed_separately
+                            ? "border-[var(--gold)] bg-[var(--gold)] text-black"
+                            : "border-[var(--border-mid)] bg-transparent text-[var(--text-second)]"
+                        }`}
+                        onClick={() => toggleOptionLineBilledSeparately(option.id, index)}
+                        type="button"
+                      >
+                        {line.billed_separately ? "Paid direct to supplier ✓" : "Customer pays supplier direct"}
+                      </button>
+                      {line.billed_separately ? (
+                        <label className="mt-2 block">
+                          <span className="label">Note shown to the customer</span>
+                          <input
+                            className="field"
+                            onChange={(event) => updateOptionLine(option.id, index, { billed_separately_note: event.target.value })}
+                            placeholder={BILLED_SEPARATELY_DEFAULT_NOTE}
+                            type="text"
+                            value={line.billed_separately_note ?? ""}
+                          />
+                        </label>
+                      ) : null}
                     </div>
                   ))}
                   <div className="flex flex-wrap gap-2">
@@ -1201,15 +1247,44 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                 >
                   {isPriceToBeConfirmed(line) ? "Price to be confirmed ✓" : "Mark price to be confirmed"}
                 </button>
+                <button
+                  className={`min-h-10 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                    line.billed_separately
+                      ? "border-[var(--gold)] bg-[var(--gold)] text-black"
+                      : "border-[var(--border-mid)] bg-transparent text-[var(--text-second)]"
+                  }`}
+                  onClick={() => toggleLineBilledSeparately(index)}
+                  type="button"
+                >
+                  {line.billed_separately ? "Paid direct to supplier ✓" : "Customer pays supplier direct"}
+                </button>
                 <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
                   <span className="text-[var(--muted)]">Net: <strong className="text-white">{currency(Number(line.cost || 0))}</strong></span>
                   <span className="text-[var(--muted)]">VAT: <strong className="text-white">{currency(line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0)}</strong></span>
-                  <span className="text-[var(--gold-l)]">Inc VAT: <strong>{currency(Number(line.cost || 0) + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0))}</strong></span>
+                  <span className={line.billed_separately ? "text-[var(--text-muted)] line-through" : "text-[var(--gold-l)]"}>
+                    Inc VAT: <strong>{currency(Number(line.cost || 0) + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0))}</strong>
+                  </span>
+                  {line.billed_separately ? <span className="text-[var(--gold)]">Excluded from our invoice</span> : null}
                 </div>
                 <button className="button-ghost !min-h-10 !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteLine(index)} type="button">
                   Delete line
                 </button>
               </div>
+              {line.billed_separately ? (
+                <div className="mt-3">
+                  <label className="label" htmlFor={`line-direct-note-${index}`}>
+                    Note shown to the customer (e.g. which supplier they pay)
+                  </label>
+                  <input
+                    className="field"
+                    id={`line-direct-note-${index}`}
+                    onChange={(event) => updateLine(index, { billed_separately_note: event.target.value })}
+                    placeholder={BILLED_SEPARATELY_DEFAULT_NOTE}
+                    type="text"
+                    value={line.billed_separately_note ?? ""}
+                  />
+                </div>
+              ) : null}
               <div className="mt-4">
                 <label className="label" htmlFor={`line-notes-${index}`}>
                   Description / customer notes

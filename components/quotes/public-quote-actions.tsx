@@ -297,6 +297,11 @@ function SectionChoiceList({
                   <span className={`block font-ui text-base font-extrabold ${selected ? "text-black" : "text-white"}`}>{section.name} roof works + scaffold/access</span>
                   <span className={`mt-1 block font-ui text-xs leading-5 ${selected ? "text-black/65" : "text-[#cfcfcf]"}`}>
                     Includes roof works {currency(packageSummary.roofNet)}{packageSummary.accessNet > 0 ? ` + scaffold/access ${currency(packageSummary.accessNet)}` : ""}{section.vat > 0 ? ` + VAT ${currency(section.vat)}` : ""}
+                    {packageSummary.directAccessNet > 0 ? (
+                      <span className={`mt-1 block font-bold uppercase tracking-[0.06em] ${selected ? "text-black/70" : "text-[var(--gold)]"}`}>
+                        + {currency(packageSummary.directAccessNet)} scaffold/access, paid direct to the scaffold company — not in this price
+                      </span>
+                    ) : null}
                   </span>
                 </span>
                 <span className={`shrink-0 text-right font-display text-3xl font-bold ${selected ? "text-black" : "text-[var(--gold-l)]"}`}>{currency(section.total)}</span>
@@ -352,9 +357,11 @@ function buildSectionChoices(lines: CostLineItem[]): SectionChoice[] {
     const vat = line.vat_applicable ? Math.round(net * 0.2 * 100) / 100 : 0;
     existing.indexes.push(originalIndex);
     existing.lines.push({ ...line, originalIndex });
-    existing.net += net;
-    existing.vat += vat;
-    existing.total += net + vat;
+    if (!line.billed_separately) {
+      existing.net += net;
+      existing.vat += vat;
+      existing.total += net + vat;
+    }
     groups.set(name, existing);
   });
 
@@ -415,15 +422,19 @@ function getLineDisplayLabel(line: CostLineItem) {
 }
 
 function getSectionPackageSummary(section: SectionChoice) {
+  const accessLines = section.lines.filter((line) => lineSortOrder(line) > 1);
   const roofNet = section.lines.filter((line) => lineSortOrder(line) === 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
-  const accessNet = section.lines.filter((line) => lineSortOrder(line) > 1).reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const accessNet = accessLines.filter((line) => !line.billed_separately).reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const directAccessNet = accessLines.filter((line) => line.billed_separately).reduce((sum, line) => sum + Number(line.cost || 0), 0);
   const hasRoof = roofNet > 0;
   const hasAccess = accessNet > 0;
+  const hasDirectAccess = directAccessNet > 0;
   const description = hasRoof && hasAccess ? "Roof works and scaffold/access combined for this section" : hasAccess ? "Scaffold/access for this section" : "Roof works for this section";
 
   return {
     roofNet: Math.round(roofNet * 100) / 100,
     accessNet: Math.round(accessNet * 100) / 100,
+    directAccessNet: Math.round(directAccessNet * 100) / 100,
     description
   };
 }
@@ -448,8 +459,9 @@ function SingleQuoteSummary({
   const baseLines = pricedLines.filter((line) => !optionalLineIndexes.includes(line.originalIndex));
   const optionalLines = pricedLines.filter((line) => optionalLineIndexes.includes(line.originalIndex));
   const selectedLines = pricedLines.filter((line) => selectedLineIndexes.includes(line.originalIndex));
-  const net = selectedLines.reduce((sum, line) => sum + Number(line.cost || 0), 0);
-  const vat = selectedLines.reduce((sum, line) => sum + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0), 0);
+  const billableSelectedLines = selectedLines.filter((line) => !line.billed_separately);
+  const net = billableSelectedLines.reduce((sum, line) => sum + Number(line.cost || 0), 0);
+  const vat = billableSelectedLines.reduce((sum, line) => sum + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0), 0);
 
   function toggleOptionalLine(index: number) {
     if (selectedLineIndexes.includes(index)) {
@@ -533,6 +545,7 @@ function SingleQuoteSummary({
 
 function CustomerQuoteLine({ line }: { line: CostLineItem }) {
   const isTbc = isPriceToBeConfirmed(line);
+  const isDirectPay = Boolean(line.billed_separately);
 
   return (
     <span className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 font-ui text-sm font-semibold">
@@ -543,10 +556,16 @@ function CustomerQuoteLine({ line }: { line: CostLineItem }) {
             Price to be confirmed
           </span>
         ) : null}
+        {isDirectPay ? (
+          <span className="mt-1 inline-flex rounded-full bg-black px-2.5 py-1 text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-[var(--gold)]">
+            {line.billed_separately_note?.trim() || "Paid direct to supplier"}
+          </span>
+        ) : null}
       </span>
       <span className="shrink-0 text-right text-black">
         {currency(Number(line.cost || 0))}
         {isTbc ? <span className="mt-1 block text-[0.62rem] font-bold uppercase tracking-[0.08em] text-black/55">Current allowance</span> : null}
+        {isDirectPay ? <span className="mt-1 block text-[0.62rem] font-bold uppercase tracking-[0.08em] text-black/55">Not in this total</span> : null}
       </span>
     </span>
   );

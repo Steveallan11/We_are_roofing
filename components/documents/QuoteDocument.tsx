@@ -4,7 +4,7 @@ import { DocHeader } from "@/components/documents/shared/DocHeader";
 import { DocumentBody, DocumentFrame, paragraphStyle } from "@/components/documents/shared/DocumentFrame";
 import { LineItemTable } from "@/components/documents/shared/LineItemTable";
 import { SectionHead } from "@/components/documents/shared/SectionHead";
-import { getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
+import { formatLineAmountForDisplay, getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { DOC } from "@/lib/theme/documentTheme";
 import { currency, formatDate } from "@/lib/utils";
 import type { JobBundle, QuoteRecord } from "@/lib/types";
@@ -55,7 +55,7 @@ export function QuoteDocument({ bundle, quote }: { bundle: JobBundle; quote: Quo
               notes: buildLineNotes(line),
               quantity: line.quantity,
               unit: line.unit,
-              amount: currency(line.cost)
+              amount: formatLineAmountForDisplay(line)
             }))}
             totals={[
               { label: "Subtotal", value: currency(quote.subtotal) },
@@ -130,7 +130,8 @@ function splitLongParagraph(text: string) {
 }
 
 function buildLineNotes(line: QuoteRecord["cost_breakdown"][number]) {
-  return [line.measurement_label, line.quote_section ? line.item : null, line.notes].filter(Boolean).join(" - ");
+  const directNote = line.billed_separately ? line.billed_separately_note?.trim() || "Paid directly to the supplier — not included in this total." : null;
+  return [line.measurement_label, line.quote_section ? line.item : null, directNote, line.notes].filter(Boolean).join(" - ");
 }
 
 function OptionLineSummary({ option }: { option: NonNullable<QuoteRecord["options"]>[number] }) {
@@ -144,10 +145,16 @@ function OptionLineSummary({ option }: { option: NonNullable<QuoteRecord["option
             <div>
               <div style={{ color: DOC.body, fontSize: 12, fontWeight: 800 }}>{line.quote_section || line.item}</div>
               <div style={{ color: DOC.muted, fontFamily: DOC.fontSerif, fontSize: 12, lineHeight: 1.5 }}>
-                {[line.quote_section ? line.item : null, line.measurement_label].filter(Boolean).join(" - ")}
+                {[
+                  line.quote_section ? line.item : null,
+                  line.measurement_label,
+                  line.billed_separately ? line.billed_separately_note?.trim() || "Paid directly to the supplier — not in this total." : null
+                ]
+                  .filter(Boolean)
+                  .join(" - ")}
               </div>
             </div>
-            <strong style={{ color: DOC.gold, fontSize: 12, whiteSpace: "nowrap" }}>{currency(line.cost)}</strong>
+            <strong style={{ color: DOC.gold, fontSize: 12, whiteSpace: "nowrap" }}>{formatLineAmountForDisplay(line)}</strong>
           </div>
         </div>
       ))}
