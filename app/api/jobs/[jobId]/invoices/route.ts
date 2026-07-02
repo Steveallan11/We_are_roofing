@@ -16,8 +16,12 @@ export async function POST(request: Request, { params }: Props) {
   const body = (await request.json().catch(() => ({}))) as {
     type?: InvoiceType;
     deposit_percentage?: number;
+    amount?: number;
+    percentage?: number;
+    description?: string;
   };
-  const invoiceType: InvoiceType = body.type === "deposit" || body.type === "final" ? body.type : "standard";
+  const invoiceType: InvoiceType =
+    body.type === "deposit" || body.type === "final" || body.type === "interim" ? body.type : "standard";
 
   if (!canPersistToSupabase()) {
     return NextResponse.json({
@@ -123,6 +127,47 @@ export async function POST(request: Request, { params }: Props) {
         ? `Final balance for quote ${quote.quote_ref} (£${alreadyInvoiced.toFixed(2)} previously invoiced).`
         : `Final balance for quote ${quote.quote_ref}.`;
     dueInDays = 14;
+  } else if (invoiceType === "interim") {
+    // On-the-fly stage/progress payment — raise as many of these as the job needs,
+    // whenever a payment is due (scaffold up, materials landed, work stage complete...).
+    const fixedAmount = Number(body.amount ?? 0);
+    const percentage = Number(body.percentage ?? 0);
+    if (fixedAmount > 0) {
+      total = round2(fixedAmount);
+    } else if (percentage > 0 && percentage < 100) {
+      total = round2((Number(quote.total ?? 0) * percentage) / 100);
+    } else {
+      return NextResponse.json({ ok: false, error: "Enter an amount or a percentage for this invoice." }, { status: 400 });
+    }
+    if (total <= 0) {
+      return NextResponse.json({ ok: false, error: "Invoice amount must be greater than zero." }, { status: 400 });
+    }
+
+    const alreadyInvoicedForInterim = sumLiveInvoiceTotal(liveInvoicesForQuote);
+    if (alreadyInvoicedForInterim + total > Number(quote.total ?? 0) + 0.01) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `That would take invoicing past the quote total. £${alreadyInvoicedForInterim.toFixed(2)} already invoiced of £${Number(quote.total ?? 0).toFixed(2)}.`
+        },
+        { status: 400 }
+      );
+    }
+
+    const description = body.description?.trim() || `Progress payment — ${bundle.job.job_title} (quote ${quote.quote_ref})`;
+    ({ subtotal, vatAmount } = splitVatFromGross(total, quote.subtotal, quote.vat_amount));
+    lineItems = [
+      {
+        description,
+        quantity: 1,
+        unit: "item",
+        unit_price: subtotal,
+        vat_applicable: vatAmount > 0,
+        total: subtotal
+      }
+    ];
+    notes = body.description?.trim() ? `Interim invoice: ${body.description.trim()}.` : `Interim invoice for quote ${quote.quote_ref}.`;
+    dueInDays = 7;
   } else {
     const existingStandard = liveInvoicesForQuote.find((invoice) => (invoice.invoice_type ?? "standard") === "standard");
     if (existingStandard) {
@@ -187,7 +232,14 @@ export async function POST(request: Request, { params }: Props) {
   const invoice = data as InvoiceRecord;
   const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [invoice, ...bundle.invoices] }, invoice);
 
-  const typeLabel = invoiceType === "deposit" ? "Deposit invoice" : invoiceType === "final" ? "Final balance invoice" : "Invoice";
+  const typeLabel =
+    invoiceType === "deposit"
+      ? "Deposit invoice"
+      : invoiceType === "final"
+        ? "Final balance invoice"
+        : invoiceType === "interim"
+          ? "Progress invoice"
+          : "Invoice";
   await createActivity(supabase, {
     business_id: bundle.business.id,
     job_id: bundle.job.id,

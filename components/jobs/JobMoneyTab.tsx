@@ -50,6 +50,10 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
   const [busy, setBusy] = useState<string | null>(null);
   const [showDepositForm, setShowDepositForm] = useState(false);
   const [depositPct, setDepositPct] = useState("30");
+  const [showInterimForm, setShowInterimForm] = useState(false);
+  const [interimMode, setInterimMode] = useState<"fixed" | "percentage">("fixed");
+  const [interimValue, setInterimValue] = useState("");
+  const [interimDescription, setInterimDescription] = useState("");
   const [sendInvoice, setSendInvoice] = useState<InvoiceRecord | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceRecord | null>(null);
 
@@ -86,6 +90,31 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
       return;
     }
     setShowDepositForm(false);
+    notify([result.message, result.warning].filter(Boolean).join(" "), null);
+    startTransition(() => router.refresh());
+  }
+
+  async function createInterimInvoice() {
+    notify(null, null);
+    setBusy("create-interim");
+    const value = Number(interimValue);
+    const body: Record<string, unknown> = { type: "interim", description: interimDescription.trim() || undefined };
+    if (interimMode === "fixed") body.amount = value;
+    else body.percentage = value;
+    const response = await fetch(`/api/jobs/${jobId}/invoices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      notify(null, result?.error || "Invoice could not be created.");
+      return;
+    }
+    setShowInterimForm(false);
+    setInterimValue("");
+    setInterimDescription("");
     notify([result.message, result.warning].filter(Boolean).join(" "), null);
     startTransition(() => router.refresh());
   }
@@ -146,7 +175,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
       <PageSection
         kicker="Invoicing"
         title="Raise & track invoices"
-        description="Deposit up front, final balance on completion — or one full invoice. Record payments as they land."
+        description="Deposit up front, progress payments as the job moves, final balance on completion — or one full invoice. Record payments as they land."
       >
         {!quote ? (
           <p className="text-sm text-[#ffcf7d]">Create a quote first — invoices are raised from the approved quote.</p>
@@ -154,6 +183,9 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => setShowDepositForm((current) => !current)} disabled={hasDeposit || busy !== null}>
               {hasDeposit ? "Deposit Raised ✓" : "Raise Deposit Invoice"}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowInterimForm((current) => !current)} disabled={busy !== null}>
+              Raise Custom Invoice
             </Button>
             <Button variant="secondary" size="sm" onClick={() => createInvoice("final")} disabled={hasFinal || busy !== null}>
               {busy === "create-final" ? "Creating..." : hasFinal ? "Final Raised ✓" : "Raise Final Balance"}
@@ -200,6 +232,72 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
                 {busy === "create-deposit" ? "Creating..." : `Create ${depositPct}% Deposit Invoice`}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setShowDepositForm(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {showInterimForm && quote ? (
+          <div className="mt-3 rounded-xl border border-[var(--border)] p-4">
+            <p className="text-sm font-semibold text-[var(--text)]">Custom invoice</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Raise a one-off payment at any point in the job — scaffold up, materials landed, a stage of work complete. Raise as many of
+              these as the job needs.
+            </p>
+
+            <label className="mt-3 block">
+              <span className="label">What's this for?</span>
+              <input
+                className="field min-h-11"
+                onChange={(event) => setInterimDescription(event.target.value)}
+                placeholder="e.g. Scaffolding up — stage payment"
+                type="text"
+                value={interimDescription}
+              />
+            </label>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="flex overflow-hidden rounded-lg border border-[var(--border)]">
+                <button
+                  className={`px-3 py-2 text-sm ${interimMode === "fixed" ? "bg-[var(--gold)] text-black" : "text-[var(--text-muted)]"}`}
+                  onClick={() => setInterimMode("fixed")}
+                  type="button"
+                >
+                  £ Amount
+                </button>
+                <button
+                  className={`px-3 py-2 text-sm ${interimMode === "percentage" ? "bg-[var(--gold)] text-black" : "text-[var(--text-muted)]"}`}
+                  onClick={() => setInterimMode("percentage")}
+                  type="button"
+                >
+                  % of quote
+                </button>
+              </div>
+              <input
+                className="field w-28 min-h-11 text-center"
+                inputMode="decimal"
+                onChange={(event) => setInterimValue(event.target.value)}
+                placeholder={interimMode === "fixed" ? "0.00" : "0"}
+                value={interimValue}
+              />
+              {interimMode === "percentage" ? (
+                <span className="text-sm text-[var(--text-muted)]">
+                  = {currency((Number(quote.total ?? 0) * (Number(interimValue) || 0)) / 100)}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={createInterimInvoice}
+                disabled={busy !== null || !(Number(interimValue) > 0)}
+              >
+                {busy === "create-interim" ? "Creating..." : "Create Invoice"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowInterimForm(false)}>
                 Cancel
               </Button>
             </div>
