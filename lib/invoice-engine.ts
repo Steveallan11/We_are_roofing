@@ -52,6 +52,18 @@ export function calculateQuoteInvoiceableTotals(quote: QuoteRecord, vatRate: num
 
 export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceRecord) {
   const logoUrl = resolveAssetUrl(bundle.business.logo_url || "/we-are-roofing-logo.png");
+  const isDeposit = invoice.invoice_type === "deposit";
+  const introHtml = isDeposit
+    ? `
+        <h2>Booking Deposit</h2>
+        <div class="terms">
+          Thank you for choosing We Are Roofing. This deposit secures your booking in our schedule for ${escapeHtml(bundle.job.job_title)} at ${escapeHtml(bundle.job.property_address)}.
+          <br/><br/>
+          It allows us to begin arranging the items needed before work commences, including materials, scaffold/access, skips, welfare facilities, and other job preparation where required. Getting these in place early helps minimise delays once the works start.
+        </div>`
+    : `
+        <h2>Works Completed</h2>
+        <div class="terms">Works completed at ${escapeHtml(bundle.job.property_address)} as agreed for ${escapeHtml(bundle.job.job_title)}.</div>`;
   const rows = invoice.line_items
     .map(
       (line) => `
@@ -109,6 +121,7 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
           <div class="meta-card"><div class="meta-label">Property</div><div>${escapeHtml(bundle.job.property_address)}</div></div>
           <div class="meta-card"><div class="meta-label">Due Date</div><div>${formatDate(invoice.due_date)}</div></div>
         </div>
+        ${introHtml}
         <table>
           <thead>
             <tr>
@@ -137,6 +150,7 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
 }
 
 export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord) {
+  const isDeposit = invoice.invoice_type === "deposit";
   const lines = [
     bundle.business.business_name,
     bundle.business.trading_address || "",
@@ -146,6 +160,13 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
     `Property: ${bundle.job.property_address}`,
     `Issue Date: ${formatDate(invoice.issue_date)}`,
     `Due Date: ${formatDate(invoice.due_date)}`,
+    "",
+    isDeposit ? "Booking Deposit" : "Works Completed",
+    ...(isDeposit
+      ? wrapText(
+          `Thank you for choosing We Are Roofing. This deposit secures your booking in our schedule for ${bundle.job.job_title} at ${bundle.job.property_address}. It allows us to begin arranging the items needed before work commences, including materials, scaffold/access, skips, welfare facilities, and other job preparation where required. Getting these in place early helps minimise delays once the works start.`
+        )
+      : wrapText(`Works completed at ${bundle.job.property_address} as agreed for ${bundle.job.job_title}.`)),
     "",
     "Items"
   ];

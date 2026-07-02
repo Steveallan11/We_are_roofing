@@ -10,6 +10,7 @@ import { currency, formatDate } from "@/lib/utils";
 import type { InvoiceRecord, JobBundle } from "@/lib/types";
 
 export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoice: InvoiceRecord }) {
+  const isDeposit = invoice.invoice_type === "deposit";
   return (
     <DocumentFrame>
       <DocHeader title="Invoice" reference={invoice.invoice_ref} subtitle={bundle.business.trading_address} meta={`Due ${formatDate(invoice.due_date)}`} />
@@ -26,8 +27,21 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
           <AddressBlock label="Customer" lines={[bundle.customer.full_name, bundle.job.property_address, bundle.job.postcode]} />
           <AddressBlock label="Bank Details" lines={[bundle.business.bank_account_name, bundle.business.bank_name, bundle.business.bank_sort_code ? `Sort Code: ${bundle.business.bank_sort_code}` : null, bundle.business.bank_account ? `Account: ${bundle.business.bank_account}` : null]} />
         </div>
-        <SectionHead>Works Completed</SectionHead>
-        <p style={paragraphStyle}>Works completed at {bundle.job.property_address} as agreed for {bundle.job.job_title}.</p>
+        <SectionHead>{isDeposit ? "Booking Deposit" : "Works Completed"}</SectionHead>
+        {isDeposit ? (
+          <>
+            <p style={paragraphStyle}>
+              Thank you for choosing We Are Roofing. This deposit secures your booking in our schedule for {bundle.job.job_title} at{" "}
+              {bundle.job.property_address}.
+            </p>
+            <p style={paragraphStyle}>
+              It allows us to begin arranging the items needed before work commences, including materials, scaffold/access, skips, welfare
+              facilities, and other job preparation where required. Getting these in place early helps minimise delays once the works start.
+            </p>
+          </>
+        ) : (
+          <p style={paragraphStyle}>Works completed at {bundle.job.property_address} as agreed for {bundle.job.job_title}.</p>
+        )}
         <SectionHead>Invoice Items</SectionHead>
         <LineItemTable
           rows={invoice.line_items.map((line) => ({

@@ -103,7 +103,7 @@ export async function POST(request: Request, { params }: Props) {
     ({ subtotal, vatAmount } = splitVatFromGross(total, invoiceable.subtotal, invoiceable.vatAmount));
     lineItems = [
       {
-        description: `Deposit (${percentage}%) — ${bundle.job.job_title} (quote ${quote.quote_ref})`,
+        description: `Booking deposit (${percentage}%)`,
         quantity: 1,
         unit: "item",
         unit_price: subtotal,
@@ -111,7 +111,7 @@ export async function POST(request: Request, { params }: Props) {
         total: subtotal
       }
     ];
-    notes = `Deposit invoice (${percentage}% of quote ${quote.quote_ref}).`;
+    notes = `Deposit invoice (${percentage}% of quote ${quote.quote_ref}) to secure the booking and begin pre-start preparation.`;
     dueInDays = 7;
   } else if (invoiceType === "final") {
     const existingFinal = liveInvoicesForQuote.find((invoice) => invoice.invoice_type === "final");
