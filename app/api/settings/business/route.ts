@@ -1,8 +1,12 @@
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getBusiness } from "@/lib/data";
 
 export async function PATCH(request: Request) {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const business = await getBusiness();
     const body = await request.json();
 

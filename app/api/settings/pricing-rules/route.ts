@@ -1,8 +1,12 @@
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getBusiness } from "@/lib/data";
 
 export async function GET() {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const business = await getBusiness();
     const supabase = createSupabaseAdminClient();
 
@@ -26,6 +30,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const business = await getBusiness();
     const body = await request.json();
 
@@ -60,6 +67,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 

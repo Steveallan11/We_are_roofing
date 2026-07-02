@@ -1,8 +1,12 @@
+import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { NurtureTemplate } from "@/lib/types";
 
 export async function GET() {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const supabase = createSupabaseAdminClient();
 
     // Get business ID (first business for the user)
@@ -35,6 +39,9 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+
     const reqBody = (await req.json().catch(() => ({}))) as {
       templateId?: string;
       subject?: string;
