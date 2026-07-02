@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CostLineItem, QuoteOption } from "@/lib/types";
-import { buildQuoteOptionCustomerRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
+import { buildQuoteOptionCustomerRows, buildQuoteOptionDetailRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 type Props = {
@@ -602,7 +602,9 @@ function SelectedOptionDetail({ option, selectedIndex }: { option: QuoteOption; 
 }
 
 function SimplePriceSummary({ option }: { option: QuoteOption }) {
-  const priceRows = buildQuoteOptionCustomerRows(option);
+  const detailRows = buildQuoteOptionDetailRows(option);
+  const chargeableRows = detailRows.filter((row) => !row.billedSeparately);
+  const directRows = detailRows.filter((row) => row.billedSeparately);
   const fallbackSubtotal = Math.max(0, Number(option.subtotal || 0));
   const fallbackVat = Math.max(0, Number(option.vat_amount || 0));
   const vat = calculateOptionVat(option) || fallbackVat;
@@ -612,9 +614,9 @@ function SimplePriceSummary({ option }: { option: QuoteOption }) {
     <div className="mt-5 rounded-2xl border border-[var(--gold)]/30 bg-[#17130a] p-4 md:p-5">
       <p className="font-ui text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Price summary</p>
       <div className="mt-4 space-y-3 font-ui text-sm text-[#f2f2f2] md:text-base">
-        {priceRows.length > 0 ? (
+        {chargeableRows.length > 0 ? (
           <>
-            {priceRows.map((row) => <PriceRow key={row.id} label={row.label} value={row.net} />)}
+            {chargeableRows.map((row) => <PriceRow key={row.id} label={row.label} value={row.net} />)}
             <PriceRow label="VAT" muted value={vat} />
           </>
         ) : (
@@ -628,6 +630,13 @@ function SimplePriceSummary({ option }: { option: QuoteOption }) {
           <strong className="shrink-0 text-right font-display text-3xl text-[var(--gold-l)]">{currency(total)}</strong>
         </div>
       </div>
+      {directRows.length > 0 ? (
+        <div className="mt-4 space-y-2 border-t border-[var(--gold)]/20 pt-4">
+          {directRows.map((row) => (
+            <DirectPayRow key={row.id} label={row.label} note={row.billedSeparatelyNote} value={row.net} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -637,6 +646,23 @@ function PriceRow({ label, muted = false, value }: { label: string; muted?: bool
     <div className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-4 ${muted ? "text-[#a9a9a9]" : "text-[#f4f4f4]"}`}>
       <span className="min-w-0 leading-6">{label}</span>
       <strong className="shrink-0 text-right text-white">{currency(value)}</strong>
+    </div>
+  );
+}
+
+function DirectPayRow({ label, note, value }: { label: string; note?: string; value: number }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 font-ui text-sm">
+      <span className="min-w-0">
+        <span className="block leading-6 text-[#d6d6d6]">{label}</span>
+        <span className="mt-1 inline-flex rounded-full bg-black px-2.5 py-1 text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-[var(--gold)]">
+          {note?.trim() || "Paid direct to supplier"}
+        </span>
+      </span>
+      <span className="shrink-0 text-right">
+        <strong className="text-[#d6d6d6]">{currency(value)}</strong>
+        <span className="mt-1 block text-[0.62rem] font-bold uppercase tracking-[0.08em] text-[#8a8a8a]">Not in this total</span>
+      </span>
     </div>
   );
 }

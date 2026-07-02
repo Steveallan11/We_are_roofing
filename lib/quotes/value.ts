@@ -119,6 +119,11 @@ export type QuoteCustomerPriceRow = {
   net: number;
 };
 
+export type QuoteCustomerDetailRow = QuoteCustomerPriceRow & {
+  billedSeparately: boolean;
+  billedSeparatelyNote?: string;
+};
+
 export type QuoteOptionPresentation = {
   optionName: string;
   optionType?: string;
@@ -190,6 +195,27 @@ export function buildQuoteOptionCustomerRows(option: Pick<QuoteOption, "cost_bre
       };
     })
     .filter((row): row is QuoteCustomerPriceRow => Boolean(row));
+}
+
+/**
+ * Same as buildQuoteOptionCustomerRows but keeps billed-separately lines in
+ * the list (flagged, not summed) — for detail views that should show the
+ * full scope of the option, not just what's chargeable through us.
+ */
+export function buildQuoteOptionDetailRows(option: Pick<QuoteOption, "cost_breakdown">): QuoteCustomerDetailRow[] {
+  const rows: QuoteCustomerDetailRow[] = [];
+  (option.cost_breakdown ?? []).forEach((item, index) => {
+    const net = getLineItemNet(item);
+    if (!net) return;
+    rows.push({
+      id: `${item.source_id || item.item || "line"}-${index}`,
+      label: getCustomerLineItemLabel(item),
+      net,
+      billedSeparately: Boolean(item.billed_separately),
+      billedSeparatelyNote: item.billed_separately_note
+    });
+  });
+  return rows;
 }
 
 export function getQuoteOptionPresentation(option: QuoteOption, index = 0): QuoteOptionPresentation {
