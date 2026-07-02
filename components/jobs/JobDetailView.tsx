@@ -10,7 +10,7 @@ import { JobDocumentsSection } from "@/components/documents/JobDocumentsSection"
 import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
-import { InvoiceActions } from "@/components/jobs/invoice-actions";
+import { JobMoneyTab } from "@/components/jobs/JobMoneyTab";
 import { JobTitleEditor } from "@/components/jobs/job-title-editor";
 import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
@@ -54,6 +54,7 @@ import type {
   InvoiceRecord,
   Job,
   JobDocumentRecord,
+  JobExpense,
   JobPhoto,
   LabourPlanRecord,
   MaterialRecord,
@@ -72,12 +73,13 @@ export type JobDetailViewProps = {
   materials: MaterialRecord[];
   labourPlan?: LabourPlanRecord | null;
   invoices: InvoiceRecord[];
+  expenses?: JobExpense[];
   emailLogs: EmailLog[];
   activity?: ActivityRecord[];
   paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 };
 
-type TabId = "overview" | "diary" | "survey" | "quote" | "materials" | "labour" | "documents" | "activity";
+type TabId = "overview" | "diary" | "survey" | "quote" | "materials" | "labour" | "money" | "documents" | "activity";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
@@ -86,12 +88,13 @@ const TABS: { value: TabId; label: string }[] = [
   { value: "quote", label: "Quote" },
   { value: "materials", label: "Materials" },
   { value: "labour", label: "Labour" },
+  { value: "money", label: "Money" },
   { value: "documents", label: "Documents" },
   { value: "activity", label: "Activity" }
 ];
 
 export function JobDetailView(props: JobDetailViewProps) {
-  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, emailLogs, activity, paymentSchedule } = props;
+  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, expenses, emailLogs, activity, paymentSchedule } = props;
 
   const router = useRouter();
   const pathname = usePathname();
@@ -173,13 +176,24 @@ export function JobDetailView(props: JobDetailViewProps) {
           <LabourTab job={job} labourPlan={labourPlan ?? null} />
         </TabsContent>
 
+        <TabsContent value="money">
+          <JobMoneyTab
+            jobId={job.id}
+            jobTitle={job.job_title}
+            quote={quote ?? null}
+            invoices={invoices}
+            expenses={expenses ?? []}
+            customerName={customer.full_name}
+            customerEmail={customer.email}
+          />
+        </TabsContent>
+
         <TabsContent value="documents">
           <DocumentsTab
             job={job}
             documents={documents}
             invoices={invoices}
             quote={quote}
-            customer={customer}
           />
         </TabsContent>
 
@@ -569,14 +583,12 @@ function DocumentsTab({
   job,
   documents,
   invoices,
-  quote,
-  customer
+  quote
 }: {
   job: Job;
   documents: JobDocumentRecord[];
   invoices: InvoiceRecord[];
   quote?: QuoteRecord | null;
-  customer: Customer;
 }) {
   const docGroups = groupDocuments(documents);
   const uploadedCount = docGroups.Uploads.length;
@@ -624,20 +636,6 @@ function DocumentsTab({
         )}
       </PageSection>
 
-      <PageSection
-        kicker="Invoices & Filing"
-        title="Raise & file"
-        description="Build invoices from the approved quote, file PDFs into this job, track paid/unpaid status."
-      >
-        <InvoiceActions
-          customerEmail={customer.email}
-          customerName={customer.full_name}
-          invoices={invoices}
-          jobId={job.id}
-          jobTitle={job.job_title}
-          quote={quote ?? null}
-        />
-      </PageSection>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { JobDetailView } from "@/components/jobs/JobDetailView";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { Button } from "@/components/ui/primitives";
-import { getJobBundle, getPaymentSchedule } from "@/lib/data";
+import { getJobBundle, getJobExpenses, getPaymentSchedule } from "@/lib/data";
 
 type Props = {
   params: Promise<{ jobId: string }>;
@@ -13,7 +13,7 @@ type Props = {
 
 export default async function JobDetailPage({ params }: Props) {
   const { jobId } = await params;
-  const [bundle, paymentSchedule] = await Promise.all([getJobBundle(jobId), getPaymentSchedule(jobId)]);
+  const [bundle, paymentSchedule, expenses] = await Promise.all([getJobBundle(jobId), getPaymentSchedule(jobId), getJobExpenses(jobId)]);
 
   if (!bundle) {
     notFound();
@@ -49,6 +49,7 @@ export default async function JobDetailPage({ params }: Props) {
         materials={bundle.materials}
         labourPlan={bundle.labour_plan ?? null}
         invoices={bundle.invoices}
+        expenses={expenses}
         emailLogs={bundle.email_logs}
         activity={bundle.activity ?? []}
         paymentSchedule={paymentSchedule}

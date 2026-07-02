@@ -709,6 +709,8 @@ export type InvoiceLineItem = {
   total: number;
 };
 
+export type InvoiceType = "standard" | "deposit" | "interim" | "final";
+
 export type InvoiceRecord = {
   id: string;
   business_id: string;
@@ -716,6 +718,7 @@ export type InvoiceRecord = {
   quote_id?: string | null;
   invoice_ref: string;
   status: InvoiceStatus;
+  invoice_type?: InvoiceType;
   issue_date: string;
   due_date: string;
   line_items: InvoiceLineItem[];
@@ -731,6 +734,46 @@ export type InvoiceRecord = {
   paid_at?: string | null;
   created_at?: string;
   updated_at?: string;
+};
+
+export type InvoicePaymentRecord = {
+  id: string;
+  invoice_id: string;
+  amount: number;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  paid_at?: string | null;
+  notes?: string | null;
+  created_at?: string;
+};
+
+export type JobExpenseCategory =
+  | "materials"
+  | "labour"
+  | "subcontractor"
+  | "plant_hire"
+  | "skip_hire"
+  | "scaffolding"
+  | "fuel"
+  | "waste"
+  | "other";
+
+export type JobExpense = {
+  id: string;
+  business_id?: string | null;
+  job_id: string;
+  category: JobExpenseCategory;
+  description: string;
+  supplier_name?: string | null;
+  amount: number;
+  vat_amount: number;
+  expense_date: string;
+  receipt_url?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  /** "job" = job_expenses table (editable), "diary" = logged via diary (read-only here) */
+  source?: "job" | "diary";
 };
 
 export type EmailLog = {

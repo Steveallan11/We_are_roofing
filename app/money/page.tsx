@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { MoneyTabs } from "@/components/money/MoneyTabs";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
-import { getJobs, getPricingRules } from "@/lib/data";
+import { getAllExpenses, getJobs, getPricingRules } from "@/lib/data";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 export default async function MoneyPage() {
-  const [jobs, pricingRules] = await Promise.all([getJobs(), getPricingRules()]);
+  const [jobs, pricingRules, expenses] = await Promise.all([getJobs(), getPricingRules(), getAllExpenses()]);
   const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
   const invoices = jobs.flatMap((job) => job.invoices ?? []);
@@ -22,7 +22,7 @@ export default async function MoneyPage() {
       wide
     >
       {!hasRateCard ? <RateCardNudge /> : null}
-      <MoneyTabs jobs={jobs} />
+      <MoneyTabs jobs={jobs} expenses={expenses} />
     </AppShell>
   );
 }
