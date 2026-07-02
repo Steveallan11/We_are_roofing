@@ -9,6 +9,7 @@ import { CustomerContactEditor } from "@/components/customers/customer-contact-e
 import { JobDocumentsSection } from "@/components/documents/JobDocumentsSection";
 import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
+import { AcceptQuoteButton } from "@/components/jobs/AcceptQuoteButton";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { JobMoneyTab } from "@/components/jobs/JobMoneyTab";
 import { JobTitleEditor } from "@/components/jobs/job-title-editor";
@@ -465,6 +466,12 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
           <span className="text-[var(--text-second)]">{getNextActionLabel(job)}</span>
         </div>
       </div>
+
+      {quote.status !== "Accepted" && quote.status !== "Declined" ? (
+        <div className="mt-4 border-t border-[var(--border)] pt-4">
+          <AcceptQuoteButton options={quote.options ?? []} quoteId={quote.id} />
+        </div>
+      ) : null}
 
       {quote.status === "Sent" && (
         <div className="mt-4 border-t border-[var(--border)] pt-4">
