@@ -159,13 +159,16 @@ export function SendQuoteModal({
           </div>
           <div className="mt-4 grid gap-4">
             <label className="block">
-              <span className="label">Greeting name</span>
+              <span className="label">Greeting / addressed to</span>
               <input
                 className="field mt-2"
                 onChange={(event) => setEmailGreetingName(event.target.value)}
-                placeholder="Mr and Mrs Smith"
+                placeholder="Brian & Clare or Mr & Mrs Linden"
                 value={emailGreetingName}
               />
+              <span className="mt-2 block text-xs leading-5 text-[var(--muted)]">
+                This controls the opening line, for example Hi Brian & Clare or Hi Mr & Mrs Linden.
+              </span>
             </label>
             <label className="block">
               <span className="label">Email subject</span>

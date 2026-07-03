@@ -13,7 +13,7 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { invoiceId } = await params;
-  const body = (await request.json().catch(() => ({}))) as { to_email?: string; test?: boolean };
+  const body = (await request.json().catch(() => ({}))) as { to_email?: string; email_customer_name?: string; test?: boolean };
   const isTestSend = body.test === true;
 
   if (!canPersistToSupabase()) {
@@ -39,6 +39,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const toEmail = body.to_email?.trim() || bundle.customer.email?.trim();
+  const emailCustomerName = body.email_customer_name?.trim() || bundle.customer.full_name;
   if (!toEmail) {
     return NextResponse.json(
       { ok: false, error: "NO_EMAIL", message: isTestSend ? "Enter an email address for the test send." : "No customer email is saved for this job yet." },
@@ -55,7 +56,8 @@ export async function POST(request: Request, { params }: Props) {
     to: toEmail,
     subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
     html: invoiceSentEmail({
-      customerName: bundle.customer.full_name,
+      customerName: emailCustomerName,
+      customerGreeting: emailCustomerName,
       invoiceRef: invoice.invoice_ref,
       invoiceUrl,
       jobTitle: bundle.job.job_title,

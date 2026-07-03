@@ -127,6 +127,7 @@ export async function POST(request: Request, { params }: Props) {
     subject: `${isTestSend ? "[TEST] " : ""}${subject}`,
     html: quoteSentEmail({
       customerName: emailCustomerName,
+      customerGreeting: emailCustomerName,
       messageBody,
       quote,
       quoteUrl,

@@ -16,6 +16,7 @@ type Props = {
 
 export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, customerName, customerEmail, onClose, onSent }: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
+  const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingMode, setSendingMode] = useState<"test" | "customer" | null>(null);
@@ -43,7 +44,7 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
     const response = await fetch(`/api/invoices/${invoiceId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: nextEmail, test: mode === "test" })
+      body: JSON.stringify({ to_email: nextEmail, email_customer_name: emailGreetingName.trim(), test: mode === "test" })
     });
 
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
@@ -109,6 +110,22 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
             type="email"
             value={email}
           />
+        </div>
+
+        <div className="mt-5">
+          <label className="label" htmlFor={`invoice-send-greeting-${invoiceId}`}>
+            Greeting / addressed to
+          </label>
+          <input
+            className="field mt-2"
+            id={`invoice-send-greeting-${invoiceId}`}
+            onChange={(event) => setEmailGreetingName(event.target.value)}
+            placeholder="Brian & Clare or Mr & Mrs Linden"
+            value={emailGreetingName}
+          />
+          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+            This controls the opening line, for example Hi Brian & Clare or Hi Mr & Mrs Linden.
+          </p>
         </div>
 
         <div className="mt-5 rounded-2xl border border-[var(--border)] bg-black/20 p-4">

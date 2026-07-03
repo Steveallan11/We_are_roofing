@@ -76,13 +76,14 @@ export function surveyConfirmationEmail(props: {
 
 export function quoteSentEmail(props: {
   customerName: string;
+  customerGreeting?: string | null;
   messageBody?: string | null;
   quote: QuoteRecord;
   quoteUrl: string;
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
-  const helloName = greetingName(props.customerName);
+  const helloName = props.customerGreeting?.trim() || greetingName(props.customerName);
   const cleanMessageBody = cleanCustomerEmailBody(props.messageBody);
   const messageHtml = cleanMessageBody
     ? paragraphsToHtml(cleanMessageBody)
@@ -130,6 +131,7 @@ function escapeHtml(value: string) {
 
 export function invoiceSentEmail(props: {
   customerName: string;
+  customerGreeting?: string | null;
   invoiceRef: string;
   invoiceUrl: string;
   jobTitle: string;
@@ -144,7 +146,7 @@ export function invoiceSentEmail(props: {
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
-  const helloName = greetingName(props.customerName);
+  const helloName = props.customerGreeting?.trim() || greetingName(props.customerName);
   const isDeposit = props.invoiceType === "deposit";
   const introCopy = isDeposit
     ? `
