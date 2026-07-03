@@ -191,9 +191,15 @@ export function invoiceSentEmail(props: {
         </div>
       </div>
       <p style="text-align:center;margin:26px 0">
-        <a href="${props.invoiceUrl}" style="background:#D4AF37;color:#000;padding:12px 22px;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none">View invoice</a>
+        <a href="${props.invoiceUrl}" style="background:#D4AF37;color:#000;padding:12px 22px;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none">Open invoice</a>
       </p>
       <p style="font-size:13px;color:#555;line-height:1.6">If you have any questions about this invoice, just reply to this email and we will help.</p>
+      <div style="background:#0a0a0a;border-radius:8px;padding:18px 20px;margin:24px 0 0;text-align:center">
+        <div style="font-size:13px;color:#f4efe2;line-height:1.6;margin-bottom:14px">
+          Please open the invoice using the button below to view the full document and payment details.
+        </div>
+        <a href="${props.invoiceUrl}" style="background:#D4AF37;color:#000;padding:13px 24px;border-radius:7px;font-size:13px;font-weight:700;text-decoration:none;display:inline-block">Open invoice</a>
+      </div>
     `,
     { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
   );

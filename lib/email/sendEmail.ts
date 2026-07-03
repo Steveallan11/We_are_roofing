@@ -101,7 +101,7 @@ export function getEmailSenderConfig(toEmail?: string | null) {
   const fromEmail = usingGmail
     ? process.env.GMAIL_SMTP_USER || "werroofinguk@gmail.com"
     : process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-  const fromName = process.env.RESEND_FROM_NAME || "Andy @ We Are Roofing";
+  const fromName = process.env.RESEND_FROM_NAME || "We Are Roofing UK Ltd";
   const replyTo = process.env.RESEND_REPLY_TO_EMAIL || process.env.MVP_ADMIN_EMAIL || process.env.NEXT_PUBLIC_MVP_ADMIN_EMAIL || "werroofinguk@gmail.com";
   const bcc = process.env.RESEND_BCC_EMAIL || replyTo;
 
@@ -203,7 +203,7 @@ async function logEmail({
       direction: "outbound",
       channel: "email",
       sender_type: "admin",
-      sender_name: "Andy @ We Are Roofing",
+      sender_name: "We Are Roofing UK Ltd",
       sender_email: "werroofinguk@gmail.com",
       body: text || html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
       html_body: html,

@@ -53,7 +53,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const emailResult = await sendEmail({
     to: toEmail,
-    subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing`,
+    subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
     html: invoiceSentEmail({
       customerName: bundle.customer.full_name,
       invoiceRef: invoice.invoice_ref,
@@ -70,7 +70,7 @@ export async function POST(request: Request, { params }: Props) {
       businessPhone: bundle.business.phone,
       businessEmail: bundle.business.email
     }),
-    text: `Your invoice ${invoice.invoice_ref} is ready. View it here: ${invoiceUrl}`,
+    text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Open it here: ${invoiceUrl}`,
     jobId: bundle.job.id,
     templateType: isTestSend ? "invoice_test" : "invoice_sent",
     log: !isTestSend
