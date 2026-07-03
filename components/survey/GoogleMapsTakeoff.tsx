@@ -48,6 +48,8 @@ type QuoteSectionStatus = {
   measurementLm: number;
 };
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
 type Props = {
   surveyId: string;
   jobId: string;
@@ -99,6 +101,9 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const drawingRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const featureClickRef = useRef<google.maps.MapsEventListener | null>(null);
   const loadedExistingRef = useRef(false);
+  const autosaveReadyRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedSignatureRef = useRef("");
   const activeLineTypeRef = useRef("Roof Work Section");
 
   const [sections, setSections] = useState<DrawnSection[]>([]);
@@ -116,6 +121,9 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const [selectedShape, setSelectedShape] = useState<{ kind: "section" | "line" | "feature"; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [applying, setApplying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -570,27 +578,114 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
     setMessage(`Imported ${shapes.length} KML/KMZ shape${shapes.length === 1 ? "" : "s"}.`);
   }
 
+  const savePayload = useMemo(
+    () => ({
+      surveyId,
+      jobId,
+      notes: surveyNotes,
+      sections: serialiseSections(sections),
+      lines: serialiseLines(lines),
+      features: serialiseFeatures(features)
+    }),
+    [features, jobId, lines, sections, surveyId, surveyNotes]
+  );
+  const saveSignature = useMemo(() => JSON.stringify(savePayload), [savePayload]);
+
+  const saveTakeoff = useCallback(
+    async (mode: "manual" | "auto", payload = savePayload, signature = saveSignature) => {
+      setSaving(true);
+      setSaveState("saving");
+      setError(null);
+      if (mode === "manual") setMessage(null);
+      try {
+        const response = await fetch("/api/survey/roof-survey/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const result = (await response.json().catch(() => null)) as { saved?: boolean; error?: string } | null;
+        if (!response.ok || !result?.saved) throw new Error(result?.error || "Unable to save the map takeoff.");
+        lastSavedSignatureRef.current = signature;
+        setHasUnsavedChanges(false);
+        setSaveState("saved");
+        setLastSavedAt(new Date());
+        if (mode === "manual") setMessage("Roof takeoff saved.");
+        return true;
+      } catch (saveError) {
+        setSaveState("error");
+        setHasUnsavedChanges(true);
+        setError(saveError instanceof Error ? saveError.message : "Unable to save the map takeoff.");
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [savePayload, saveSignature]
+  );
+
   async function handleSave() {
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/survey/roof-survey/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ surveyId, jobId, notes: surveyNotes, sections: serialiseSections(sections), lines: serialiseLines(lines), features: serialiseFeatures(features) })
-      });
-      const result = (await response.json().catch(() => null)) as { saved?: boolean; error?: string } | null;
-      if (!response.ok || !result?.saved) throw new Error(result?.error || "Unable to save the map takeoff.");
-      setMessage("Roof takeoff saved.");
-      return true;
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save the map takeoff.");
-      return false;
-    } finally {
-      setSaving(false);
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
     }
+    return saveTakeoff("manual");
   }
+
+  useEffect(() => {
+    if (loading || autosaveReadyRef.current) return;
+    const timer = setTimeout(() => {
+      autosaveReadyRef.current = true;
+      lastSavedSignatureRef.current = saveSignature;
+      setHasUnsavedChanges(false);
+      setSaveState("saved");
+      setLastSavedAt(new Date());
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [loading, saveSignature]);
+
+  useEffect(() => {
+    if (!autosaveReadyRef.current) return;
+
+    if (saveSignature === lastSavedSignatureRef.current) {
+      setHasUnsavedChanges(false);
+      setSaveState((current) => (current === "saving" ? current : "saved"));
+      return;
+    }
+
+    setHasUnsavedChanges(true);
+    setSaveState((current) => (current === "saving" ? current : "idle"));
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveTakeoff("auto", savePayload, saveSignature);
+    }, 3000);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [savePayload, saveSignature, saveTakeoff]);
+
+  useEffect(() => {
+    const shouldWarn = hasUnsavedChanges || saveState === "saving";
+    if (!shouldWarn) return;
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges, saveState]);
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
 
   async function handleApplyToQuote() {
     setApplying(true);
@@ -764,8 +859,9 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
                 <Metric label="Linear" value={`${totalLength.toFixed(1)} lm`} />
                 <Metric label="Items" value={`${features.length} no.`} />
               </div>
+              <SaveStatus state={saveState} hasUnsavedChanges={hasUnsavedChanges} lastSavedAt={lastSavedAt} />
               <button className="button-primary mt-4 w-full" disabled={saving} onClick={() => void handleSave()} type="button">
-                {saving ? "Saving..." : "Save Survey"}
+                {saving ? "Saving..." : hasUnsavedChanges ? "Save Now" : "Saved"}
               </button>
               <button className="button-secondary mt-2 w-full !border-[var(--success)]/40 !bg-[var(--success-bg)] !text-[#8df0b7]" disabled={saving || applying || (sections.length === 0 && lines.length === 0 && features.length === 0)} onClick={() => void handleApplyToQuote()} type="button">
                 {applying ? "Creating Quote..." : "Save + Create Quote Draft"}
@@ -1843,6 +1939,38 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
       <p className="text-[0.65rem] uppercase tracking-[0.18em] text-[var(--muted)]">{label}</p>
       <p className="mt-1 text-lg font-bold text-[var(--gold)]">{value}</p>
+    </div>
+  );
+}
+
+function SaveStatus({ state, hasUnsavedChanges, lastSavedAt }: { state: SaveState; hasUnsavedChanges: boolean; lastSavedAt: Date | null }) {
+  const label =
+    state === "saving"
+      ? "Autosaving..."
+      : state === "error"
+        ? "Autosave failed"
+        : hasUnsavedChanges
+          ? "Unsaved changes"
+          : lastSavedAt
+            ? `Saved ${lastSavedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+            : "Saved";
+  const tone =
+    state === "error"
+      ? "border-[#ef4444]/35 bg-[#ef4444]/10 text-[#ffb4ad]"
+      : state === "saving" || hasUnsavedChanges
+        ? "border-[#f59e0b]/35 bg-[#f59e0b]/10 text-[#ffd38b]"
+        : "border-[#10b981]/35 bg-[#10b981]/10 text-[#8df0b7]";
+
+  return (
+    <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${tone}`}>
+      {label}
+      <span className="block pt-1 text-[0.68rem] font-normal opacity-80">
+        {state === "error"
+          ? "Use Save Now before leaving this page."
+          : hasUnsavedChanges || state === "saving"
+            ? "Keep this page open while changes save."
+            : "Your latest takeoff is stored."}
+      </span>
     </div>
   );
 }
