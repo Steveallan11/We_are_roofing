@@ -61,9 +61,10 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(6,6,6,0.84)] px-4 py-6" role="dialog" aria-modal="true">
-      <div className="card w-full max-w-xl p-6">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-[60] flex min-h-0 items-stretch justify-center bg-[rgba(6,6,6,0.84)] p-0 md:items-center md:px-4 md:py-6" role="dialog" aria-modal="true">
+      <div className="flex h-[100dvh] w-full max-w-xl flex-col overflow-hidden border border-[var(--border)] bg-[var(--surface)] shadow-2xl md:h-[min(88dvh,780px)] md:rounded-[1.5rem]">
+        <div className="shrink-0 border-b border-[var(--border)] bg-black/25 p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4">
           <div>
             <p className="section-kicker text-[0.65rem] uppercase">Send Invoice</p>
             <h3 className="mt-2 font-condensed text-3xl text-white">{invoiceRef}</h3>
@@ -74,8 +75,10 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
           <button className="button-ghost !px-3 !py-2 text-sm" onClick={onClose} type="button">
             Close
           </button>
+          </div>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 overscroll-contain md:p-6">
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-[var(--border)] bg-black/20 p-3">
             <p className="label">Invoice Ref</p>
@@ -140,8 +143,10 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
 
         {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
         {success ? <p className="mt-4 text-sm text-[#7ce3a6]">{success}</p> : null}
+        </div>
 
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
+        <div className="shrink-0 border-t border-[var(--border)] bg-black/35 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-5">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button className="button-ghost" disabled={sendingMode !== null} onClick={onClose} type="button">
             Cancel
           </button>
@@ -151,6 +156,7 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
           <button className="button-primary" disabled={sendingMode !== null} onClick={() => sendInvoice("customer")} type="button">
             {sendingMode === "customer" ? "Sending..." : "Send To Customer"}
           </button>
+          </div>
         </div>
       </div>
     </div>
