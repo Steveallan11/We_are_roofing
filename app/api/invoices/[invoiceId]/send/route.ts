@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { getJobBundle } from "@/lib/data";
+import { getInvoicePdfHref } from "@/lib/documents";
 import { invoiceSentEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
+import { appendInvoiceFileToken } from "@/lib/invoices/publicLink";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -49,7 +51,8 @@ export async function POST(request: Request, { params }: Props) {
 
   const artifacts = await persistInvoiceArtifacts(supabase, bundle, invoice);
   const appUrl = getAppUrl();
-  const invoiceUrl = toAbsoluteUrl(artifacts.pdfUrl ?? `/jobs/${bundle.job.id}/invoice/${invoiceId}/preview`, appUrl);
+  const rawInvoiceUrl = toAbsoluteUrl(artifacts.pdfUrl ?? getInvoicePdfHref(invoiceId), appUrl);
+  const invoiceUrl = appendInvoiceFileToken(rawInvoiceUrl, invoiceId);
   const dueDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(invoice.due_date));
 
   const emailResult = await sendEmail({

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { getInvoicePdfHref } from "@/lib/documents";
+import { verifyInvoiceFileToken } from "@/lib/invoices/publicLink";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Props = {
@@ -8,13 +9,21 @@ type Props = {
 };
 
 const DEFAULT_SIGNED_URL_TTL_SECONDS = 60 * 60;
+const PUBLIC_LEGACY_STATUSES = new Set(["Sent", "Part Paid", "Paid", "Overdue"]);
 
-export async function GET(_request: Request, { params }: Props) {
-  const auth = await requireAdminApi();
-  if (!auth.ok) return auth.response;
-
+export async function GET(request: Request, { params }: Props) {
   const { invoiceId } = await params;
   const supabase = createSupabaseAdminClient();
+  const token = new URL(request.url).searchParams.get("token");
+  const { data: invoice } = await supabase.from("invoices").select("pdf_url,status").eq("id", invoiceId).maybeSingle();
+  const hasPublicToken = verifyInvoiceFileToken(invoiceId, token);
+  const hasLegacyPublicAccess = !token && invoice?.status && PUBLIC_LEGACY_STATUSES.has(String(invoice.status));
+
+  if (!hasPublicToken && !hasLegacyPublicAccess) {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
+  }
+
   const { data: document, error } = await supabase
     .from("job_documents")
     .select("*")
@@ -36,7 +45,6 @@ export async function GET(_request: Request, { params }: Props) {
     return NextResponse.redirect(signed.data.signedUrl);
   }
 
-  const { data: invoice } = await supabase.from("invoices").select("pdf_url").eq("id", invoiceId).maybeSingle();
   if (invoice?.pdf_url && invoice.pdf_url !== getInvoicePdfHref(invoiceId)) {
     return NextResponse.redirect(invoice.pdf_url);
   }
