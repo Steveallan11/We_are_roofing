@@ -120,12 +120,23 @@ export function MaterialsEditor({ jobId, quoteId, initialMaterials, suppliers }:
           <p className="section-kicker text-[0.65rem] uppercase">Materials Tracker</p>
           <p className="mt-2 text-sm text-[var(--muted)]">Confirm what is needed, assign suppliers, and keep ordering notes in one place.</p>
         </div>
-        <button className="button-primary" disabled={isPending} onClick={addMaterial} type="button">
-          Add Material
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <a className="button-secondary" href={`/api/jobs/${jobId}/materials/export`}>
+            Export Supplier CSV
+          </a>
+          <a className="button-ghost" href={`/api/jobs/${jobId}/materials/export?include_prices=true`}>
+            Export With Estimates
+          </a>
+          <button className="button-primary" disabled={isPending} onClick={addMaterial} type="button">
+            Add Material
+          </button>
+        </div>
       </div>
 
       <div className="border-b border-[var(--border)] bg-black/10 p-5">
+        <p className="mb-4 rounded-2xl border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-4 py-3 text-sm leading-6 text-[var(--text)]">
+          Supplier CSV hides your estimated prices and gives suppliers blank pricing columns to complete. Use Export With Estimates only for your own internal checking.
+        </p>
         <div className="grid gap-3 md:grid-cols-4">
           <SummaryTile label="Need to order" value={String(requiredCount)} hint="Definitely required" />
           <SummaryTile label="Check first" value={String(checkCount)} hint="May be needed or site check" />
