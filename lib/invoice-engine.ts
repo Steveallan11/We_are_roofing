@@ -549,7 +549,18 @@ function escapeHtml(value: string) {
 }
 
 function escapePdf(value: string) {
-  return value.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+  return Array.from(value)
+    .map((char) => {
+      if (char === "\\") return "\\\\";
+      if (char === "(") return "\\(";
+      if (char === ")") return "\\)";
+      if (char === "£") return "\\243";
+      if (char === "‘" || char === "’") return "'";
+      if (char === "“" || char === "”") return '"';
+      if (char === "–" || char === "—" || char === "•" || char === "·") return "-";
+      return char.charCodeAt(0) > 255 ? "-" : char;
+    })
+    .join("");
 }
 
 function formatCurrency(value: number) {
