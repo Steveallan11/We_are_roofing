@@ -299,8 +299,15 @@ export async function POST(request: Request, { params }: Props) {
 }
 
 function getAppUrl() {
-  const raw = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "https://we-are-roofing-one.vercel.app").replace(/\/$/, "");
-  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const fallback = "https://we-are-roofing-one.vercel.app";
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || fallback).replace(/\/$/, "");
+  const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host === "weareroofing.co.uk" ? fallback : url;
+  } catch {
+    return fallback;
+  }
 }
 
 async function buildDocumentAttachments(
