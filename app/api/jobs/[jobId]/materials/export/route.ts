@@ -9,10 +9,12 @@ type Props = {
 
 export async function GET(request: Request, { params }: Props) {
   const { jobId } = await params;
-  const includePrices = new URL(request.url).searchParams.get("include_prices") === "true";
+  const searchParams = new URL(request.url).searchParams;
+  const includePrices = searchParams.get("include_prices") === "true";
+  const preview = searchParams.get("preview") === "true";
 
   if (!canPersistToSupabase()) {
-    return csvResponse(buildCsv({ job: null, customer: null, materials: [], includePrices }), "materials-list.csv");
+    return csvResponse(buildCsv({ job: null, customer: null, materials: [], includePrices }), "materials-list.csv", preview);
   }
 
   const auth = await requireAdminApi();
@@ -42,7 +44,7 @@ export async function GET(request: Request, { params }: Props) {
 
   const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
   const filename = `${safeFilename(job.job_ref || job.job_title || "job")}-${includePrices ? "materials-internal-estimates" : "material-pricing-request"}.csv`;
-  return csvResponse(buildCsv({ job, customer, materials: materials ?? [], includePrices }), filename);
+  return csvResponse(buildCsv({ job, customer, materials: materials ?? [], includePrices }), filename, preview);
 }
 
 function buildCsv({
@@ -118,11 +120,13 @@ function formatMoney(value: number | string | null) {
   return Number.isFinite(amount) ? amount.toFixed(2) : "";
 }
 
-function csvResponse(csv: string, filename: string) {
+function csvResponse(csv: string, filename: string, preview: boolean) {
   return new NextResponse(`\uFEFF${csv}`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`
+      "Content-Disposition": `${preview ? "inline" : "attachment"}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
     }
   });
 }

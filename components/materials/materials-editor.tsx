@@ -107,6 +107,29 @@ export function MaterialsEditor({ jobId, quoteId, initialMaterials, suppliers }:
     setMaterials((current) => current.filter((material) => material.id !== id));
   }
 
+  async function downloadExport(includePrices: boolean) {
+    setError(null);
+    const url = `/api/jobs/${jobId}/materials/export${includePrices ? "?include_prices=true" : ""}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(result?.error || "Material export could not be downloaded.");
+      return;
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = getFilenameFromDisposition(disposition) || `materials-${includePrices ? "internal-estimates" : "supplier-pricing-request"}.csv`;
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
+
   const materialTotal = materials.reduce((sum, material) => sum + getMaterialTotal(material), 0);
   const requiredCount = materials.filter((material) => material.required_status === "Definitely Needed").length;
   const checkCount = materials.filter((material) => material.required_status === "May Be Needed" || material.required_status === "Check On Site").length;
@@ -121,11 +144,14 @@ export function MaterialsEditor({ jobId, quoteId, initialMaterials, suppliers }:
           <p className="mt-2 text-sm text-[var(--muted)]">Confirm what is needed, assign suppliers, and keep ordering notes in one place.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a className="button-secondary" href={`/api/jobs/${jobId}/materials/export`}>
+          <button className="button-secondary" onClick={() => void downloadExport(false)} type="button">
             Export Supplier CSV
-          </a>
-          <a className="button-ghost" href={`/api/jobs/${jobId}/materials/export?include_prices=true`}>
+          </button>
+          <button className="button-ghost" onClick={() => void downloadExport(true)} type="button">
             Export With Estimates
+          </button>
+          <a className="button-ghost" href={`/api/jobs/${jobId}/materials/export?preview=true`} target="_blank" rel="noreferrer">
+            Preview CSV
           </a>
           <button className="button-primary" disabled={isPending} onClick={addMaterial} type="button">
             Add Material
@@ -327,4 +353,11 @@ function SummaryTile({ label, value, hint }: { label: string; value: string; hin
 
 function getMaterialTotal(material: MaterialRecord) {
   return Number(material.total_cost ?? Number(material.quantity || 0) * Number(material.unit_cost || 0));
+}
+
+function getFilenameFromDisposition(disposition: string) {
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1].replaceAll('"', ""));
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] ?? null;
 }
