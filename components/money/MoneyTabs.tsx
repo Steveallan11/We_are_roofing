@@ -3,15 +3,17 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useState } from "react";
-import type { Job, Customer, QuoteRecord, JobDocumentRecord, InvoiceRecord, JobExpense } from "@/lib/types";
+import type { Job, Customer, QuoteRecord, JobDocumentRecord, InvoiceRecord, JobExpense, ReceiptInboxRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
+import { ReceiptInbox } from "@/components/money/ReceiptInbox";
 
 type ExpenseWithJob = JobExpense & { job?: { id: string; job_title: string; job_ref?: string | null } | null };
 
 interface MoneyTabsProps {
   jobs: Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null; documents?: JobDocumentRecord[]; invoices?: InvoiceRecord[] }>;
   expenses?: ExpenseWithJob[];
+  receiptInbox?: ReceiptInboxRecord[];
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
@@ -26,7 +28,7 @@ const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   other: "Other"
 };
 
-export function MoneyTabs({ jobs, expenses = [] }: MoneyTabsProps) {
+export function MoneyTabs({ jobs, expenses = [], receiptInbox = [] }: MoneyTabsProps) {
   const [activeTab, setActiveTab] = useState<"revenue" | "expenses" | "invoices" | "forecast">("revenue");
 
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
@@ -158,7 +160,7 @@ export function MoneyTabs({ jobs, expenses = [] }: MoneyTabsProps) {
           </div>
         )}
 
-        {activeTab === "expenses" && <ExpensesTab expenses={expenses} />}
+        {activeTab === "expenses" && <ExpensesTab expenses={expenses} jobs={jobs} receiptInbox={receiptInbox} />}
 
         {activeTab === "invoices" && (
           <div className="space-y-4">
@@ -257,7 +259,15 @@ export function MoneyTabs({ jobs, expenses = [] }: MoneyTabsProps) {
   );
 }
 
-function ExpensesTab({ expenses }: { expenses: ExpenseWithJob[] }) {
+function ExpensesTab({
+  expenses,
+  jobs,
+  receiptInbox
+}: {
+  expenses: ExpenseWithJob[];
+  jobs: MoneyTabsProps["jobs"];
+  receiptInbox: ReceiptInboxRecord[];
+}) {
   const now = new Date();
   const monthKey = now.toISOString().slice(0, 7);
   const totalAll = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
@@ -272,18 +282,18 @@ function ExpensesTab({ expenses }: { expenses: ExpenseWithJob[] }) {
   }
   const topCategories = [...byCategory.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-  if (expenses.length === 0) {
-    return (
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
-        <p className="text-[var(--text-muted)]">
-          No expenses logged yet. Open a job and use its <span className="font-semibold text-[var(--text)]">Money</span> tab to log materials, labour, hire, and other costs.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
+      <ReceiptInbox initialReceipts={receiptInbox} jobs={jobs} />
+
+      {expenses.length === 0 ? (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+          <p className="text-[var(--text-muted)]">
+            No expenses logged yet. Add a receipt above, or open a job and use its <span className="font-semibold text-[var(--text)]">Money</span> tab.
+          </p>
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">This Month</p>
@@ -342,6 +352,8 @@ function ExpensesTab({ expenses }: { expenses: ExpenseWithJob[] }) {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

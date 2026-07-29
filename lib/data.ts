@@ -32,6 +32,7 @@ import type {
   LabourEntryRecord,
   PricingRuleRecord,
   QuoteRecord,
+  ReceiptInboxRecord,
   PaymentScheduleRecord,
   PaymentStageRecord,
   ConversationRecord,
@@ -603,6 +604,30 @@ export async function getAllExpenses(): Promise<Array<JobExpense & { job?: { id:
   });
 
   return [...expenses, ...diaryExpenses].sort((a, b) => (b.expense_date || "").localeCompare(a.expense_date || ""));
+}
+
+export async function getReceiptInbox(): Promise<ReceiptInboxRecord[]> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  await supabase
+    .from("receipt_inbox")
+    .update({ status: "pending", updated_at: new Date().toISOString() })
+    .eq("status", "processing")
+    .lt("updated_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+  const result = await supabase
+    .from("receipt_inbox")
+    .select("*")
+    .in("status", ["pending", "processing"])
+    .order("created_at", { ascending: false });
+
+  if (result.error) {
+    console.warn("Receipt inbox could not be loaded:", result.error.message);
+    return [];
+  }
+
+  return (result.data as ReceiptInboxRecord[] | null) ?? [];
 }
 
 function mapDiaryExpenses(entries: Array<Record<string, unknown>>): JobExpense[] {

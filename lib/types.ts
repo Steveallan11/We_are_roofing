@@ -785,6 +785,29 @@ export type JobExpense = {
   source?: "job" | "diary";
 };
 
+export type ReceiptInboxRecord = {
+  id: string;
+  business_id: string;
+  status: "pending" | "processing" | "assigned";
+  display_name: string;
+  storage_bucket: string;
+  storage_path: string;
+  mime_type?: string | null;
+  file_size?: number | null;
+  supplier_name?: string | null;
+  description?: string | null;
+  category: JobExpenseCategory;
+  amount?: number | null;
+  vat_amount: number;
+  expense_date: string;
+  notes?: string | null;
+  assigned_job_id?: string | null;
+  assigned_expense_id?: string | null;
+  assigned_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+};
+
 export type EmailLog = {
   id: string;
   job_id?: string | null;
