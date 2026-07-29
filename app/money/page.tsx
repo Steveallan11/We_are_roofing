@@ -1,16 +1,17 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { MoneyTabs } from "@/components/money/MoneyTabs";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
-import { getAllExpenses, getJobs, getPricingRules, getReceiptInbox } from "@/lib/data";
+import { getAllExpenses, getJobFinancialSnapshots, getJobs, getPricingRules, getReceiptInbox } from "@/lib/data";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 export default async function MoneyPage() {
-  const [jobs, pricingRules, expenses, receiptInbox] = await Promise.all([
+  const [jobs, pricingRules, expenses, receiptInbox, jobFinancials] = await Promise.all([
     getJobs(),
     getPricingRules(),
     getAllExpenses(),
-    getReceiptInbox()
+    getReceiptInbox(),
+    getJobFinancialSnapshots()
   ]);
   const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
@@ -27,7 +28,7 @@ export default async function MoneyPage() {
       wide
     >
       {!hasRateCard ? <RateCardNudge /> : null}
-      <MoneyTabs jobs={jobs} expenses={expenses} receiptInbox={receiptInbox} />
+      <MoneyTabs jobs={jobs} expenses={expenses} receiptInbox={receiptInbox} jobFinancials={jobFinancials} />
     </AppShell>
   );
 }

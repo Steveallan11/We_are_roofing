@@ -3,7 +3,16 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useState } from "react";
-import type { Job, Customer, QuoteRecord, JobDocumentRecord, InvoiceRecord, JobExpense, ReceiptInboxRecord } from "@/lib/types";
+import type {
+  Job,
+  Customer,
+  QuoteRecord,
+  JobDocumentRecord,
+  InvoiceRecord,
+  JobExpense,
+  JobFinancialSnapshot,
+  ReceiptInboxRecord
+} from "@/lib/types";
 import { currency } from "@/lib/utils";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { ReceiptInbox } from "@/components/money/ReceiptInbox";
@@ -14,6 +23,7 @@ interface MoneyTabsProps {
   jobs: Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null; documents?: JobDocumentRecord[]; invoices?: InvoiceRecord[] }>;
   expenses?: ExpenseWithJob[];
   receiptInbox?: ReceiptInboxRecord[];
+  jobFinancials?: JobFinancialSnapshot[];
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
@@ -28,8 +38,8 @@ const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   other: "Other"
 };
 
-export function MoneyTabs({ jobs, expenses = [], receiptInbox = [] }: MoneyTabsProps) {
-  const [activeTab, setActiveTab] = useState<"revenue" | "expenses" | "invoices" | "forecast">("revenue");
+export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancials = [] }: MoneyTabsProps) {
+  const [activeTab, setActiveTab] = useState<"revenue" | "jobProfit" | "expenses" | "invoices" | "forecast">("revenue");
 
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
   const invoicesWithJobs = jobs.flatMap((job) =>
@@ -60,6 +70,7 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [] }: MoneyTabsP
 
   const tabs = [
     { id: "revenue" as const, label: "Revenue" },
+    { id: "jobProfit" as const, label: "Job Profit" },
     { id: "expenses" as const, label: "Expenses" },
     { id: "invoices" as const, label: "Invoices" },
     { id: "forecast" as const, label: "Forecast" },
@@ -160,6 +171,8 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [] }: MoneyTabsP
           </div>
         )}
 
+        {activeTab === "jobProfit" && <JobProfitTab jobs={jobs} expenses={expenses} jobFinancials={jobFinancials} />}
+
         {activeTab === "expenses" && <ExpensesTab expenses={expenses} jobs={jobs} receiptInbox={receiptInbox} />}
 
         {activeTab === "invoices" && (
@@ -255,6 +268,298 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [] }: MoneyTabsP
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+type JobProfitRow = {
+  job: MoneyTabsProps["jobs"][number];
+  quoteNet: number;
+  invoiced: number;
+  paid: number;
+  outstanding: number;
+  materials: number;
+  materialsRecorded: number;
+  materialsEstimated: boolean;
+  labour: number;
+  labourRecorded: number;
+  labourEstimated: boolean;
+  otherCosts: number;
+  costsNet: number;
+  recordedCosts: number;
+  costVat: number;
+  cisHeld: number;
+  profit: number | null;
+  cashPosition: number;
+};
+
+function JobProfitTab({
+  jobs,
+  expenses,
+  jobFinancials
+}: {
+  jobs: MoneyTabsProps["jobs"];
+  expenses: ExpenseWithJob[];
+  jobFinancials: JobFinancialSnapshot[];
+}) {
+  const snapshotsByJob = new Map(jobFinancials.map((snapshot) => [snapshot.job_id, snapshot]));
+  const expensesByJob = new Map<string, ExpenseWithJob[]>();
+  for (const expense of expenses) {
+    const list = expensesByJob.get(expense.job_id) ?? [];
+    list.push(expense);
+    expensesByJob.set(expense.job_id, list);
+  }
+
+  const rows: JobProfitRow[] = jobs
+    .map((job) => {
+      const jobExpenses = expensesByJob.get(job.id) ?? [];
+      const snapshot = snapshotsByJob.get(job.id);
+      const liveInvoices = (job.invoices ?? []).filter((invoice) => invoice.status !== "Void");
+      const sumExpenses = (categories: string[], field: "gross" | "vat" | "net") =>
+        jobExpenses
+          .filter((expense) => categories.includes(expense.category))
+          .reduce((sum, expense) => {
+            const gross = Number(expense.amount ?? 0);
+            const vat = Number(expense.vat_amount ?? 0);
+            if (field === "gross") return sum + gross;
+            if (field === "vat") return sum + vat;
+            return sum + Math.max(0, gross - vat);
+          }, 0);
+
+      const materialExpenseGross = sumExpenses(["materials"], "gross");
+      const materialExpenseNet = sumExpenses(["materials"], "net");
+      const labourExpenseGross = sumExpenses(["labour", "subcontractor"], "gross");
+      const labourExpenseNet = sumExpenses(["labour", "subcontractor"], "net");
+      const otherCategories = ["plant_hire", "skip_hire", "scaffolding", "fuel", "waste", "other"];
+      const otherGross = sumExpenses(otherCategories, "gross");
+      const otherNet = sumExpenses(otherCategories, "net");
+      const otherVat = sumExpenses(otherCategories, "vat");
+      const materialHasActuals = Number(snapshot?.material_actual_gross ?? 0) > 0;
+      const materialHasReceipts = materialExpenseGross > 0;
+      const materials = materialHasActuals
+        ? Number(snapshot?.material_resolved_net ?? 0)
+        : materialHasReceipts
+          ? materialExpenseNet
+          : Number(snapshot?.material_resolved_net ?? 0);
+      const materialsRecorded = materialHasActuals
+        ? Number(snapshot?.material_actual_gross ?? 0)
+        : materialExpenseGross;
+      const labourHasReceipts = labourExpenseGross > 0;
+      const labourHasActuals = Number(snapshot?.labour_actual_net ?? 0) > 0;
+      const labour = labourHasReceipts
+        ? labourExpenseNet
+        : Number(snapshot?.labour_resolved_net ?? 0);
+      const labourRecorded = labourHasReceipts
+        ? labourExpenseGross
+        : Number(snapshot?.labour_actual_net ?? 0);
+      const materialVat = materialHasActuals
+        ? Number(snapshot?.material_actual_vat ?? 0)
+        : materialHasReceipts
+          ? sumExpenses(["materials"], "vat")
+          : 0;
+      const labourVat = labourHasReceipts ? sumExpenses(["labour", "subcontractor"], "vat") : 0;
+      const quoteNet = Number(job.quote?.subtotal ?? 0);
+      const invoiced = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0);
+      const paid = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.amount_paid ?? 0), 0);
+      const outstanding = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+      const costsNet = materials + labour + otherNet;
+      const recordedCosts = materialsRecorded + labourRecorded + otherGross;
+      const costVat = materialVat + labourVat + otherVat;
+      const cisHeld = jobExpenses.reduce((sum, expense) => sum + Number(expense.cis_deduction ?? 0), 0);
+
+      return {
+        job,
+        quoteNet,
+        invoiced,
+        paid,
+        outstanding,
+        materials,
+        materialsRecorded,
+        materialsEstimated: !materialHasReceipts && Number(snapshot?.material_estimated_count ?? 0) > 0,
+        labour,
+        labourRecorded,
+        labourEstimated: !labourHasReceipts && Number(snapshot?.labour_estimated_count ?? 0) > 0,
+        otherCosts: otherNet,
+        costsNet,
+        recordedCosts,
+        costVat,
+        cisHeld,
+        profit: quoteNet > 0 ? quoteNet - costsNet : null,
+        cashPosition: paid - Math.max(0, recordedCosts - cisHeld)
+      };
+    })
+    .filter((row) => row.quoteNet > 0 || row.invoiced > 0 || row.costsNet > 0 || row.recordedCosts > 0);
+
+  const totalPaid = rows.reduce((sum, row) => sum + row.paid, 0);
+  const totalOutstanding = rows.reduce((sum, row) => sum + row.outstanding, 0);
+  const totalRecordedCosts = rows.reduce((sum, row) => sum + row.recordedCosts, 0);
+  const totalProfit = rows.reduce((sum, row) => sum + (row.profit ?? 0), 0);
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+        <p className="font-semibold text-[var(--text)]">No job financials yet</p>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Quotes, invoices, labour, materials, and assigned receipts will appear here by job.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-[var(--gold)]/40 bg-[var(--surface)] p-4">
+        <p className="text-sm font-semibold text-[var(--text)]">A complete view of money in and costs out</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+          Paid in comes from invoice payments. Recorded costs come from receipts, expenses, material actuals, and labour actuals.
+          Estimates are marked and never added on top of a matching recorded expense.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MoneySummaryCard label="Paid in" value={totalPaid} tone="positive" />
+        <MoneySummaryCard label="Still due" value={totalOutstanding} tone="attention" />
+        <MoneySummaryCard label="Recorded costs" value={totalRecordedCosts} tone="negative" />
+        <MoneySummaryCard label="Est. profit" value={totalProfit} tone={totalProfit >= 0 ? "positive" : "negative"} />
+      </div>
+
+      <div className="space-y-4">
+        {rows.map((row) => {
+          const margin = row.profit !== null && row.quoteNet > 0 ? (row.profit / row.quoteNet) * 100 : null;
+          const costPercent = row.quoteNet > 0 ? Math.min(100, Math.max(0, (row.costsNet / row.quoteNet) * 100)) : 0;
+          return (
+            <article key={row.job.id} className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+              <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--surface-raised)] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-[var(--text)]">{row.job.job_ref || row.job.job_title}</p>
+                    <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
+                      {row.job.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    {row.job.customer?.full_name || "No customer"} · {row.job.job_title}
+                  </p>
+                </div>
+                <Link
+                  href={`/jobs/${row.job.id}?tab=money` as Route}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--gold)] px-4 text-sm font-bold text-black transition-opacity hover:opacity-90"
+                >
+                  Open job money
+                </Link>
+              </div>
+
+              <div className="grid gap-4 p-4 lg:grid-cols-3">
+                <MoneyDetailGroup title="Money coming in" accent="green">
+                  <MoneyDetailRow label="Paid in" value={row.paid} strong />
+                  <MoneyDetailRow label="Invoiced" value={row.invoiced} />
+                  <MoneyDetailRow label="Still due" value={row.outstanding} />
+                </MoneyDetailGroup>
+
+                <MoneyDetailGroup title="Costs going out" accent="red">
+                  <MoneyDetailRow label="Materials" value={row.materials} estimated={row.materialsEstimated} />
+                  <MoneyDetailRow label="Labour & subbies" value={row.labour} estimated={row.labourEstimated} />
+                  <MoneyDetailRow label="Scaffold, hire & other" value={row.otherCosts} />
+                  {row.costVat > 0 ? <MoneyDetailRow label="VAT recorded" value={row.costVat} subtle /> : null}
+                  {row.cisHeld > 0 ? <MoneyDetailRow label="CIS held" value={row.cisHeld} subtle /> : null}
+                </MoneyDetailGroup>
+
+                <MoneyDetailGroup title="Job position" accent="gold">
+                  <MoneyDetailRow label="Quote before VAT" value={row.quoteNet} />
+                  <MoneyDetailRow label="Costs before VAT" value={row.costsNet} />
+                  <MoneyDetailRow label="Estimated profit" value={row.profit} strong />
+                  <MoneyDetailRow label="Cash position today" value={row.cashPosition} subtle />
+                </MoneyDetailGroup>
+              </div>
+
+              {row.quoteNet > 0 ? (
+                <div className="border-t border-[var(--border)] px-4 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+                    <span className="text-[var(--text-muted)]">Cost used against quoted value</span>
+                    <span className={`font-bold ${margin !== null && margin < 0 ? "text-red-600" : "text-[var(--text)]"}`}>
+                      {margin === null ? "TBC" : `${margin.toFixed(1)}% margin`}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-raised)]">
+                    <div
+                      className={`h-full rounded-full ${row.profit !== null && row.profit < 0 ? "bg-red-500" : "bg-[var(--gold)]"}`}
+                      style={{ width: `${costPercent}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MoneySummaryCard({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: number;
+  tone: "positive" | "attention" | "negative";
+}) {
+  const toneClass =
+    tone === "positive" ? "text-green-600" : tone === "negative" ? "text-red-600" : "text-[var(--gold)]";
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</p>
+      <p className={`mt-2 text-xl font-bold sm:text-2xl ${toneClass}`}>{currency(value)}</p>
+    </div>
+  );
+}
+
+function MoneyDetailGroup({
+  title,
+  accent,
+  children
+}: {
+  title: string;
+  accent: "green" | "red" | "gold";
+  children: React.ReactNode;
+}) {
+  const borderClass =
+    accent === "green" ? "border-l-green-500" : accent === "red" ? "border-l-red-500" : "border-l-[var(--gold)]";
+  return (
+    <section className={`rounded-lg border border-[var(--border)] border-l-4 ${borderClass} bg-[var(--surface-raised)] p-4`}>
+      <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--text)]">{title}</h3>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function MoneyDetailRow({
+  label,
+  value,
+  estimated = false,
+  strong = false,
+  subtle = false
+}: {
+  label: string;
+  value: number | null;
+  estimated?: boolean;
+  strong?: boolean;
+  subtle?: boolean;
+}) {
+  return (
+    <div className={`flex items-start justify-between gap-3 text-sm ${strong ? "border-t border-[var(--border)] pt-2 first:border-0 first:pt-0" : ""}`}>
+      <span className={subtle ? "text-[var(--text-muted)]" : "text-[var(--text)]"}>
+        {label}
+        {estimated ? (
+          <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-900">
+            Estimate
+          </span>
+        ) : null}
+      </span>
+      <span className={`${strong ? "font-bold text-[var(--text)]" : "font-semibold text-[var(--text)]"} whitespace-nowrap`}>
+        {value === null ? "TBC" : currency(value)}
+      </span>
     </div>
   );
 }

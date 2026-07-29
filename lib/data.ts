@@ -24,6 +24,7 @@ import type {
   JobBundle,
   JobDocumentRecord,
   JobExpense,
+  JobFinancialSnapshot,
   KanbanColumn,
   KnowledgeBaseRecord,
   LabourPersonRecord,
@@ -604,6 +605,96 @@ export async function getAllExpenses(): Promise<Array<JobExpense & { job?: { id:
   });
 
   return [...expenses, ...diaryExpenses].sort((a, b) => (b.expense_date || "").localeCompare(a.expense_date || ""));
+}
+
+export async function getJobFinancialSnapshots(): Promise<JobFinancialSnapshot[]> {
+  if (!canUseSupabase()) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const [materialsResult, labourResult] = await Promise.all([
+    supabase
+      .from("materials")
+      .select("job_id, quantity, estimated_price, unit_cost, total_cost, actual_price, actual_vat_amount")
+      .limit(5000),
+    supabase
+      .from("labour_entries")
+      .select("job_id, estimated_cost, actual_cost")
+      .limit(5000)
+  ]);
+
+  if (materialsResult.error) {
+    console.warn("Material costs could not be loaded for Money:", materialsResult.error.message);
+  }
+  if (labourResult.error) {
+    console.warn("Labour costs could not be loaded for Money:", labourResult.error.message);
+  }
+
+  const snapshots = new Map<string, JobFinancialSnapshot>();
+  const getSnapshot = (jobId: string) => {
+    const existing = snapshots.get(jobId);
+    if (existing) return existing;
+    const created: JobFinancialSnapshot = {
+      job_id: jobId,
+      material_estimated_net: 0,
+      material_actual_gross: 0,
+      material_actual_vat: 0,
+      material_resolved_net: 0,
+      material_actual_count: 0,
+      material_estimated_count: 0,
+      labour_estimated_net: 0,
+      labour_actual_net: 0,
+      labour_resolved_net: 0,
+      labour_actual_count: 0,
+      labour_estimated_count: 0
+    };
+    snapshots.set(jobId, created);
+    return created;
+  };
+
+  for (const row of (materialsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const jobId = String(row.job_id ?? "");
+    if (!jobId) continue;
+    const snapshot = getSnapshot(jobId);
+    const quantity = Number(row.quantity ?? 0);
+    const totalCost = row.total_cost == null ? null : Number(row.total_cost);
+    const unitCost = row.unit_cost == null ? null : Number(row.unit_cost);
+    const estimatedPrice = row.estimated_price == null ? null : Number(row.estimated_price);
+    const estimatedNet =
+      totalCost !== null && Number.isFinite(totalCost)
+        ? totalCost
+        : unitCost !== null && Number.isFinite(unitCost)
+          ? unitCost * quantity
+          : estimatedPrice !== null && Number.isFinite(estimatedPrice)
+            ? estimatedPrice
+            : 0;
+    const actualGross = row.actual_price == null ? 0 : Number(row.actual_price);
+    const actualVat = row.actual_vat_amount == null ? 0 : Number(row.actual_vat_amount);
+    const hasActual = Number.isFinite(actualGross) && actualGross > 0;
+
+    snapshot.material_estimated_net += estimatedNet;
+    snapshot.material_actual_gross += hasActual ? actualGross : 0;
+    snapshot.material_actual_vat += hasActual && Number.isFinite(actualVat) ? actualVat : 0;
+    snapshot.material_resolved_net += hasActual ? Math.max(0, actualGross - actualVat) : estimatedNet;
+    if (hasActual) snapshot.material_actual_count += 1;
+    else if (estimatedNet > 0) snapshot.material_estimated_count += 1;
+  }
+
+  for (const row of (labourResult.data ?? []) as Array<Record<string, unknown>>) {
+    const jobId = String(row.job_id ?? "");
+    if (!jobId) continue;
+    const snapshot = getSnapshot(jobId);
+    const estimated = Number(row.estimated_cost ?? 0);
+    const actual = row.actual_cost == null ? 0 : Number(row.actual_cost);
+    const hasActual = Number.isFinite(actual) && actual > 0;
+
+    snapshot.labour_estimated_net += Number.isFinite(estimated) ? estimated : 0;
+    snapshot.labour_actual_net += hasActual ? actual : 0;
+    snapshot.labour_resolved_net += hasActual ? actual : Number.isFinite(estimated) ? estimated : 0;
+    if (hasActual) snapshot.labour_actual_count += 1;
+    else if (estimated > 0) snapshot.labour_estimated_count += 1;
+  }
+
+  return [...snapshots.values()];
 }
 
 export async function getReceiptInbox(): Promise<ReceiptInboxRecord[]> {

@@ -532,6 +532,21 @@ export type LabourPlanRecord = {
   entries?: LabourEntryRecord[];
 };
 
+export type JobFinancialSnapshot = {
+  job_id: string;
+  material_estimated_net: number;
+  material_actual_gross: number;
+  material_actual_vat: number;
+  material_resolved_net: number;
+  material_actual_count: number;
+  material_estimated_count: number;
+  labour_estimated_net: number;
+  labour_actual_net: number;
+  labour_resolved_net: number;
+  labour_actual_count: number;
+  labour_estimated_count: number;
+};
+
 export type SupplierRecord = {
   id: string;
   business_id: string;
