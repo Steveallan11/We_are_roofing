@@ -4,7 +4,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import { createServerClient } from "@supabase/ssr";
 
 const protectedPrefixes = ["/today", "/dashboard", "/diary", "/crm", "/jobs", "/customers", "/comms", "/money", "/surveys", "/calendar", "/knowledge", "/settings"];
-const publicApiPrefixes = ["/api/auth/logout", "/api/weather", "/api/comms/webhooks"];
+const publicApiPrefixes = ["/api/auth/logout", "/api/weather", "/api/comms/webhooks", "/api/invoices/mark-overdue"];
 
 function isPublicApi(pathname: string) {
   if (pathname.startsWith("/api/quotes/")) {

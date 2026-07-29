@@ -6,6 +6,10 @@
     {
       "path": "/api/nurture/send",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/invoices/mark-overdue",
+      "schedule": "0 7 * * *"
     }
   ]
 }

@@ -27,6 +27,7 @@ export type ActivityType =
   | "materials_updated"
   | "invoice_created"
   | "invoice_sent"
+  | "invoice_overdue"
   | "payment_received"
   | "job_completed"
   | "note_added";
