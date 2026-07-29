@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyseReceiptFile";
 import type { Customer, Job, JobExpenseCategory, ReceiptInboxRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
@@ -44,6 +45,9 @@ export function ReceiptInbox({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadForm, setUploadForm] = useState<ReceiptForm>(emptyForm());
+  const [analysingReceipt, setAnalysingReceipt] = useState(false);
+  const [receiptAnalysis, setReceiptAnalysis] = useState<ReceiptAnalysis | null>(null);
+  const [receiptAnalysisError, setReceiptAnalysisError] = useState<string | null>(null);
 
   useEffect(() => setReceipts(initialReceipts), [initialReceipts]);
 
@@ -56,7 +60,32 @@ export function ReceiptInbox({
     if (accepted.length !== selected.length) {
       setError("Only images and PDFs up to 15MB can be added.");
     }
+    const receiptImage = accepted.length === 1 && files.length === 0 && accepted[0].type.startsWith("image/") ? accepted[0] : null;
+    if (receiptImage) void analyseInboxReceipt(receiptImage);
     setFiles((current) => [...current, ...accepted]);
+  }
+
+  async function analyseInboxReceipt(file: File) {
+    setAnalysingReceipt(true);
+    setReceiptAnalysis(null);
+    setReceiptAnalysisError(null);
+    try {
+      const analysis = await analyseReceiptFile(file);
+      setReceiptAnalysis(analysis);
+      setUploadForm((current) => ({
+        ...current,
+        supplier_name: current.supplier_name.trim() || analysis.supplier_name || "",
+        description: current.description.trim() || analysis.description,
+        category: analysis.category,
+        amount: current.amount || (analysis.amount_total == null ? "" : String(analysis.amount_total)),
+        vat_amount: current.vat_amount || (analysis.vat_amount == null ? "" : String(analysis.vat_amount)),
+        expense_date: analysis.receipt_date || current.expense_date
+      }));
+    } catch (analysisError) {
+      setReceiptAnalysisError(analysisError instanceof Error ? analysisError.message : "AI could not read this receipt.");
+    } finally {
+      setAnalysingReceipt(false);
+    }
   }
 
   async function uploadReceipts() {
@@ -105,6 +134,8 @@ export function ReceiptInbox({
       setMessage(`${uploaded.length} receipt${uploaded.length === 1 ? "" : "s"} saved to the inbox.`);
       if (failed.length === 0) {
         setUploadForm(emptyForm());
+        setReceiptAnalysis(null);
+        setReceiptAnalysisError(null);
         setShowUpload(false);
       }
     }
@@ -138,6 +169,27 @@ export function ReceiptInbox({
           <p className="font-semibold text-[var(--text)]">Add receipt to inbox</p>
           <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">Only the photo or PDF is required. Add any details you know now, or update them later.</p>
           <ReceiptFields form={uploadForm} onChange={setUploadForm} showJob={false} jobs={jobs} />
+          {analysingReceipt ? (
+            <div aria-live="polite" className="mt-3 rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-3 py-3" role="status">
+              <p className="text-sm font-bold text-[var(--text)]">AI is reading the receipt...</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">Checking supplier, date, amount, VAT, and purchase type.</p>
+            </div>
+          ) : null}
+          {receiptAnalysis ? (
+            <div aria-live="polite" className="mt-3 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-3" role="status">
+              <p className="text-sm font-bold text-[var(--text)]">AI filled the details | {receiptAnalysis.confidence} confidence</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                Please check the values before filing.
+                {receiptAnalysis.review_notes.length > 0 ? ` ${receiptAnalysis.review_notes.join(" ")}` : ""}
+              </p>
+            </div>
+          ) : null}
+          {receiptAnalysisError ? (
+            <div aria-live="polite" className="mt-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-3" role="status">
+              <p className="text-sm font-bold text-[var(--text)]">AI could not fill this one automatically</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{receiptAnalysisError} You can still save the receipt and update it later.</p>
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <label className="button-primary min-h-11 cursor-pointer text-center">
               Take photo
@@ -187,11 +239,15 @@ export function ReceiptInbox({
           ) : null}
           <button
             className="button-primary mt-4 min-h-11 w-full sm:w-auto"
-            disabled={uploading || files.length === 0}
+            disabled={uploading || analysingReceipt || files.length === 0}
             onClick={uploadReceipts}
             type="button"
           >
-            {uploading ? "Saving receipts..." : `Save ${files.length || ""} receipt${files.length === 1 ? "" : "s"} to inbox`}
+            {analysingReceipt
+              ? "AI reading receipt..."
+              : uploading
+                ? "Saving receipts..."
+                : `Save ${files.length || ""} receipt${files.length === 1 ? "" : "s"} to inbox`}
           </button>
         </div>
       ) : null}

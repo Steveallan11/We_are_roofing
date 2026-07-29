@@ -7,6 +7,7 @@ import { useMemo, useState, useTransition } from "react";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
 import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
+import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyseReceiptFile";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { currency, formatDate } from "@/lib/utils";
 import type { InvoiceRecord, InvoiceType, JobDocumentRecord, JobExpense, JobExpenseCategory, MaterialRecord, QuoteRecord } from "@/lib/types";
@@ -669,6 +670,9 @@ function ExpensesSection({
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [analysingReceipt, setAnalysingReceipt] = useState(false);
+  const [receiptAnalysis, setReceiptAnalysis] = useState<ReceiptAnalysis | null>(null);
+  const [receiptAnalysisError, setReceiptAnalysisError] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     const byCategory = new Map<string, number>();
@@ -685,6 +689,7 @@ function ExpensesSection({
   const cisPreview = supportsCis && form.cis_applicable ? formNet * Number(form.cis_rate || 0) : 0;
   const editingExpense = form.id ? expenses.find((expense) => expense.id === form.id) : null;
   const existingReceipts = editingExpense?.receipt_documents ?? [];
+  const hasValidExpenseDetails = Boolean(form.description.trim()) && Number(form.amount) > 0;
 
   function stageReceiptFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -695,7 +700,41 @@ function ExpensesSection({
     if (acceptedFiles.length !== selectedFiles.length) {
       onNotify(null, "Only images or PDFs up to 15MB can be attached as receipts.");
     }
+    if (acceptedFiles.length > 0) {
+      setForm((current) => ({
+        ...current,
+        description: current.description.trim() ? current.description : "Receipt / supplier invoice"
+      }));
+      const receiptImage = acceptedFiles.find((file) => file.type.startsWith("image/"));
+      if (receiptImage && !form.id) void analyseStagedReceipt(receiptImage);
+    }
     setReceiptFiles((current) => [...current, ...acceptedFiles]);
+  }
+
+  async function analyseStagedReceipt(file: File) {
+    setAnalysingReceipt(true);
+    setReceiptAnalysis(null);
+    setReceiptAnalysisError(null);
+    try {
+      const analysis = await analyseReceiptFile(file);
+      setReceiptAnalysis(analysis);
+      setForm((current) => ({
+        ...current,
+        supplier_name: current.supplier_name.trim() || analysis.supplier_name || "",
+        description:
+          !current.description.trim() || current.description === "Receipt / supplier invoice"
+            ? analysis.description
+            : current.description,
+        category: analysis.category,
+        amount: current.amount || (analysis.amount_total == null ? "" : String(analysis.amount_total)),
+        vat_amount: current.vat_amount || (analysis.vat_amount == null ? "" : String(analysis.vat_amount)),
+        expense_date: analysis.receipt_date || current.expense_date
+      }));
+    } catch (error) {
+      setReceiptAnalysisError(error instanceof Error ? error.message : "AI could not read this receipt.");
+    } finally {
+      setAnalysingReceipt(false);
+    }
   }
 
   function startEdit(expense: JobExpense) {
@@ -712,6 +751,8 @@ function ExpensesSection({
       notes: expense.notes ?? ""
     });
     setReceiptFiles([]);
+    setReceiptAnalysis(null);
+    setReceiptAnalysisError(null);
     setShowForm(true);
   }
 
@@ -807,6 +848,8 @@ function ExpensesSection({
     onNotify(`${form.id ? "Expense updated." : "Expense added."}${receiptMessage}`, null);
     setForm(emptyExpenseForm());
     setReceiptFiles([]);
+    setReceiptAnalysis(null);
+    setReceiptAnalysisError(null);
     setShowForm(false);
   }
 
@@ -842,6 +885,8 @@ function ExpensesSection({
             onClick={() => {
               setForm(emptyExpenseForm());
               setReceiptFiles([]);
+              setReceiptAnalysis(null);
+              setReceiptAnalysisError(null);
               setShowForm(true);
             }}
           >
@@ -853,6 +898,8 @@ function ExpensesSection({
             onClick={() => {
               setForm(emptyExpenseForm());
               setReceiptFiles([]);
+              setReceiptAnalysis(null);
+              setReceiptAnalysisError(null);
               setShowForm((current) => !current);
             }}
           >
@@ -944,6 +991,37 @@ function ExpensesSection({
                 </label>
               </div>
 
+              {analysingReceipt ? (
+                <div aria-live="polite" className="mt-3 rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-3 py-3" role="status">
+                  <p className="text-sm font-bold text-[var(--text)]">AI is reading the receipt...</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Checking supplier, date, amount, VAT, and purchase type.</p>
+                </div>
+              ) : null}
+
+              {receiptAnalysis ? (
+                <div aria-live="polite" className="mt-3 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-3" role="status">
+                  <p className="text-sm font-bold text-[var(--text)]">
+                    AI filled the receipt details | {receiptAnalysis.confidence} confidence
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                    Check the highlighted fields before saving.
+                    {receiptAnalysis.invoice_number ? ` Reference: ${receiptAnalysis.invoice_number}.` : ""}
+                  </p>
+                  {receiptAnalysis.review_notes.length > 0 ? (
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                      Review: {receiptAnalysis.review_notes.join(" ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {receiptAnalysisError ? (
+                <div aria-live="polite" className="mt-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-3" role="status">
+                  <p className="text-sm font-bold text-[var(--text)]">AI could not fill this one automatically</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{receiptAnalysisError} You can still enter the details and save it normally.</p>
+                </div>
+              ) : null}
+
               {existingReceipts.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {existingReceipts.map((document, index) => (
@@ -978,13 +1056,38 @@ function ExpensesSection({
                       </button>
                     </div>
                   ))}
+                  <div
+                    aria-live="polite"
+                    className={`rounded-lg border px-3 py-3 text-sm ${
+                      hasValidExpenseDetails
+                        ? "border-green-500/40 bg-green-500/10 text-green-700"
+                        : "border-amber-500/50 bg-amber-500/10 text-amber-800"
+                    }`}
+                    role="status"
+                  >
+                    <p className="font-bold">{hasValidExpenseDetails ? "Ready to save" : "Photo added successfully"}</p>
+                    <p className="mt-1 text-xs leading-5">
+                      {hasValidExpenseDetails
+                        ? "Press Save Expense & Receipts below to file it against this job."
+                        : "Enter the receipt amount below. Add the VAT amount too if VAT is shown on the receipt."}
+                    </p>
+                  </div>
                 </div>
               ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="label">Amount inc VAT (£)</span>
-                <input className="field min-h-11" inputMode="decimal" onChange={(event) => setForm({ ...form, amount: event.target.value })} type="number" step="0.01" min="0" value={form.amount} />
+                <input
+                  className={`field min-h-11 ${receiptFiles.length > 0 && !(Number(form.amount) > 0) ? "border-amber-500 ring-2 ring-amber-500/25" : ""}`}
+                  inputMode="decimal"
+                  onChange={(event) => setForm({ ...form, amount: event.target.value })}
+                  placeholder={receiptFiles.length > 0 ? "Enter amount to continue" : ""}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.amount}
+                />
               </label>
               <label className="block">
                 <span className="label">of which VAT (£)</span>
@@ -1031,11 +1134,15 @@ function ExpensesSection({
             </label>
           </div>
           <div className="mt-3 flex gap-2">
-            <Button variant="primary" size="sm" onClick={save} disabled={saving || !form.description.trim() || !(Number(form.amount) > 0)}>
-              {saving
+            <Button variant="primary" size="sm" onClick={save} disabled={saving || analysingReceipt || !hasValidExpenseDetails}>
+              {analysingReceipt
+                ? "AI reading receipt..."
+                : saving
                 ? receiptFiles.length > 0
                   ? "Saving expense & receipts..."
                   : "Saving..."
+                : receiptFiles.length > 0 && !hasValidExpenseDetails
+                  ? "Enter amount to save"
                 : receiptFiles.length > 0
                   ? form.id
                     ? "Save Changes & Receipts"
@@ -1050,6 +1157,8 @@ function ExpensesSection({
               onClick={() => {
                 setForm(emptyExpenseForm());
                 setReceiptFiles([]);
+                setReceiptAnalysis(null);
+                setReceiptAnalysisError(null);
                 setShowForm(false);
               }}
               disabled={saving}
