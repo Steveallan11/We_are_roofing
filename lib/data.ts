@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { attachReceiptDocuments } from "@/lib/expenses/receiptDocuments";
 import {
   getMockBundle,
   getMockDashboardStats,
@@ -572,7 +573,7 @@ export async function getJobExpenses(jobId: string): Promise<JobExpense[]> {
 
   const expenses = ((expensesResult.data as JobExpense[] | null) ?? []).map((row) => ({ ...row, source: "job" as const }));
   const diaryExpenses = mapDiaryExpenses(diaryResult.data ?? []);
-  return [...expenses, ...diaryExpenses];
+  return [...(await attachReceiptDocuments(supabase, expenses)), ...diaryExpenses];
 }
 
 export async function getAllExpenses(): Promise<Array<JobExpense & { job?: { id: string; job_title: string; job_ref?: string | null } | null }>> {

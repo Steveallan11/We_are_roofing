@@ -777,6 +777,7 @@ export type JobExpense = {
   cis_deduction?: number | null;
   expense_date: string;
   receipt_url?: string | null;
+  receipt_documents?: JobDocumentRecord[];
   notes?: string | null;
   created_at?: string;
   updated_at?: string;

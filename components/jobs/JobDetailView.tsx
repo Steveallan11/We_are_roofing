@@ -599,7 +599,7 @@ function DocumentsTab({
   quote?: QuoteRecord | null;
 }) {
   const docGroups = groupDocuments(documents);
-  const uploadedCount = docGroups.Uploads.length;
+  const uploadedCount = docGroups.Uploads.length + docGroups.Receipts.length;
   const generatedCount = documents.length - uploadedCount;
 
   return (

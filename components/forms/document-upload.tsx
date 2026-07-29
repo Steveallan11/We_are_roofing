@@ -8,6 +8,7 @@ type Props = {
 };
 
 const DOCUMENT_TYPES = [
+  { value: "expense_receipt", label: "Receipt / supplier invoice" },
   { value: "customer_upload", label: "Customer document" },
   { value: "supplier_quote", label: "Supplier quote" },
   { value: "building_control", label: "Building control" },

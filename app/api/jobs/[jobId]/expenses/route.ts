@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { attachReceiptDocuments } from "@/lib/expenses/receiptDocuments";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { JobExpense, JobExpenseCategory } from "@/lib/types";
 import { canPersistToSupabase } from "@/lib/workflows";
@@ -59,7 +60,7 @@ export async function GET(_request: Request, { params }: Props) {
       source: "diary" as const
     }));
 
-  return NextResponse.json({ ok: true, expenses: [...expenses, ...diaryExpenses] });
+  return NextResponse.json({ ok: true, expenses: [...(await attachReceiptDocuments(supabase, expenses)), ...diaryExpenses] });
 }
 
 export async function POST(request: Request, { params }: Props) {

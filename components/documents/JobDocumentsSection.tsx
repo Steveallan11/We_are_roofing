@@ -100,6 +100,7 @@ function getDocumentDisplayType(document: JobDocumentRecord): string {
   if (document.document_type.includes("survey")) return "Survey Document";
   if (document.document_type.includes("quote")) return "Quote Document";
   if (document.document_type.includes("invoice")) return "Invoice";
+  if (document.document_type === "expense_receipt") return "Receipt / supplier invoice";
   const typeLabel = document.document_type
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

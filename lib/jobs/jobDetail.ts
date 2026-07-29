@@ -1,18 +1,20 @@
 import type { JobDocumentRecord } from "@/lib/types";
 import { getJobDocumentHref } from "@/lib/documents";
 
-export type DocumentGroupKey = "Survey" | "Quotes" | "Invoices" | "Uploads";
+export type DocumentGroupKey = "Survey" | "Quotes" | "Invoices" | "Receipts" | "Uploads";
 
 export function groupDocuments(documents: JobDocumentRecord[]): Record<DocumentGroupKey, JobDocumentRecord[]> {
   return {
     Survey: documents.filter((document) => document.document_type.includes("survey")),
     Quotes: documents.filter((document) => document.document_type.includes("quote")),
     Invoices: documents.filter((document) => document.document_type.includes("invoice")),
+    Receipts: documents.filter((document) => document.document_type === "expense_receipt"),
     Uploads: documents.filter(
       (document) =>
         !document.document_type.includes("survey") &&
         !document.document_type.includes("quote") &&
-        !document.document_type.includes("invoice")
+        !document.document_type.includes("invoice") &&
+        document.document_type !== "expense_receipt"
     )
   };
 }
@@ -23,6 +25,7 @@ export function getDocumentDisplayType(document: JobDocumentRecord) {
   if (document.document_type === "quote_pdf") return "Quote PDF";
   if (document.document_type === "invoice_pdf") return "Invoice PDF";
   if (document.document_type === "invoice_html") return "Invoice HTML snapshot";
+  if (document.document_type === "expense_receipt") return "Receipt / supplier invoice";
   return document.document_type;
 }
 

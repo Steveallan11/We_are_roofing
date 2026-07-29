@@ -9,7 +9,7 @@ import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { currency, formatDate } from "@/lib/utils";
-import type { InvoiceRecord, InvoiceType, JobExpense, JobExpenseCategory, MaterialRecord, QuoteRecord } from "@/lib/types";
+import type { InvoiceRecord, InvoiceType, JobDocumentRecord, JobExpense, JobExpenseCategory, MaterialRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
   jobId: string;
@@ -84,6 +84,11 @@ function formatExpenseCostBreakdown(expense: JobExpense) {
   const cis = Number(expense.cis_deduction ?? 0);
   if (cis > 0) parts.push(`CIS held ${currency(cis)}`);
   return parts.join(" | ");
+}
+
+function formatReceiptFileSize(size: number) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
@@ -663,6 +668,7 @@ function ExpensesSection({
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
 
   const totals = useMemo(() => {
     const byCategory = new Map<string, number>();
@@ -677,6 +683,20 @@ function ExpensesSection({
   const supportsCis = form.category === "labour" || form.category === "subcontractor";
   const formNet = Math.max(0, Number(form.amount || 0) - Number(form.vat_amount || 0));
   const cisPreview = supportsCis && form.cis_applicable ? formNet * Number(form.cis_rate || 0) : 0;
+  const editingExpense = form.id ? expenses.find((expense) => expense.id === form.id) : null;
+  const existingReceipts = editingExpense?.receipt_documents ?? [];
+
+  function stageReceiptFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const selectedFiles = Array.from(files);
+    const acceptedFiles = selectedFiles.filter(
+      (file) => (file.type.startsWith("image/") || file.type === "application/pdf") && file.size <= 15 * 1024 * 1024
+    );
+    if (acceptedFiles.length !== selectedFiles.length) {
+      onNotify(null, "Only images or PDFs up to 15MB can be attached as receipts.");
+    }
+    setReceiptFiles((current) => [...current, ...acceptedFiles]);
+  }
 
   function startEdit(expense: JobExpense) {
     setForm({
@@ -691,7 +711,45 @@ function ExpensesSection({
       expense_date: expense.expense_date,
       notes: expense.notes ?? ""
     });
+    setReceiptFiles([]);
     setShowForm(true);
+  }
+
+  async function uploadReceiptDocuments(expenseId: string, files: File[]) {
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("expense_id", expenseId);
+        formData.append("document_type", "expense_receipt");
+        formData.append("display_name", file.name);
+
+        const response = await fetch(`/api/jobs/${jobId}/documents`, {
+          method: "POST",
+          body: formData
+        });
+        const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; document?: JobDocumentRecord } | null;
+        if (!response.ok || !result?.ok || !result.document) {
+          throw new Error(result?.error || `Upload failed for ${file.name}`);
+        }
+        return { file, document: result.document };
+      })
+    );
+
+    const uploaded: JobDocumentRecord[] = [];
+    const failed: File[] = [];
+    const errors: string[] = [];
+
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        uploaded.push(result.value.document);
+        return;
+      }
+      failed.push(files[index]);
+      errors.push(result.reason instanceof Error ? result.reason.message : `Upload failed for ${files[index].name}`);
+    });
+
+    return { uploaded, failed, errors };
   }
 
   async function save() {
@@ -715,15 +773,40 @@ function ExpensesSection({
       body: JSON.stringify(payload)
     });
     const result = (await response.json().catch(() => null)) as { ok?: boolean; expense?: JobExpense; error?: string } | null;
-    setSaving(false);
     if (!response.ok || !result?.ok || !result.expense) {
+      setSaving(false);
       onNotify(null, result?.error || "Expense could not be saved.");
       return;
     }
-    const saved = result.expense;
+
+    let saved = result.expense;
+    if (receiptFiles.length > 0) {
+      const uploadResult = await uploadReceiptDocuments(saved.id, receiptFiles);
+      saved = {
+        ...saved,
+        receipt_url: saved.receipt_url || (uploadResult.uploaded[0] ? `/api/documents/${uploadResult.uploaded[0].id}` : null),
+        receipt_documents: [...(editingExpense?.receipt_documents ?? []), ...uploadResult.uploaded]
+      };
+      setReceiptFiles(uploadResult.failed);
+
+      if (uploadResult.failed.length > 0) {
+        setSaving(false);
+        setForm({ ...form, id: saved.id });
+        onChange(form.id ? expenses.map((expense) => (expense.id === saved.id ? saved : expense)) : [saved, ...expenses]);
+        onNotify(
+          uploadResult.uploaded.length > 0 ? `${uploadResult.uploaded.length} receipt${uploadResult.uploaded.length === 1 ? "" : "s"} saved.` : null,
+          `${uploadResult.failed.length} receipt${uploadResult.failed.length === 1 ? "" : "s"} failed. Check the files and press Save Changes to retry.`
+        );
+        return;
+      }
+    }
+
+    setSaving(false);
     onChange(form.id ? expenses.map((expense) => (expense.id === saved.id ? saved : expense)) : [saved, ...expenses]);
-    onNotify(form.id ? "Expense updated." : "Expense added.", null);
+    const receiptMessage = receiptFiles.length > 0 ? ` ${receiptFiles.length} receipt${receiptFiles.length === 1 ? "" : "s"} filed against the job.` : "";
+    onNotify(`${form.id ? "Expense updated." : "Expense added."}${receiptMessage}`, null);
     setForm(emptyExpenseForm());
+    setReceiptFiles([]);
     setShowForm(false);
   }
 
@@ -752,16 +835,30 @@ function ExpensesSection({
       title="Job costs"
       description="Log materials, labour, hire, and other costs against this job to see the real margin."
       actions={
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setForm(emptyExpenseForm());
-            setShowForm((current) => !current);
-          }}
-        >
-          {showForm && !form.id ? "Close" : "+ Add Expense"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setForm(emptyExpenseForm());
+              setReceiptFiles([]);
+              setShowForm(true);
+            }}
+          >
+            + Add Receipt
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setForm(emptyExpenseForm());
+              setReceiptFiles([]);
+              setShowForm((current) => !current);
+            }}
+          >
+            {showForm && !form.id ? "Close" : "+ Add Expense"}
+          </Button>
+        </div>
       }
     >
       {totals.byCategory.length > 0 ? (
@@ -811,6 +908,79 @@ function ExpensesSection({
                 value={form.supplier_name}
               />
             </label>
+            <div className="rounded-xl border border-[var(--border)] bg-black/10 p-3 sm:col-span-2">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text)]">Receipt or supplier invoice</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                  Take a clear photo or attach an image/PDF. Files are stored privately in this job's Documents tab.
+                </p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <label className="button-primary min-h-11 cursor-pointer text-center">
+                  Take Photo
+                  <input
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(event) => {
+                      stageReceiptFiles(event.currentTarget.files);
+                      event.currentTarget.value = "";
+                    }}
+                    type="file"
+                  />
+                </label>
+                <label className="button-secondary min-h-11 cursor-pointer text-center">
+                  Choose Image / PDF
+                  <input
+                    accept="image/*,.pdf,application/pdf"
+                    className="hidden"
+                    multiple
+                    onChange={(event) => {
+                      stageReceiptFiles(event.currentTarget.files);
+                      event.currentTarget.value = "";
+                    }}
+                    type="file"
+                  />
+                </label>
+              </div>
+
+              {existingReceipts.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {existingReceipts.map((document, index) => (
+                    <a
+                      className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--gold)]"
+                      href={`/api/documents/${document.id}`}
+                      key={document.id}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Open receipt {index + 1}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+
+              {receiptFiles.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {receiptFiles.map((file, index) => (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-black/10 px-3 py-2" key={`${file.name}-${file.size}-${index}`}>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-[var(--text)]">{file.name}</p>
+                        <p className="text-[0.68rem] text-[var(--text-muted)]">{formatReceiptFileSize(file.size)} | Ready to upload</p>
+                      </div>
+                      <button
+                        aria-label={`Remove ${file.name}`}
+                        className="min-h-11 shrink-0 rounded-lg px-3 text-xs font-semibold text-[#ff9a91]"
+                        onClick={() => setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="label">Amount inc VAT (£)</span>
@@ -862,13 +1032,24 @@ function ExpensesSection({
           </div>
           <div className="mt-3 flex gap-2">
             <Button variant="primary" size="sm" onClick={save} disabled={saving || !form.description.trim() || !(Number(form.amount) > 0)}>
-              {saving ? "Saving..." : form.id ? "Save Changes" : "Add Expense"}
+              {saving
+                ? receiptFiles.length > 0
+                  ? "Saving expense & receipts..."
+                  : "Saving..."
+                : receiptFiles.length > 0
+                  ? form.id
+                    ? "Save Changes & Receipts"
+                    : "Save Expense & Receipts"
+                  : form.id
+                    ? "Save Changes"
+                    : "Add Expense"}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 setForm(emptyExpenseForm());
+                setReceiptFiles([]);
                 setShowForm(false);
               }}
               disabled={saving}
@@ -888,6 +1069,30 @@ function ExpensesSection({
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[var(--text)]">{expense.description}</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{formatExpenseCostBreakdown(expense)}</p>
+              {expense.receipt_documents?.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {expense.receipt_documents.map((document, index) => (
+                    <a
+                      className="inline-flex min-h-11 items-center rounded-lg border border-[var(--gold)]/35 px-3 text-xs font-semibold text-[var(--gold)]"
+                      href={`/api/documents/${document.id}`}
+                      key={document.id}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      View receipt {expense.receipt_documents!.length > 1 ? index + 1 : ""}
+                    </a>
+                  ))}
+                </div>
+              ) : expense.receipt_url ? (
+                <a
+                  className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-[var(--gold)]/35 px-3 text-xs font-semibold text-[var(--gold)]"
+                  href={expense.receipt_url}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  View receipt
+                </a>
+              ) : null}
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                 {formatDate(expense.expense_date)} · {EXPENSE_CATEGORIES.find((category) => category.value === expense.category)?.label ?? "Other"}
                 {expense.supplier_name ? ` · ${expense.supplier_name}` : ""}
@@ -899,7 +1104,7 @@ function ExpensesSection({
               {expense.source !== "diary" ? (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => startEdit(expense)}>
-                    Edit
+                    Edit / Add Receipt
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => remove(expense)} disabled={deletingId === expense.id}>
                     {deletingId === expense.id ? "..." : "Delete"}

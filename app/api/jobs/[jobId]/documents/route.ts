@@ -23,7 +23,9 @@ export async function POST(request: Request, { params }: Props) {
   const formData = await request.formData();
   const file = formData.get("file");
   const displayName = String(formData.get("display_name") || "").trim();
-  const documentType = String(formData.get("document_type") || "customer_upload").trim() || "customer_upload";
+  const expenseId = String(formData.get("expense_id") || "").trim();
+  const requestedDocumentType = String(formData.get("document_type") || "customer_upload").trim() || "customer_upload";
+  const documentType = expenseId ? "expense_receipt" : requestedDocumentType;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "A file is required." }, { status: 400 });
@@ -34,6 +36,22 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const supabase = createSupabaseAdminClient();
+  if (expenseId) {
+    const { data: expense, error: expenseError } = await supabase
+      .from("job_expenses")
+      .select("id")
+      .eq("id", expenseId)
+      .eq("job_id", jobId)
+      .maybeSingle();
+
+    if (expenseError) {
+      return NextResponse.json({ ok: false, error: expenseError.message }, { status: 500 });
+    }
+    if (!expense) {
+      return NextResponse.json({ ok: false, error: "Expense not found on this job." }, { status: 404 });
+    }
+  }
+
   const tableCheck = await supabase.from("job_documents").select("id").limit(1);
   if (tableCheck.error) {
     if (isMissingJobDocumentsTable(tableCheck.error.message)) {
@@ -87,6 +105,34 @@ export async function POST(request: Request, { params }: Props) {
 
   if (error || !document) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Unable to save document metadata." }, { status: 500 });
+  }
+
+  if (expenseId) {
+    const { error: linkError } = await supabase.from("job_expense_documents").insert({
+      expense_id: expenseId,
+      document_id: document.id,
+      document_role: "receipt"
+    });
+
+    if (linkError) {
+      await Promise.all([
+        supabase.storage.from(JOB_DOCUMENTS_BUCKET).remove([storagePath]),
+        supabase.from("job_documents").delete().eq("id", document.id)
+      ]);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Receipt could not be linked to the expense. Run migration 0036_expense_receipt_documents.sql and retry."
+        },
+        { status: 500 }
+      );
+    }
+
+    await supabase
+      .from("job_expenses")
+      .update({ receipt_url: `/api/documents/${document.id}`, updated_at: new Date().toISOString() })
+      .eq("id", expenseId)
+      .is("receipt_url", null);
   }
 
   await supabase.from("jobs").update({ updated_at: new Date().toISOString() }).eq("id", jobId);
