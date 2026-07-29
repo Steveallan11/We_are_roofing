@@ -9,7 +9,7 @@ import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { currency, formatDate } from "@/lib/utils";
-import type { InvoiceRecord, InvoiceType, JobExpense, JobExpenseCategory, QuoteRecord } from "@/lib/types";
+import type { InvoiceRecord, InvoiceType, JobExpense, JobExpenseCategory, MaterialRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
   jobId: string;
@@ -17,6 +17,7 @@ type Props = {
   quote: QuoteRecord | null;
   invoices: InvoiceRecord[];
   expenses: JobExpense[];
+  materials: MaterialRecord[];
   customerName: string;
   customerEmail: string | null | undefined;
 };
@@ -42,7 +43,50 @@ const INVOICE_TYPE_LABELS: Record<string, string> = {
   standard: "Full Invoice"
 };
 
-export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initialExpenses, customerName, customerEmail }: Props) {
+const DEFAULT_VAT_RATE = 0.2;
+
+function getMaterialEstimatedNet(material: MaterialRecord) {
+  const quantity = Number(material.quantity ?? 0);
+  const totalCost = material.total_cost == null ? null : Number(material.total_cost);
+  if (totalCost !== null && Number.isFinite(totalCost)) return totalCost;
+  const unitCost = material.unit_cost == null ? null : Number(material.unit_cost);
+  if (unitCost !== null && Number.isFinite(unitCost)) return quantity * unitCost;
+  const estimatedPrice = material.estimated_price == null ? null : Number(material.estimated_price);
+  return estimatedPrice !== null && Number.isFinite(estimatedPrice) ? estimatedPrice : 0;
+}
+
+function getMaterialEstimatedVat(material: MaterialRecord) {
+  if (material.vat_applicable === false) return 0;
+  return getMaterialEstimatedNet(material) * DEFAULT_VAT_RATE;
+}
+
+function getMaterialActualGross(material: MaterialRecord) {
+  const actual = material.actual_price == null ? null : Number(material.actual_price);
+  return actual !== null && Number.isFinite(actual) ? actual : 0;
+}
+
+function getMaterialActualVat(material: MaterialRecord) {
+  const vat = material.actual_vat_amount == null ? null : Number(material.actual_vat_amount);
+  return vat !== null && Number.isFinite(vat) ? vat : 0;
+}
+
+function getMaterialProfitCostNet(material: MaterialRecord) {
+  const actualGross = getMaterialActualGross(material);
+  if (actualGross > 0) return Math.max(0, actualGross - getMaterialActualVat(material));
+  return getMaterialEstimatedNet(material);
+}
+
+function formatExpenseCostBreakdown(expense: JobExpense) {
+  const gross = Number(expense.amount ?? 0);
+  const vat = Number(expense.vat_amount ?? 0);
+  const net = Math.max(0, gross - vat);
+  const parts = [`Net ${currency(net)}`, `VAT ${currency(vat)}`, `Gross ${currency(gross)}`];
+  const cis = Number(expense.cis_deduction ?? 0);
+  if (cis > 0) parts.push(`CIS held ${currency(cis)}`);
+  return parts.join(" | ");
+}
+
+export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [expenses, setExpenses] = useState<JobExpense[]>(initialExpenses);
@@ -67,10 +111,62 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
     const paid = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.amount_paid ?? 0), 0);
     const outstanding = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
     const expensesGross = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
-    const expensesNet = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0) - Number(expense.vat_amount ?? 0), 0);
-    const profit = quoteNet > 0 ? quoteNet - expensesNet : null;
-    return { quoteTotal, quoteNet, invoiced, paid, outstanding, expensesGross, expensesNet, profit };
-  }, [quote, liveInvoices, expenses]);
+    const expensesVat = expenses.reduce((sum, expense) => sum + Number(expense.vat_amount ?? 0), 0);
+    const expensesNet = expensesGross - expensesVat;
+    const nonMaterialExpensesGross = expenses.reduce((sum, expense) => {
+      if (expense.category === "materials") return sum;
+      return sum + Number(expense.amount ?? 0);
+    }, 0);
+    const nonMaterialExpensesVat = expenses.reduce((sum, expense) => {
+      if (expense.category === "materials") return sum;
+      return sum + Number(expense.vat_amount ?? 0);
+    }, 0);
+    const nonMaterialExpensesNet = expenses.reduce((sum, expense) => {
+      if (expense.category === "materials") return sum;
+      return sum + Number(expense.amount ?? 0) - Number(expense.vat_amount ?? 0);
+    }, 0);
+    const materialExpensesNet = expenses.reduce((sum, expense) => {
+      if (expense.category !== "materials") return sum;
+      return sum + Number(expense.amount ?? 0) - Number(expense.vat_amount ?? 0);
+    }, 0);
+    const cisDeductions = expenses.reduce((sum, expense) => sum + Number(expense.cis_deduction ?? 0), 0);
+    const materialEstimatedNet = materials.reduce((sum, material) => sum + getMaterialEstimatedNet(material), 0);
+    const materialEstimatedVat = materials.reduce((sum, material) => sum + getMaterialEstimatedVat(material), 0);
+    const materialActualGross = materials.reduce((sum, material) => sum + getMaterialActualGross(material), 0);
+    const materialActualVat = materials.reduce((sum, material) => sum + getMaterialActualVat(material), 0);
+    const materialActualNet = materialActualGross - materialActualVat;
+    const materialCostNet = materials.reduce((sum, material) => sum + getMaterialProfitCostNet(material), 0);
+    const materialActualCount = materials.filter((material) => getMaterialActualGross(material) > 0).length;
+    const materialEstimatedCount = materials.filter((material) => getMaterialEstimatedNet(material) > 0).length;
+    const resolvedMaterialCostNet = materialCostNet > 0 ? materialCostNet : materialExpensesNet;
+    const totalCostNet = nonMaterialExpensesNet + resolvedMaterialCostNet;
+    const profit = quoteNet > 0 ? quoteNet - totalCostNet : null;
+    return {
+      quoteTotal,
+      quoteNet,
+      invoiced,
+      paid,
+      outstanding,
+      expensesGross,
+      expensesVat,
+      expensesNet,
+      nonMaterialExpensesGross,
+      nonMaterialExpensesVat,
+      nonMaterialExpensesNet,
+      cisDeductions,
+      materialEstimatedNet,
+      materialEstimatedVat,
+      materialActualGross,
+      materialActualVat,
+      materialActualNet,
+      materialCostNet,
+      materialActualCount,
+      materialEstimatedCount,
+      resolvedMaterialCostNet,
+      totalCostNet,
+      profit
+    };
+  }, [quote, liveInvoices, expenses, materials]);
 
   function notify(nextMessage: string | null, nextError: string | null) {
     setMessage(nextMessage);
@@ -176,12 +272,19 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
   return (
     <div className="stack">
       <PageSection kicker="Job Money" title="Financial summary" description="Quote value, invoicing progress, and costs for this job.">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat label="Quote value" value={summary.quoteTotal ? currency(summary.quoteTotal) : "TBC"} hint="Inc VAT" />
           <Stat label="Invoiced" value={currency(summary.invoiced)} hint={`${liveInvoices.length} invoice${liveInvoices.length === 1 ? "" : "s"}`} />
           <Stat label="Paid" value={currency(summary.paid)} hint="Received to date" />
           <Stat label="Outstanding" value={currency(summary.outstanding)} hint="Awaiting payment" />
-          <Stat label="Expenses" value={currency(summary.expensesGross)} hint={`${expenses.length} logged`} />
+          <Stat label="Materials est." value={currency(summary.materialEstimatedNet + summary.materialEstimatedVat)} hint={`${currency(summary.materialEstimatedNet)} net + VAT`} />
+          <Stat
+            label="Materials real"
+            value={summary.materialActualGross > 0 ? currency(summary.materialActualGross) : "TBC"}
+            hint={summary.materialActualCount > 0 ? `${currency(summary.materialActualNet)} net + VAT` : `${summary.materialEstimatedCount} estimated`}
+          />
+          <Stat label="Other expenses" value={currency(summary.nonMaterialExpensesGross)} hint={`${currency(summary.nonMaterialExpensesNet)} net, ${currency(summary.nonMaterialExpensesVat)} VAT`} />
+          <Stat label="CIS held" value={currency(summary.cisDeductions)} hint="Labour/subcontractors" />
           <Stat
             label="Est. profit"
             value={summary.profit === null ? "TBC" : currency(summary.profit)}
@@ -524,6 +627,8 @@ type ExpenseFormState = {
   supplier_name: string;
   amount: string;
   vat_amount: string;
+  cis_applicable: boolean;
+  cis_rate: string;
   expense_date: string;
   notes: string;
 };
@@ -536,6 +641,8 @@ function emptyExpenseForm(): ExpenseFormState {
     supplier_name: "",
     amount: "",
     vat_amount: "",
+    cis_applicable: false,
+    cis_rate: "0.2",
     expense_date: new Date().toISOString().slice(0, 10),
     notes: ""
   };
@@ -567,6 +674,9 @@ function ExpensesSection({
     }
     return { gross, byCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]) };
   }, [expenses]);
+  const supportsCis = form.category === "labour" || form.category === "subcontractor";
+  const formNet = Math.max(0, Number(form.amount || 0) - Number(form.vat_amount || 0));
+  const cisPreview = supportsCis && form.cis_applicable ? formNet * Number(form.cis_rate || 0) : 0;
 
   function startEdit(expense: JobExpense) {
     setForm({
@@ -576,6 +686,8 @@ function ExpensesSection({
       supplier_name: expense.supplier_name ?? "",
       amount: String(expense.amount ?? ""),
       vat_amount: expense.vat_amount ? String(expense.vat_amount) : "",
+      cis_applicable: Boolean(expense.cis_applicable),
+      cis_rate: String(expense.cis_rate ?? 0.2),
       expense_date: expense.expense_date,
       notes: expense.notes ?? ""
     });
@@ -592,6 +704,8 @@ function ExpensesSection({
       supplier_name: form.supplier_name || undefined,
       amount: Number(form.amount),
       vat_amount: form.vat_amount ? Number(form.vat_amount) : 0,
+      cis_applicable: form.cis_applicable,
+      cis_rate: Number(form.cis_rate || 0),
       expense_date: form.expense_date,
       notes: form.notes || undefined
     };
@@ -707,6 +821,40 @@ function ExpensesSection({
                 <input className="field min-h-11" inputMode="decimal" onChange={(event) => setForm({ ...form, vat_amount: event.target.value })} type="number" step="0.01" min="0" value={form.vat_amount} />
               </label>
             </div>
+            {supportsCis ? (
+              <div className="rounded-xl border border-[var(--border)] bg-black/10 p-3 sm:col-span-2">
+                <label className="flex items-start gap-3 text-sm text-[var(--text)]">
+                  <input
+                    checked={form.cis_applicable}
+                    className="mt-1"
+                    onChange={(event) => setForm({ ...form, cis_applicable: event.target.checked })}
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="font-semibold">Apply CIS deduction</span>
+                    <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                      Used for subcontractor/labour payments. Deduction is calculated from net cost, before VAT.
+                    </span>
+                  </span>
+                </label>
+                {form.cis_applicable ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="label">CIS rate</span>
+                      <select className="field min-h-11" onChange={(event) => setForm({ ...form, cis_rate: event.target.value })} value={form.cis_rate}>
+                        <option value="0.2">20% registered</option>
+                        <option value="0.3">30% unregistered</option>
+                        <option value="0">0% gross payment</option>
+                      </select>
+                    </label>
+                    <div className="rounded-lg border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-3 py-2">
+                      <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--gold)]">CIS deduction</p>
+                      <p className="mt-1 font-display text-xl text-[var(--text)]">{currency(cisPreview)}</p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <label className="block sm:col-span-2">
               <span className="label">Notes (optional)</span>
               <input className="field min-h-11" onChange={(event) => setForm({ ...form, notes: event.target.value })} value={form.notes} />
@@ -739,6 +887,7 @@ function ExpensesSection({
           <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between" key={`${expense.source}-${expense.id}`}>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[var(--text)]">{expense.description}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{formatExpenseCostBreakdown(expense)}</p>
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                 {formatDate(expense.expense_date)} · {EXPENSE_CATEGORIES.find((category) => category.value === expense.category)?.label ?? "Other"}
                 {expense.supplier_name ? ` · ${expense.supplier_name}` : ""}

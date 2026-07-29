@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: Props) {
   const payload: Record<string, unknown> = {
     updated_at: new Date().toISOString()
   };
-  for (const key of ["item_name", "category", "unit", "required_status", "notes", "supplier", "estimated_price", "actual_price", "margin_pct"]) {
+  for (const key of ["item_name", "category", "unit", "required_status", "notes", "supplier", "estimated_price", "actual_price", "actual_vat_amount", "vat_applicable", "margin_pct"]) {
     if (body[key] !== undefined) payload[key] = body[key];
   }
   if (quantity !== undefined) payload.quantity = quantity;

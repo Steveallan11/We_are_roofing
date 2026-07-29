@@ -46,6 +46,8 @@ const FILTERS = [
   { id: "Optional", label: "Optional" }
 ] as const;
 
+const DEFAULT_VAT_RATE = 0.2;
+
 export function MaterialsEditor({ jobId, quoteId, initialMaterials, suppliers }: Props) {
   const router = useRouter();
   const [materials, setMaterials] = useState(initialMaterials);
@@ -130,7 +132,10 @@ export function MaterialsEditor({ jobId, quoteId, initialMaterials, suppliers }:
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
-  const materialTotal = materials.reduce((sum, material) => sum + getMaterialTotal(material), 0);
+  const materialEstimatedNet = materials.reduce((sum, material) => sum + getMaterialEstimatedNet(material), 0);
+  const materialEstimatedVat = materials.reduce((sum, material) => sum + getMaterialEstimatedVat(material), 0);
+  const materialActualGross = materials.reduce((sum, material) => sum + getMaterialActualGross(material), 0);
+  const materialActualVat = materials.reduce((sum, material) => sum + getMaterialActualVat(material), 0);
   const requiredCount = materials.filter((material) => material.required_status === "Definitely Needed").length;
   const checkCount = materials.filter((material) => material.required_status === "May Be Needed" || material.required_status === "Check On Site").length;
   const supplierCount = new Set(materials.map((material) => material.supplier).filter(Boolean)).size;
@@ -163,11 +168,13 @@ export function MaterialsEditor({ jobId, quoteId, initialMaterials, suppliers }:
         <p className="mb-4 rounded-2xl border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-4 py-3 text-sm leading-6 text-[var(--text)]">
           Supplier CSV hides your estimated prices and gives suppliers blank pricing columns to complete. Use Export With Estimates only for your own internal checking.
         </p>
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <SummaryTile label="Need to order" value={String(requiredCount)} hint="Definitely required" />
           <SummaryTile label="Check first" value={String(checkCount)} hint="May be needed or site check" />
           <SummaryTile label="Suppliers" value={String(supplierCount)} hint="Assigned on this list" />
-          <SummaryTile label="Estimated total" value={currency(materialTotal)} hint="Based on unit costs entered" />
+          <SummaryTile label="Est. net" value={currency(materialEstimatedNet)} hint="Before VAT" />
+          <SummaryTile label="Est. VAT" value={currency(materialEstimatedVat)} hint={currency(materialEstimatedNet + materialEstimatedVat) + " inc VAT"} />
+          <SummaryTile label="Actual total" value={materialActualGross > 0 ? currency(materialActualGross) : "TBC"} hint={materialActualGross > 0 ? currency(materialActualGross - materialActualVat) + " net" : "Enter supplier invoices"} />
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
@@ -225,7 +232,12 @@ function MaterialCard({
   saveMaterial: (material: MaterialRecord, updates: Partial<MaterialRecord>) => Promise<void>;
   deleteMaterial: (id: string) => Promise<void>;
 }) {
-  const rowTotal = getMaterialTotal(material);
+  const estimatedNet = getMaterialEstimatedNet(material);
+  const estimatedVat = getMaterialEstimatedVat(material);
+  const estimatedGross = estimatedNet + estimatedVat;
+  const actualGross = getMaterialActualGross(material);
+  const actualVat = getMaterialActualVat(material);
+  const actualNet = Math.max(0, actualGross - actualVat);
   const statusCopy = STATUS_COPY[material.required_status] ?? STATUS_COPY.Optional;
 
   return (
@@ -245,13 +257,18 @@ function MaterialCard({
             value={material.item_name}
           />
         </div>
-        <div className="rounded-2xl border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-4 py-3 lg:min-w-40 lg:text-right">
-          <p className="text-[0.62rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Line total</p>
-          <p className="mt-1 text-xl font-semibold text-white">{currency(rowTotal)}</p>
+        <div className="rounded-2xl border border-[var(--gold)]/25 bg-[var(--gold)]/10 px-4 py-3 lg:min-w-56 lg:text-right">
+          <p className="text-[0.62rem] font-bold uppercase tracking-[0.18em] text-[var(--gold)]">Material cost</p>
+          <p className="mt-1 text-xl font-semibold text-white">{actualGross > 0 ? currency(actualGross) : currency(estimatedGross)}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {actualGross > 0
+              ? `Actual: ${currency(actualNet)} net + ${currency(actualVat)} VAT`
+              : `Estimate: ${currency(estimatedNet)} net + ${currency(estimatedVat)} VAT`}
+          </p>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <FieldBlock label="Quantity">
           <input
             className="field"
@@ -269,7 +286,7 @@ function MaterialCard({
             value={material.unit ?? ""}
           />
         </FieldBlock>
-        <FieldBlock label="Unit cost">
+        <FieldBlock label="Est. unit cost ex VAT">
           <input
             className="field"
             onBlur={() => saveMaterial(material, { unit_cost: material.unit_cost ?? 0, quantity: Number(material.quantity || 0) })}
@@ -277,6 +294,40 @@ function MaterialCard({
             step="0.01"
             type="number"
             value={material.unit_cost ?? 0}
+          />
+        </FieldBlock>
+        <FieldBlock label="VAT applies">
+          <select
+            className="field"
+            onChange={(event) => {
+              const vat_applicable = event.target.value === "true";
+              updateLocal(material.id, { vat_applicable });
+              void saveMaterial(material, { vat_applicable });
+            }}
+            value={material.vat_applicable === false ? "false" : "true"}
+          >
+            <option value="true">Yes - add 20%</option>
+            <option value="false">No VAT</option>
+          </select>
+        </FieldBlock>
+        <FieldBlock label="Actual total inc VAT">
+          <input
+            className="field"
+            onBlur={() => saveMaterial(material, { actual_price: material.actual_price ?? null })}
+            onChange={(event) => updateLocal(material.id, { actual_price: event.target.value === "" ? null : Number(event.target.value || 0) })}
+            step="0.01"
+            type="number"
+            value={material.actual_price ?? ""}
+          />
+        </FieldBlock>
+        <FieldBlock label="Actual VAT">
+          <input
+            className="field"
+            onBlur={() => saveMaterial(material, { actual_vat_amount: material.actual_vat_amount ?? 0 })}
+            onChange={(event) => updateLocal(material.id, { actual_vat_amount: Number(event.target.value || 0) })}
+            step="0.01"
+            type="number"
+            value={material.actual_vat_amount ?? 0}
           />
         </FieldBlock>
         <FieldBlock label="Supplier">
@@ -351,8 +402,29 @@ function SummaryTile({ label, value, hint }: { label: string; value: string; hin
   );
 }
 
-function getMaterialTotal(material: MaterialRecord) {
-  return Number(material.total_cost ?? Number(material.quantity || 0) * Number(material.unit_cost || 0));
+function getMaterialEstimatedNet(material: MaterialRecord) {
+  const quantity = Number(material.quantity || 0);
+  const totalCost = material.total_cost == null ? null : Number(material.total_cost);
+  if (totalCost !== null && Number.isFinite(totalCost)) return totalCost;
+  const unitCost = material.unit_cost == null ? null : Number(material.unit_cost);
+  if (unitCost !== null && Number.isFinite(unitCost)) return quantity * unitCost;
+  const estimatedPrice = material.estimated_price == null ? null : Number(material.estimated_price);
+  return estimatedPrice !== null && Number.isFinite(estimatedPrice) ? estimatedPrice : 0;
+}
+
+function getMaterialEstimatedVat(material: MaterialRecord) {
+  if (material.vat_applicable === false) return 0;
+  return getMaterialEstimatedNet(material) * DEFAULT_VAT_RATE;
+}
+
+function getMaterialActualGross(material: MaterialRecord) {
+  const actual = material.actual_price == null ? null : Number(material.actual_price);
+  return actual !== null && Number.isFinite(actual) ? actual : 0;
+}
+
+function getMaterialActualVat(material: MaterialRecord) {
+  const actualVat = material.actual_vat_amount == null ? null : Number(material.actual_vat_amount);
+  return actualVat !== null && Number.isFinite(actualVat) ? actualVat : 0;
 }
 
 function getFilenameFromDisposition(disposition: string) {

@@ -452,6 +452,8 @@ export type MaterialRecord = MaterialLineItem & {
   unit_cost?: number | null;
   total_cost?: number | null;
   actual_price?: number | null;
+  actual_vat_amount?: number | null;
+  vat_applicable?: boolean | null;
   margin_pct?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -770,6 +772,9 @@ export type JobExpense = {
   supplier_name?: string | null;
   amount: number;
   vat_amount: number;
+  cis_applicable?: boolean | null;
+  cis_rate?: number | null;
+  cis_deduction?: number | null;
   expense_date: string;
   receipt_url?: string | null;
   notes?: string | null;

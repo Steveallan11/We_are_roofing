@@ -33,6 +33,9 @@ export async function POST(request: Request, { params }: Props) {
       notes: body.notes || "",
       supplier: body.supplier || null,
       estimated_price: body.estimated_price == null ? null : Number(body.estimated_price || 0),
+      actual_price: body.actual_price == null ? null : Number(body.actual_price || 0),
+      actual_vat_amount: body.actual_vat_amount == null ? 0 : Number(body.actual_vat_amount || 0),
+      vat_applicable: body.vat_applicable ?? true,
       unit_cost: unitCost,
       total_cost: unitCost == null ? null : quantity * unitCost
     })

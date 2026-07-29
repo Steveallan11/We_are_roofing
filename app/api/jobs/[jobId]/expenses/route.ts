@@ -72,6 +72,8 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: "A description and an amount greater than zero are required." }, { status: 400 });
   }
   const category = CATEGORIES.includes(body.category as JobExpenseCategory) ? (body.category as JobExpenseCategory) : "other";
+  const vatAmount = round2(Math.max(0, Number(body.vat_amount ?? 0)));
+  const cisFields = normaliseCisFields({ category, amount, vatAmount, body });
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true, expense: null });
 
@@ -93,7 +95,8 @@ export async function POST(request: Request, { params }: Props) {
       description,
       supplier_name: body.supplier_name?.trim() || null,
       amount: round2(amount),
-      vat_amount: round2(Math.max(0, Number(body.vat_amount ?? 0))),
+      vat_amount: vatAmount,
+      ...cisFields,
       expense_date: body.expense_date || new Date().toISOString().slice(0, 10),
       receipt_url: body.receipt_url || null,
       notes: body.notes?.trim() || null
@@ -120,6 +123,7 @@ export async function PATCH(request: Request, { params }: Props) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const supabase = createSupabaseAdminClient();
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.description !== undefined) {
     const description = (body.description ?? "").trim();
@@ -133,16 +137,49 @@ export async function PATCH(request: Request, { params }: Props) {
     }
     patch.amount = round2(amount);
   }
+  let patchCategory = body.category as JobExpenseCategory | undefined;
   if (body.vat_amount !== undefined) patch.vat_amount = round2(Math.max(0, Number(body.vat_amount ?? 0)));
   if (body.category !== undefined) {
-    patch.category = CATEGORIES.includes(body.category as JobExpenseCategory) ? body.category : "other";
+    patchCategory = CATEGORIES.includes(body.category as JobExpenseCategory) ? (body.category as JobExpenseCategory) : "other";
+    patch.category = patchCategory;
+  }
+  if (body.cis_applicable !== undefined || body.cis_rate !== undefined || body.amount !== undefined || body.vat_amount !== undefined || body.category !== undefined) {
+    const { data: currentExpense, error: currentExpenseError } = await supabase
+      .from("job_expenses")
+      .select("category, amount, vat_amount, cis_applicable, cis_rate")
+      .eq("id", body.expense_id)
+      .eq("job_id", jobId)
+      .maybeSingle();
+
+    if (currentExpenseError) {
+      return NextResponse.json({ ok: false, error: currentExpenseError.message }, { status: 500 });
+    }
+    if (!currentExpense) {
+      return NextResponse.json({ ok: false, error: "Expense not found." }, { status: 404 });
+    }
+
+    const category = patchCategory ?? (currentExpense.category as JobExpenseCategory);
+    const amount = Number(body.amount ?? currentExpense.amount ?? 0);
+    const vatAmount = Number(body.vat_amount ?? currentExpense.vat_amount ?? 0);
+    Object.assign(
+      patch,
+      normaliseCisFields({
+        category,
+        amount,
+        vatAmount,
+        body: {
+          ...body,
+          cis_applicable: body.cis_applicable ?? currentExpense.cis_applicable,
+          cis_rate: body.cis_rate ?? currentExpense.cis_rate
+        }
+      })
+    );
   }
   if (body.supplier_name !== undefined) patch.supplier_name = body.supplier_name?.trim() || null;
   if (body.expense_date !== undefined && body.expense_date) patch.expense_date = body.expense_date;
   if (body.notes !== undefined) patch.notes = body.notes?.trim() || null;
   if (body.receipt_url !== undefined) patch.receipt_url = body.receipt_url || null;
 
-  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("job_expenses")
     .update(patch)
@@ -189,4 +226,26 @@ function mapDiaryCategory(category: string | null): JobExpenseCategory {
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function normaliseCisFields({
+  category,
+  amount,
+  vatAmount,
+  body
+}: {
+  category: JobExpenseCategory;
+  amount: number;
+  vatAmount: number;
+  body: Partial<JobExpense>;
+}) {
+  const supportsCis = category === "labour" || category === "subcontractor";
+  const cisApplicable = supportsCis && Boolean(body.cis_applicable);
+  const cisRate = cisApplicable ? Math.max(0, Number(body.cis_rate ?? 0.2)) : 0;
+  const net = Math.max(0, Number(amount || 0) - Number(vatAmount || 0));
+  return {
+    cis_applicable: cisApplicable,
+    cis_rate: cisRate,
+    cis_deduction: cisApplicable ? round2(net * cisRate) : 0
+  };
 }

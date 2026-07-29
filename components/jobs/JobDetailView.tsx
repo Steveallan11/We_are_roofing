@@ -184,6 +184,7 @@ export function JobDetailView(props: JobDetailViewProps) {
             quote={quote ?? null}
             invoices={invoices}
             expenses={expenses ?? []}
+            materials={materials}
             customerName={customer.full_name}
             customerEmail={customer.email}
           />
