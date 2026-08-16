@@ -220,7 +220,7 @@ export function buildQuoteOptionDetailRows(option: Pick<QuoteOption, "cost_break
 
 export function getQuoteOptionPresentation(option: QuoteOption, index = 0): QuoteOptionPresentation {
   const optionName = getOptionName(option, index);
-  const optionType = option.option_type || getOptionTypeFromId(option.id);
+  const optionType = getSupportedOptionType(option);
   const recommended = Boolean(option.recommended);
 
   if (optionType === "standard_scaffold") {
@@ -252,8 +252,8 @@ export function getQuoteOptionPresentation(option: QuoteOption, index = 0): Quot
   return {
     optionName,
     optionType,
-    title: option.title || option.label || optionName,
-    shortDescription: option.short_description || "Review this option",
+    title: getCustomOptionTitle(option, optionName),
+    shortDescription: getCustomOptionShortDescription(option),
     longDescription: option.description || "Review this option and the price summary below before deciding whether to proceed.",
     recommended
   };
@@ -370,7 +370,7 @@ export function normaliseQuoteCostLine(line: CostLineItem): CostLineItem {
 }
 
 export function normaliseQuoteOption(option: QuoteOption, index = 0): QuoteOption {
-  const optionType = option.option_type || getOptionTypeFromId(option.id);
+  const optionType = getSupportedOptionType(option);
   const defaults = getQuoteOptionTypeDefaults(optionType, index);
   const cost_breakdown = (option.cost_breakdown ?? []).map(normaliseQuoteOptionCostLine);
   const subtotal = calculateOptionNet({ cost_breakdown });
@@ -378,13 +378,13 @@ export function normaliseQuoteOption(option: QuoteOption, index = 0): QuoteOptio
 
   return {
     ...option,
-    id: optionType ? defaults.id : option.id || defaults.id,
-    label: optionType ? defaults.label : option.label || defaults.label,
+    id: option.id || defaults.id,
+    label: option.label || defaults.label,
     option_type: optionType,
-    title: option.title || defaults.title,
-    short_description: option.short_description || defaults.short_description,
+    title: optionType ? option.title || defaults.title : getCustomOptionTitle(option, defaults.label),
+    short_description: optionType ? option.short_description || defaults.short_description : getCustomOptionShortDescription(option),
     description: option.description || defaults.description,
-    recommended: optionType ? defaults.recommended : Boolean(option.recommended),
+    recommended: Boolean(option.recommended),
     cost_breakdown,
     subtotal,
     vat_amount,
@@ -397,15 +397,16 @@ export function buildDefaultQuoteOptionsFromLines(lines: CostLineItem[]): QuoteO
   const roofLines = normalisedLines.filter((line) => getQuoteLineItemCategory(line) === "roof_works");
   const standardAccess = normalisedLines.filter((line) => line.pricing_category === "standard_scaffold");
   const temporaryProtection = normalisedLines.filter((line) => line.pricing_category === "temporary_roof_protection");
-  const defaultsA = getQuoteOptionTypeDefaults("standard_scaffold", 0);
-  const defaultsB = getQuoteOptionTypeDefaults("temporary_roof_protection", 1);
+  const hasAccessChoice = standardAccess.length > 0 && temporaryProtection.length > 0;
+  const defaultsA = getQuoteOptionTypeDefaults(hasAccessChoice ? "standard_scaffold" : undefined, 0);
+  const defaultsB = getQuoteOptionTypeDefaults(hasAccessChoice ? "temporary_roof_protection" : undefined, 1);
   const optionALines = [...roofLines, ...(standardAccess.length ? standardAccess : normalisedLines.filter((line) => getQuoteLineItemCategory(line) === "access" && line.pricing_category !== "temporary_roof_protection"))];
   const optionBLines = [...roofLines, ...(temporaryProtection.length ? temporaryProtection : standardAccess)];
   const fallbackLines = normalisedLines.length ? normalisedLines : lines.map(normaliseQuoteCostLine);
 
   return [
-    normaliseQuoteOption({ ...defaultsA, option_type: "standard_scaffold", cost_breakdown: optionALines.length ? optionALines : fallbackLines, subtotal: 0, vat_amount: 0, total: 0 }, 0),
-    normaliseQuoteOption({ ...defaultsB, option_type: "temporary_roof_protection", cost_breakdown: optionBLines.length ? optionBLines : fallbackLines, subtotal: 0, vat_amount: 0, total: 0 }, 1)
+    normaliseQuoteOption({ ...defaultsA, option_type: hasAccessChoice ? "standard_scaffold" : undefined, cost_breakdown: optionALines.length ? optionALines : fallbackLines, subtotal: 0, vat_amount: 0, total: 0 }, 0),
+    normaliseQuoteOption({ ...defaultsB, option_type: hasAccessChoice ? "temporary_roof_protection" : undefined, cost_breakdown: optionBLines.length ? optionBLines : fallbackLines, subtotal: 0, vat_amount: 0, total: 0 }, 1)
   ];
 }
 
@@ -475,18 +476,59 @@ function getCustomerLineItemLabel(item: CostLineItem) {
 function getOptionName(option: Pick<QuoteOption, "id" | "label">, index: number) {
   if (/^option[\s_-]?[a-z]$/i.test(option.label || "")) return option.label.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
-  const typeFromId = getOptionTypeFromId(option.id);
-  if (typeFromId === "standard_scaffold") return "Option A";
-  if (typeFromId === "temporary_roof_protection") return "Option B";
-
   return `Option ${String.fromCharCode(65 + Math.max(index, 0))}`;
 }
 
-function getOptionTypeFromId(id?: string) {
-  const normalised = (id || "").toLowerCase().replace(/_/g, "-");
-  if (normalised === "option-a") return "standard_scaffold";
-  if (normalised === "option-b") return "temporary_roof_protection";
+function getSupportedOptionType(option: Pick<QuoteOption, "option_type" | "cost_breakdown" | "title" | "label">) {
+  const requestedType = option.option_type;
+  if (requestedType !== "standard_scaffold" && requestedType !== "temporary_roof_protection") return requestedType;
+
+  const lineIdentity = (option.cost_breakdown ?? [])
+    .map((line) => `${line.item ?? ""} ${line.pricing_category ?? ""} ${line.quote_section ?? ""} ${line.source_label ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+  if (requestedType === "standard_scaffold" && /\b(scaffold|access)\b/.test(lineIdentity)) return requestedType;
+  if (requestedType === "temporary_roof_protection" && /\b(temporary roof|weather protection|temp roof)\b/.test(lineIdentity)) return requestedType;
+
+  // Older generic Option A/B quotes were incorrectly stamped with these types.
+  // Only keep the type when the option's actual priced lines support it.
   return undefined;
+}
+
+function getCustomOptionTitle(option: Pick<QuoteOption, "title" | "label" | "description" | "cost_breakdown">, fallback: string) {
+  const title = option.title?.trim();
+  if (title && !["Standard Scaffold", "Temporary Roof Protection"].includes(title)) return title;
+
+  const label = option.label?.trim();
+  if (label && !/^option[\s_-]?[a-z]$/i.test(label)) return label;
+
+  const lineTitle = (option.cost_breakdown ?? [])
+    .map((line) => line.item?.trim())
+    .find((item) => item && !/^(roof works|main works|quoted works|additional works)$/i.test(item));
+  if (lineTitle) return lineTitle;
+
+  const description = option.description?.trim().split(/[.!?]/)[0]?.trim();
+  if (description) {
+    const action = description.split(/\s+(?:with|using|including|to include)\s+/i)[0]?.trim() || description;
+    return truncateOptionText(action, 58);
+  }
+
+  return fallback;
+}
+
+function getCustomOptionShortDescription(option: Pick<QuoteOption, "short_description" | "description">) {
+  const shortDescription = option.short_description?.trim();
+  if (shortDescription && !["Best lower upfront cost", "Best protection during the works", "Review this option"].includes(shortDescription)) {
+    return shortDescription;
+  }
+  const description = option.description?.trim();
+  return description ? truncateOptionText(description, 92) : "Review the scope and price for this option";
+}
+
+function truncateOptionText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  const shortened = value.slice(0, maxLength + 1).replace(/\s+\S*$/, "").trim();
+  return `${shortened || value.slice(0, maxLength).trim()}…`;
 }
 
 function pickBetterSummaryLabel(current: string, next: string, category: QuotePriceSummaryRow["id"]) {

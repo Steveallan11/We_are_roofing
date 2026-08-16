@@ -264,7 +264,18 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
         return buildDefaultQuoteOptionsFromLines(costBreakdown);
       }
       const nextLetter = String.fromCharCode(65 + current.length);
-      return [...current, { ...makeOption(0), id: `option-${nextLetter.toLowerCase()}`, label: `Option ${nextLetter}`, recommended: false }];
+      return [
+        ...current,
+        {
+          ...makeOption(0),
+          id: `option-${nextLetter.toLowerCase()}`,
+          label: `Option ${nextLetter}`,
+          option_type: undefined,
+          title: `Option ${nextLetter}`,
+          short_description: "Review the scope and price for this option",
+          recommended: false
+        }
+      ];
     });
   }
 
@@ -839,8 +850,26 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                   </button>
                 </div>
                 <label className="mt-3 block">
-                  <span className="label">Option label</span>
+                  <span className="label">Option code</span>
                   <input className="field" onChange={(event) => updateOption(option.id, { label: event.target.value })} value={option.label} />
+                </label>
+                <label className="mt-3 block">
+                  <span className="label">Customer-facing option title</span>
+                  <input
+                    className="field"
+                    onChange={(event) => updateOption(option.id, { title: event.target.value, option_type: undefined })}
+                    placeholder="e.g. Repair existing flat roof"
+                    value={option.title ?? ""}
+                  />
+                </label>
+                <label className="mt-3 block">
+                  <span className="label">Short summary shown on option card</span>
+                  <input
+                    className="field"
+                    onChange={(event) => updateOption(option.id, { short_description: event.target.value })}
+                    placeholder="e.g. Lower-cost repair option"
+                    value={option.short_description ?? ""}
+                  />
                 </label>
                 <label className="mt-3 block">
                   <span className="label">Customer description</span>
@@ -1401,8 +1430,8 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   );
 }
 
-function normaliseOption(option: QuoteOption): QuoteOption {
-  return normaliseQuoteOption(option);
+function normaliseOption(option: QuoteOption, index: number): QuoteOption {
+  return normaliseQuoteOption(option, index);
 }
 
 function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = {}) {
