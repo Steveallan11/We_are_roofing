@@ -1,5 +1,5 @@
 import type { QuoteRecord } from "@/lib/types";
-import { cleanCustomerEmailBody } from "@/lib/quotes/email";
+import { cleanCustomerEmailBody, DEFAULT_QUOTE_EMAIL_MESSAGE } from "@/lib/quotes/email";
 import { currency } from "@/lib/utils";
 
 type BusinessFooter = {
@@ -87,24 +87,16 @@ export function quoteSentEmail(props: {
   const cleanMessageBody = cleanCustomerEmailBody(props.messageBody);
   const messageHtml = cleanMessageBody
     ? paragraphsToHtml(cleanMessageBody)
-    : `<p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
-        Your roofing quotation is ready to review. We have laid it out in clear sections so you can read the roof report, understand the proposed works, and choose the next step without digging through small print.
-      </p>`;
+    : paragraphsToHtml(DEFAULT_QUOTE_EMAIL_MESSAGE);
   return shell(
     "Your Roofing Quote Is Ready",
     `
       <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${escapeHtml(helloName)},</p>
       ${messageHtml}
-      <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:18px 20px;margin:22px 0">
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00;margin-bottom:10px">What is inside</div>
-        <p style="font-size:15px;line-height:1.75;color:#555;margin:0 0 8px">1. Roof report - what we found and what it means.</p>
-        <p style="font-size:15px;line-height:1.75;color:#555;margin:0 0 8px">2. Scope of works - what is included in the job.</p>
-        <p style="font-size:15px;line-height:1.75;color:#555;margin:0">3. Options and next steps - review everything at your own pace.</p>
-      </div>
-      <p style="text-align:center;margin:30px 0">
+      <p style="text-align:center;margin:26px 0">
         <a href="${props.quoteUrl}" style="background:#D4AF37;color:#000;padding:15px 30px;border-radius:8px;font-size:16px;font-weight:700;text-decoration:none;display:inline-block">View Quote</a>
       </p>
-      <p style="font-size:15px;color:#555;line-height:1.75;margin-bottom:0">If anything is unclear, just reply to this email or use the question box on the quote page and Andy will talk you through it.</p>
+      <p style="font-size:14px;color:#666;line-height:1.65;margin-bottom:0">If you have any questions, simply reply to this email.</p>
     `,
     { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
   );

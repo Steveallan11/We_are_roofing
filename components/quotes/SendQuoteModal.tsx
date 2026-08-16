@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cleanCustomerEmailBody } from "@/lib/quotes/email";
+import { DEFAULT_QUOTE_EMAIL_MESSAGE } from "@/lib/quotes/email";
 import { currency } from "@/lib/utils";
 import type { JobDocumentRecord } from "@/lib/types";
 
@@ -29,7 +29,6 @@ export function SendQuoteModal({
   customerName,
   customerEmail,
   defaultEmailSubject,
-  defaultEmailBody,
   documents = [],
   onClose,
   onSent
@@ -37,9 +36,7 @@ export function SendQuoteModal({
   const [email, setEmail] = useState(customerEmail ?? "");
   const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
   const [emailSubject, setEmailSubject] = useState(defaultEmailSubject || `Your We Are Roofing quotation - ${quoteRef}`);
-  const [emailBody, setEmailBody] = useState(
-    cleanCustomerEmailBody(defaultEmailBody) || "Your roofing quotation is ready to review. Please use the button below to view the quote online."
-  );
+  const [emailBody, setEmailBody] = useState(DEFAULT_QUOTE_EMAIL_MESSAGE);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [includeRoofPlan, setIncludeRoofPlan] = useState(false);
   const [roofPlanDocumentId, setRoofPlanDocumentId] = useState("");
@@ -155,7 +152,7 @@ export function SendQuoteModal({
         <div className="mt-5 rounded-2xl border border-[var(--border)] bg-black/20 p-5">
           <div>
             <p className="label">Draft email</p>
-            <p className="mt-1 text-sm text-[var(--muted)]">Edit the greeting, subject, and message before sending the secure quote link.</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">Keep this short. The full report, options, and prices are shown on the secure quote page.</p>
           </div>
           <div className="mt-4 grid gap-4">
             <label className="block">
@@ -182,9 +179,9 @@ export function SendQuoteModal({
             <label className="block">
               <span className="label">Email message</span>
               <textarea
-                className="field mt-2 min-h-40 leading-7"
+                className="field mt-2 min-h-28 leading-7"
                 onChange={(event) => setEmailBody(event.target.value)}
-                placeholder="Write the email message customers will see above the View Quote button."
+                placeholder="Add a short note above the View Quote button."
                 value={emailBody}
               />
             </label>

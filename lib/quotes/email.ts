@@ -1,3 +1,6 @@
+export const DEFAULT_QUOTE_EMAIL_MESSAGE =
+  "Your roofing quotation is ready to review. Please use the button below to view the full details and next steps.";
+
 export function cleanCustomerEmailBody(value?: string | null) {
   if (!value) return "";
 
