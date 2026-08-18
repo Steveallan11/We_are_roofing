@@ -37,6 +37,8 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [roofReport, setRoofReport] = useState(quote?.roof_report ?? "");
   const [scopeOfWorks, setScopeOfWorks] = useState(quote?.scope_of_works ?? "");
   const [guaranteeText, setGuaranteeText] = useState(quote?.guarantee_text ?? "");
@@ -433,41 +435,53 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   }
 
   async function saveQuote() {
+    if (saving) return;
     setError(null);
     setSuccess(null);
-    const response = await fetch(`/api/quotes/${quoteId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        roof_report: roofReport,
-        scope_of_works: scopeOfWorks,
-        cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
-        guarantee_text: guaranteeText,
-        exclusions,
-        terms,
-        customer_email_subject: emailSubject,
-        customer_email_body: emailBody,
-        confidence,
-        pricing_notes: pricingNotes
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        missing_info: missingInfo
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        options: options.map(normaliseOption)
-      })
-    });
+    setSaving(true);
 
-    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-    if (!response.ok || !result?.ok) {
-      setError(result?.error || "Unable to save quote changes.");
-      return;
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roof_report: roofReport,
+          scope_of_works: scopeOfWorks,
+          cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
+          guarantee_text: guaranteeText,
+          exclusions,
+          terms,
+          customer_email_subject: emailSubject,
+          customer_email_body: emailBody,
+          confidence,
+          pricing_notes: pricingNotes
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          missing_info: missingInfo
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          options: options.map(normaliseOption)
+        })
+      });
+
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !result?.ok) {
+        setError(result?.error || `Unable to save quote changes (${response.status}).`);
+        return;
+      }
+
+      const savedAt = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      setLastSavedAt(savedAt);
+      setSuccess(`Quote changes saved at ${savedAt}.`);
+      startTransition(() => router.refresh());
+    } catch (saveError) {
+      console.error("Quote save failed:", saveError);
+      setError("The quote could not be saved because the connection was interrupted. Please try again.");
+    } finally {
+      setSaving(false);
     }
-
-    setSuccess("Quote changes saved.");
-    startTransition(() => router.refresh());
   }
 
   async function generatePdf() {
@@ -753,28 +767,33 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
 
   return (
     <div className="stack">
-      <div className="card p-5">
+      <div className="card p-5 lg:sticky lg:top-4 lg:z-20 lg:shadow-[0_12px_30px_rgba(0,0,0,0.24)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="section-kicker text-[0.65rem] uppercase">Editable Draft</p>
             <p className="mt-2 text-sm text-[var(--muted)]">Adjust wording, totals, and customer email content before approval.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button className="button-secondary" disabled={polishing || isPending} onClick={polishQuoteWording} type="button">
+            <button className="button-secondary" disabled={polishing || saving || isPending} onClick={polishQuoteWording} type="button">
               {polishing ? "Polishing..." : "Polish Customer Quote"}
             </button>
             {rateCard.length ? (
-              <button className="button-ghost" disabled={isPending} onClick={applyRates} type="button">
+              <button className="button-ghost" disabled={saving || isPending} onClick={applyRates} type="button">
                 Apply Rate Card
               </button>
             ) : null}
-            <button className="button-secondary" disabled={isPending} onClick={generatePdf} type="button">
+            <button className="button-secondary" disabled={saving || isPending} onClick={generatePdf} type="button">
               Generate PDF
             </button>
-            <button className="button-primary" disabled={isPending} onClick={saveQuote} type="button">
-              {isPending ? "Saving..." : "Save Changes"}
+            <button className="button-primary min-w-36" disabled={saving || isPending} onClick={saveQuote} type="button">
+              {saving || isPending ? "Saving..." : "Save Changes"}
             </button>
           </div>
+        </div>
+        <div aria-live="polite" className="mt-3 min-h-5">
+          {success ? <p className="text-sm font-semibold text-[#7ce3a6]">{success}</p> : null}
+          {error ? <p className="text-sm font-semibold text-[#ff9a91]">{error}</p> : null}
+          {!success && !error && lastSavedAt ? <p className="text-xs text-[var(--muted)]">Last saved at {lastSavedAt}</p> : null}
         </div>
       </div>
 
@@ -789,10 +808,10 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="button-primary" disabled={polishing || buildingWithChatGpt || isPending} onClick={editQuoteWithChatGpt} type="button">
+            <button className="button-primary" disabled={polishing || buildingWithChatGpt || saving || isPending} onClick={editQuoteWithChatGpt} type="button">
               {polishing ? "Editing quote..." : "Edit existing quote"}
             </button>
-            <button className="button-secondary" disabled={buildingWithChatGpt || polishing || isPending} onClick={buildQuoteWithChatGpt} type="button">
+            <button className="button-secondary" disabled={buildingWithChatGpt || polishing || saving || isPending} onClick={buildQuoteWithChatGpt} type="button">
               {buildingWithChatGpt ? "Building quote..." : "Build full quote"}
             </button>
           </div>
@@ -1424,8 +1443,6 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
         </div>
       </div>
 
-      {success ? <p className="text-sm text-[#7ce3a6]">{success}</p> : null}
-      {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
     </div>
   );
 }
