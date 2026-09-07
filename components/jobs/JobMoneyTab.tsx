@@ -507,6 +507,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
           invoiceId={sendInvoice.id}
           invoiceRef={sendInvoice.invoice_ref}
           jobTitle={jobTitle}
+          dueDate={sendInvoice.due_date}
           onClose={() => setSendInvoice(null)}
           onSent={(nextMessage) => {
             setSendInvoice(null);

@@ -15,7 +15,12 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { invoiceId } = await params;
-  const body = (await request.json().catch(() => ({}))) as { to_email?: string; email_customer_name?: string; test?: boolean };
+  const body = (await request.json().catch(() => ({}))) as {
+    to_email?: string;
+    email_customer_name?: string;
+    due_date?: string;
+    test?: boolean;
+  };
   const isTestSend = body.test === true;
 
   if (!canPersistToSupabase()) {
@@ -26,13 +31,37 @@ export async function POST(request: Request, { params }: Props) {
   if (!auth.ok) return auth.response;
 
   const supabase = createSupabaseAdminClient();
-  const { data: invoice, error } = await supabase.from("invoices").select("*").eq("id", invoiceId).single();
-  if (error || !invoice) {
+  const { data: invoiceRecord, error } = await supabase.from("invoices").select("*").eq("id", invoiceId).single();
+  if (error || !invoiceRecord) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Unable to load invoice." }, { status: 404 });
   }
 
+  let invoice = invoiceRecord;
+
   if (invoice.status === "Paid" || invoice.status === "Void") {
     return NextResponse.json({ ok: false, error: `Invoice cannot be sent from status ${invoice.status}.` }, { status: 400 });
+  }
+
+  const requestedDueDate = body.due_date?.trim();
+  if (requestedDueDate) {
+    if (!isValidIsoDate(requestedDueDate)) {
+      return NextResponse.json({ ok: false, error: "Choose a valid payment due date." }, { status: 400 });
+    }
+    if (invoice.issue_date && requestedDueDate < String(invoice.issue_date).slice(0, 10)) {
+      return NextResponse.json({ ok: false, error: "Payment due date cannot be before the invoice issue date." }, { status: 400 });
+    }
+    if (requestedDueDate !== String(invoice.due_date).slice(0, 10)) {
+      const updated = await supabase
+        .from("invoices")
+        .update({ due_date: requestedDueDate, updated_at: new Date().toISOString() })
+        .eq("id", invoiceId)
+        .select("*")
+        .single();
+      if (updated.error || !updated.data) {
+        return NextResponse.json({ ok: false, error: updated.error?.message ?? "Unable to update the payment due date." }, { status: 500 });
+      }
+      invoice = updated.data;
+    }
   }
 
   const bundle = await getJobBundle(invoice.job_id);
@@ -75,7 +104,7 @@ export async function POST(request: Request, { params }: Props) {
       businessPhone: bundle.business.phone,
       businessEmail: bundle.business.email
     }),
-    text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Open it here: ${invoiceUrl}`,
+    text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Payment is due by ${dueDate}. Open it here: ${invoiceUrl}`,
     jobId: bundle.job.id,
     templateType: isTestSend ? "invoice_test" : "invoice_sent",
     log: !isTestSend
@@ -131,4 +160,10 @@ function getAppUrl() {
 function toAbsoluteUrl(pathOrUrl: string, appUrl: string) {
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
   return `${appUrl}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
+}
+
+function isValidIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

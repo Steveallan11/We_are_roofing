@@ -8,15 +8,17 @@ type Props = {
   invoiceRef: string;
   jobTitle: string;
   total: number;
+  dueDate: string;
   customerName: string;
   customerEmail: string | null | undefined;
   onClose: () => void;
   onSent: (message: string) => void;
 };
 
-export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, customerName, customerEmail, onClose, onSent }: Props) {
+export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDate, customerName, customerEmail, onClose, onSent }: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
   const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
+  const [paymentDueDate, setPaymentDueDate] = useState(dueDate);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingMode, setSendingMode] = useState<"test" | "customer" | null>(null);
@@ -36,6 +38,10 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
       setError(mode === "test" ? "Add the email address to receive the test invoice." : "Add the customer's email address before sending this invoice.");
       return;
     }
+    if (!paymentDueDate) {
+      setError("Choose the date payment is due.");
+      return;
+    }
 
     setSendingMode(mode);
     setError(null);
@@ -44,7 +50,12 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
     const response = await fetch(`/api/invoices/${invoiceId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: nextEmail, email_customer_name: emailGreetingName.trim(), test: mode === "test" })
+      body: JSON.stringify({
+        to_email: nextEmail,
+        email_customer_name: emailGreetingName.trim(),
+        due_date: paymentDueDate,
+        test: mode === "test"
+      })
     });
 
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
@@ -116,6 +127,22 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
         </div>
 
         <div className="mt-5">
+          <label className="label" htmlFor={`invoice-due-date-${invoiceId}`}>
+            Payment due date
+          </label>
+          <input
+            className="field mt-2 min-h-11"
+            id={`invoice-due-date-${invoiceId}`}
+            onChange={(event) => setPaymentDueDate(event.target.value)}
+            type="date"
+            value={paymentDueDate}
+          />
+          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+            This exact date will appear on the invoice PDF and in the customer email.
+          </p>
+        </div>
+
+        <div className="mt-5">
           <label className="label" htmlFor={`invoice-send-greeting-${invoiceId}`}>
             Greeting / addressed to
           </label>
@@ -134,9 +161,9 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, custo
         <div className="mt-5 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
           <p className="label">What gets sent</p>
           <ul className="mt-3 space-y-2 text-sm text-[var(--text)]">
-            <li>- Branded invoice email with due date and payment notes</li>
+            <li>- Branded invoice email showing the payment due date above</li>
             <li>- Link to the latest invoice PDF or preview</li>
-            <li>- Send test email lets you check it first without updating the invoice</li>
+            <li>- Send test email lets you check it first without marking the invoice as sent</li>
             <li>- Send to customer updates the invoice status to Sent in the job file</li>
           </ul>
         </div>

@@ -130,6 +130,7 @@ export function InvoiceActions({ jobId, quote, invoices, customerName, customerE
           invoiceId={sendInvoice.id}
           invoiceRef={sendInvoice.invoice_ref}
           jobTitle={jobTitle}
+          dueDate={sendInvoice.due_date}
           onClose={() => setSendInvoice(null)}
           onSent={(nextMessage) => {
             setSendInvoice(null);
