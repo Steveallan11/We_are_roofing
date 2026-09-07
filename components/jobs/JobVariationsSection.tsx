@@ -59,6 +59,8 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
 
   const draftSubtotal = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0), 0);
   const draftVat = lines.reduce((sum, line) => sum + (line.vat_applicable ? (Number(line.quantity) || 0) * (Number(line.unit_price) || 0) * 0.2 : 0), 0);
+  const combinableDrafts = variations.filter((variation) => variation.status === "Draft" && !variation.approval_group_id);
+  const selectedDrafts = combinableDrafts.filter((variation) => selectedVariationIds.includes(variation.id));
 
   function refresh(nextMessage: string) {
     setMessage(nextMessage);
@@ -250,37 +252,51 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
         {showForm ? "Close" : "+ Add Additional Work"}
       </Button>
 
-      {variations.filter((variation) => variation.status === "Draft" && !variation.approval_group_id).length >= 2 ? (
+      {variations.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
-          <p className="font-semibold text-[var(--text)]">Send several extras as one quotation</p>
-          <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Tick the draft items below. The customer receives one email, one combined quote and one approval button.</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              disabled={busy !== null}
-              onClick={() => setSelectedVariationIds(variations.filter((variation) => variation.status === "Draft" && !variation.approval_group_id).map((variation) => variation.id))}
-              size="sm"
-              variant="ghost"
-            >
-              Select all drafts
-            </Button>
-            {selectedVariationIds.length > 0 ? <Button disabled={busy !== null} onClick={() => setSelectedVariationIds([])} size="sm" variant="ghost">Clear</Button> : null}
-            <Button
-              disabled={busy !== null || selectedVariationIds.length < 2}
-              onClick={() => {
-                const selected = variations.filter((variation) => selectedVariationIds.includes(variation.id));
-                setEmailTarget({
-                  type: "combined",
-                  variationIds: [...selectedVariationIds],
-                  total: selected.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0),
-                  reference: "Combined additional-works quotation"
-                });
-              }}
-              size="sm"
-              variant="primary"
-            >
-              {`Prepare email for ${selectedVariationIds.length || "selected"} items`}
-            </Button>
-          </div>
+          <p className="section-kicker">One customer email</p>
+          <p className="mt-2 font-semibold text-[var(--text)]">Combine multiple additional works into one quotation</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+            The customer receives one editable email, one secure quote link and one approval button covering every selected item.
+          </p>
+          {combinableDrafts.length >= 2 ? (
+            <>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  disabled={busy !== null}
+                  onClick={() => setSelectedVariationIds(combinableDrafts.map((variation) => variation.id))}
+                  size="sm"
+                  variant="ghost"
+                >
+                  Select all {combinableDrafts.length} drafts
+                </Button>
+                {selectedVariationIds.length > 0 ? <Button disabled={busy !== null} onClick={() => setSelectedVariationIds([])} size="sm" variant="ghost">Clear selection</Button> : null}
+                <Button
+                  disabled={busy !== null || selectedDrafts.length < 2}
+                  onClick={() => setEmailTarget({
+                    type: "combined",
+                    variationIds: selectedDrafts.map((variation) => variation.id),
+                    total: selectedDrafts.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0),
+                    reference: "Combined additional-works quotation"
+                  })}
+                  size="sm"
+                  variant="primary"
+                >
+                  {selectedDrafts.length >= 2 ? `Review one email for ${selectedDrafts.length} items` : "Select at least 2 items below"}
+                </Button>
+              </div>
+              {selectedDrafts.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-[var(--border)] bg-black/10 p-3 text-sm text-[var(--text)]">
+                  <strong>{selectedDrafts.length} selected:</strong> {selectedDrafts.map((variation) => variation.title).join(" · ")}
+                  <span className="ml-2 font-bold text-[var(--gold-l)]">{currency(selectedDrafts.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0))}</span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-3 rounded-xl border border-[var(--border)] bg-black/10 p-3 text-sm leading-6 text-[var(--text-muted)]">
+              Save at least two additional-work items using <strong className="text-[var(--text)]">Send for online approval</strong>. They will then appear below with selection boxes so you can send them together.
+            </p>
+          )}
         </div>
       ) : null}
 
