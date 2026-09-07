@@ -170,7 +170,13 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
   }
 
   async function recordApproval(variation: JobVariationRecord) {
-    const name = window.prompt("Who approved this additional work?", customerName)?.trim();
+    const isGroup = Boolean(variation.approval_group_id);
+    const name = window.prompt(
+      isGroup
+        ? `Who approved the complete combined quotation ${variation.approval_group_ref || variation.variation_ref}?`
+        : "Who approved this additional work?",
+      customerName
+    )?.trim();
     if (!name) return;
     setBusy(`approve-${variation.id}`);
     const response = await fetch(`/api/variations/${variation.id}/approve`, {
@@ -374,6 +380,7 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
           const canDeleteGroup = isGroupLead
             && !groupHasInvoices
             && groupedVariations.every((item) => !["Invoiced", "Paid"].includes(item.status));
+          const canApproveGroup = isGroupLead && groupedVariations.every((item) => item.status === "Sent");
           const canInvoice = ["Accepted", "Invoiced"].includes(variation.status) && progress.remaining > 0.01;
           const amountToCreate = invoiceAmountMode === "remaining" ? progress.remaining : Number(invoiceAmount || 0);
           return (
@@ -449,6 +456,11 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
               ) : null}
               {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
                 <Button disabled={busy !== null} onClick={() => recordApproval(variation)} size="sm" variant="ghost">Record Verbal Approval</Button>
+              ) : null}
+              {canApproveGroup ? (
+                <Button disabled={busy !== null} onClick={() => recordApproval(variation)} size="sm" variant="primary">
+                  {busy === `approve-${variation.id}` ? "Recording..." : "Manually Accept Combined Quote"}
+                </Button>
               ) : null}
               {canInvoice ? (
                 <Button disabled={busy !== null} onClick={() => openInvoiceForm(variation)} size="sm" variant="primary">
