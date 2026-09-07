@@ -24,6 +24,9 @@ export async function POST(request: Request, { params }: Props) {
   const lookup = await supabase.from("job_variations").select("*").eq("id", variationId).single();
   if (lookup.error || !lookup.data) return NextResponse.json({ ok: false, error: lookup.error?.message ?? "Additional work not found." }, { status: 404 });
   const variation = lookup.data as JobVariationRecord;
+  if (variation.approval_group_id) {
+    return NextResponse.json({ ok: false, error: `This item belongs to combined quote ${variation.approval_group_ref || ""}. Resend the combined quotation rather than sending this item separately.` }, { status: 400 });
+  }
   if (!["Draft", "Sent"].includes(variation.status)) {
     return NextResponse.json({ ok: false, error: `This additional work is already ${variation.status.toLowerCase()}.` }, { status: 400 });
   }

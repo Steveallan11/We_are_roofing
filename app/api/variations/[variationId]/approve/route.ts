@@ -17,6 +17,9 @@ export async function POST(request: Request, { params }: Props) {
   const lookup = await supabase.from("job_variations").select("*").eq("id", variationId).single();
   if (lookup.error || !lookup.data) return NextResponse.json({ ok: false, error: "Additional work not found." }, { status: 404 });
   const variation = lookup.data as JobVariationRecord;
+  if (variation.approval_group_id) {
+    return NextResponse.json({ ok: false, error: `This item belongs to combined quote ${variation.approval_group_ref || ""} and cannot be approved separately.` }, { status: 400 });
+  }
   if (["Invoiced", "Paid", "Void", "Declined"].includes(variation.status)) {
     return NextResponse.json({ ok: false, error: `This additional work cannot be approved from ${variation.status}.` }, { status: 400 });
   }

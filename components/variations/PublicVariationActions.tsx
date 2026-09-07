@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function PublicVariationActions({ variationId, token }: { variationId: string; token: string }) {
+export function PublicVariationActions({ variationId, token, quoteRef, itemCount }: { variationId: string; token: string; quoteRef: string; itemCount: number }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState<"accept" | "decline" | null>(null);
@@ -42,9 +42,9 @@ export function PublicVariationActions({ variationId, token }: { variationId: st
 
   return (
     <section className="rounded-3xl border border-[#d6c78f] bg-[#faf6e8] p-5 text-[#1f1f1f] md:p-8">
-      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#8d6a00]">Your decision</p>
-      <h2 className="mt-3 font-display text-3xl leading-tight md:text-4xl">Approve this additional work?</h2>
-      <p className="mt-3 font-ui text-base leading-7 text-[#555]">Enter your details so we can record who approved or declined the work.</p>
+      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#8d6a00]">Your decision · {quoteRef}</p>
+      <h2 className="mt-3 font-display text-3xl leading-tight md:text-4xl">Approve this additional works quote?</h2>
+      <p className="mt-3 font-ui text-base leading-7 text-[#555]">Your response applies to {itemCount === 1 ? "the item above" : `all ${itemCount} linked items above`}. Enter your details so we can record your decision.</p>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <label>
           <span className="block text-xs font-bold uppercase tracking-[0.12em] text-[#555]">Full name</span>
@@ -58,7 +58,7 @@ export function PublicVariationActions({ variationId, token }: { variationId: st
       {error ? <p className="mt-4 text-sm font-semibold text-[#a51d1d]">{error}</p> : null}
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <button className="min-h-14 rounded-xl bg-[#D4AF37] px-5 font-ui text-base font-extrabold text-black disabled:opacity-60" disabled={busy !== null} onClick={() => respond("accept")} type="button">
-          {busy === "accept" ? "Recording approval..." : "Approve Additional Work"}
+          {busy === "accept" ? "Recording approval..." : itemCount === 1 ? "Approve Additional Work" : "Approve All Additional Work"}
         </button>
         <button className="min-h-14 rounded-xl border border-[#777] bg-white px-5 font-ui text-base font-bold text-[#333] disabled:opacity-60" disabled={busy !== null} onClick={() => respond("decline")} type="button">
           {busy === "decline" ? "Recording response..." : "Decline and Contact Me"}

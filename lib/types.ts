@@ -818,6 +818,8 @@ export type JobVariationRecord = {
   business_id: string;
   job_id: string;
   quote_id?: string | null;
+  approval_group_id?: string | null;
+  approval_group_ref?: string | null;
   variation_ref: string;
   title: string;
   description: string;

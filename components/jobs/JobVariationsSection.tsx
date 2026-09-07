@@ -46,6 +46,7 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
   const [invoiceDueDate, setInvoiceDueDate] = useState(addDays(7));
   const [invoiceAmountMode, setInvoiceAmountMode] = useState<"remaining" | "custom">("remaining");
   const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +120,39 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
     refresh(result.message || "Sent for customer approval.");
   }
 
+  function toggleCombinedSelection(variationId: string) {
+    setSelectedVariationIds((current) =>
+      current.includes(variationId) ? current.filter((id) => id !== variationId) : [...current, variationId]
+    );
+  }
+
+  async function sendCombinedQuote() {
+    if (!customerEmail) {
+      setError("Add the customer's email address before sending this quotation.");
+      return;
+    }
+    if (selectedVariationIds.length < 2) {
+      setError("Select at least two draft items to send as one quotation.");
+      return;
+    }
+    setBusy("send-combined");
+    setError(null);
+    setMessage(null);
+    const response = await fetch(`/api/jobs/${jobId}/variations/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variation_ids: selectedVariationIds, to_email: customerEmail, customer_name: customerName })
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      setError(result?.error || "The combined additional-works quotation could not be sent.");
+      return;
+    }
+    setSelectedVariationIds([]);
+    refresh(result.message || "Combined additional-works quotation sent.");
+  }
+
   async function recordApproval(variation: JobVariationRecord) {
     const name = window.prompt("Who approved this additional work?", customerName)?.trim();
     if (!name) return;
@@ -175,6 +209,27 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
       <Button onClick={() => setShowForm((current) => !current)} size="sm" variant="secondary">
         {showForm ? "Close" : "+ Add Additional Work"}
       </Button>
+
+      {variations.filter((variation) => variation.status === "Draft" && !variation.approval_group_id).length >= 2 ? (
+        <div className="mt-4 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
+          <p className="font-semibold text-[var(--text)]">Send several extras as one quotation</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Tick the draft items below. The customer receives one email, one combined quote and one approval button.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              disabled={busy !== null}
+              onClick={() => setSelectedVariationIds(variations.filter((variation) => variation.status === "Draft" && !variation.approval_group_id).map((variation) => variation.id))}
+              size="sm"
+              variant="ghost"
+            >
+              Select all drafts
+            </Button>
+            {selectedVariationIds.length > 0 ? <Button disabled={busy !== null} onClick={() => setSelectedVariationIds([])} size="sm" variant="ghost">Clear</Button> : null}
+            <Button disabled={busy !== null || selectedVariationIds.length < 2} onClick={sendCombinedQuote} size="sm" variant="primary">
+              {busy === "send-combined" ? "Sending..." : `Send ${selectedVariationIds.length || "selected"} as one quote`}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {showForm ? (
         <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-black/15 p-4 md:p-5">
@@ -246,8 +301,19 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {variation.status === "Draft" && !variation.approval_group_id ? (
+                    <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm font-semibold text-[var(--text)]">
+                      <input
+                        checked={selectedVariationIds.includes(variation.id)}
+                        onChange={() => toggleCombinedSelection(variation.id)}
+                        type="checkbox"
+                      />
+                      Include in combined quote
+                    </label>
+                  ) : null}
                   <p className="font-semibold text-[var(--text)]">{variation.variation_ref}</p>
                   <Badge size="sm" variant={variation.status === "Accepted" || variation.status === "Invoiced" || variation.status === "Paid" ? "complete" : variation.status === "Declined" || variation.status === "Void" ? "alert" : "pending"}>{variation.status}</Badge>
+                  {variation.approval_group_ref ? <Badge size="sm" variant="active">Combined quote {variation.approval_group_ref}</Badge> : null}
                 </div>
                 <h3 className="mt-2 font-display text-2xl text-[var(--text)]">{variation.title}</h3>
                 {variation.description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">{variation.description}</p> : null}
@@ -280,12 +346,12 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
             ) : null}
             {variation.accepted_at ? <p className="mt-3 text-xs text-[var(--text-muted)]">Approved {formatDate(variation.accepted_at)} by {variation.approved_by_name || "customer"} ({variation.approval_method || "recorded"})</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
-              {variation.status === "Draft" || variation.status === "Sent" ? (
+              {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
                 <Button disabled={busy !== null} onClick={() => sendForApproval(variation)} size="sm" variant="secondary">
-                  {busy === `send-${variation.id}` ? "Sending..." : variation.status === "Sent" ? "Resend Approval" : "Send for Approval"}
+                  {busy === `send-${variation.id}` ? "Sending..." : variation.status === "Sent" ? "Resend Quote" : "Send This Quote"}
                 </Button>
               ) : null}
-              {variation.status === "Draft" || variation.status === "Sent" ? (
+              {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
                 <Button disabled={busy !== null} onClick={() => recordApproval(variation)} size="sm" variant="ghost">Record Verbal Approval</Button>
               ) : null}
               {canInvoice ? (

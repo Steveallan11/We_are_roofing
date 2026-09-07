@@ -95,7 +95,7 @@ export async function POST(request: Request, { params }: Props) {
       total: invoiceTotal,
       amount_paid: 0,
       balance_due: invoiceTotal,
-      notes: `Additional work ${variation.variation_ref}: ${variation.title}. ${invoiceDescription}. Approved total £${Number(variation.total).toFixed(2)}.`,
+      notes: `${variation.approval_group_ref ? `Additional works quote ${variation.approval_group_ref}, item ${variation.variation_ref}` : `Additional work ${variation.variation_ref}`}: ${variation.title}. ${invoiceDescription}. Approved item total £${Number(variation.total).toFixed(2)}.`,
       payment_terms: bundle.business.payment_terms
     })
     .select("*")
