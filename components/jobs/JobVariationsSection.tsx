@@ -185,6 +185,32 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
     refresh(result.message || "Approval recorded.");
   }
 
+  async function deleteVariation(variation: JobVariationRecord, deleteGroup = false) {
+    const reference = deleteGroup ? variation.approval_group_ref || variation.variation_ref : variation.variation_ref;
+    const warning = deleteGroup
+      ? `This permanently deletes the complete combined quotation ${reference} and every additional-work item in it. Type ${reference} to confirm.`
+      : `This permanently deletes ${reference}. Any customer link for it will stop working. Type ${reference} to confirm.`;
+    const confirmation = window.prompt(warning)?.trim();
+    if (!confirmation) return;
+
+    setBusy(`delete-${variation.id}`);
+    setError(null);
+    setMessage(null);
+    const response = await fetch(`/api/variations/${variation.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation, delete_group: deleteGroup })
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      setError(result?.error || "Additional work could not be deleted.");
+      return;
+    }
+    setSelectedVariationIds((current) => current.filter((id) => id !== variation.id));
+    refresh(result.message || "Additional work deleted.");
+  }
+
   function openInvoiceForm(variation: JobVariationRecord) {
     const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
     setInvoiceVariationId(variation.id);
@@ -320,12 +346,18 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
         {variations.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No additional work recorded yet.</p> : null}
         {variations.map((variation) => {
           const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+          const allLinkedInvoices = invoices.filter((invoice) => invoice.variation_id === variation.id);
           const linkedInvoices = invoices.filter((invoice) => invoice.variation_id === variation.id && invoice.status !== "Void");
           const groupedVariations = variation.approval_group_id
             ? variations.filter((item) => item.approval_group_id === variation.approval_group_id)
             : [];
           const groupLead = [...groupedVariations].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""))[0];
           const isGroupLead = Boolean(groupLead && groupLead.id === variation.id);
+          const groupHasInvoices = groupedVariations.some((item) => invoices.some((invoice) => invoice.variation_id === item.id));
+          const canDeleteSingle = !variation.approval_group_id && !["Invoiced", "Paid"].includes(variation.status) && allLinkedInvoices.length === 0;
+          const canDeleteGroup = isGroupLead
+            && !groupHasInvoices
+            && groupedVariations.every((item) => !["Invoiced", "Paid"].includes(item.status));
           const canInvoice = ["Accepted", "Invoiced"].includes(variation.status) && progress.remaining > 0.01;
           const amountToCreate = invoiceAmountMode === "remaining" ? progress.remaining : Number(invoiceAmount || 0);
           return (
@@ -405,6 +437,16 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
               {canInvoice ? (
                 <Button disabled={busy !== null} onClick={() => openInvoiceForm(variation)} size="sm" variant="primary">
                   {progress.invoiceCount > 0 ? "Raise Next Invoice" : "Raise Variation Invoice"}
+                </Button>
+              ) : null}
+              {canDeleteSingle ? (
+                <Button disabled={busy !== null} onClick={() => deleteVariation(variation)} size="sm" variant="ghost">
+                  {busy === `delete-${variation.id}` ? "Deleting..." : "Delete Additional Work"}
+                </Button>
+              ) : null}
+              {canDeleteGroup ? (
+                <Button disabled={busy !== null} onClick={() => deleteVariation(variation, true)} size="sm" variant="ghost">
+                  {busy === `delete-${variation.id}` ? "Deleting..." : "Delete Combined Quote"}
                 </Button>
               ) : null}
               {progress.invoiceCount > 0 && progress.remaining <= 0.01 ? <Badge size="sm" variant="complete">Fully invoiced</Badge> : null}

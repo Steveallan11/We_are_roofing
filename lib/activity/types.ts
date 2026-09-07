@@ -22,6 +22,7 @@ export type ActivityType =
   | "variation_accepted"
   | "variation_declined"
   | "variation_invoiced"
+  | "variation_deleted"
   | "email_sent"
   | "email_failed"
   | "sms_sent"
