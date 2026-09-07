@@ -4,6 +4,7 @@ import { createActivity } from "@/lib/activity/createActivity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { ActivityType } from "@/lib/activity/types";
 import type { InvoiceStatus } from "@/lib/types";
+import { updateVariationInvoiceStatus } from "@/lib/variations/invoicing";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 type Props = {
@@ -95,6 +96,8 @@ export async function PATCH(request: Request, { params }: Props) {
     });
   }
 
+  if (invoice.variation_id) await updateVariationInvoiceStatus(supabase, invoice.variation_id);
+
   return NextResponse.json({
     ok: true,
     message: `Invoice marked ${body.status}.`,
@@ -163,6 +166,8 @@ export async function DELETE(_request: Request, { params }: Props) {
   if (deleted.error) {
     return NextResponse.json({ ok: false, error: deleted.error.message }, { status: 500 });
   }
+
+  if (invoice.variation_id) await updateVariationInvoiceStatus(supabase, invoice.variation_id);
 
   return NextResponse.json({ ok: true, message: `${invoice.invoice_ref} deleted.` });
 }

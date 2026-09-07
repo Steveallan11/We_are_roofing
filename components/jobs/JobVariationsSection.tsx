@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, PageSection } from "@/components/ui/primitives";
-import type { JobVariationRecord } from "@/lib/types";
+import type { InvoiceRecord, JobVariationRecord } from "@/lib/types";
 import { currency, formatDate } from "@/lib/utils";
+import { getVariationInvoiceProgress } from "@/lib/variations/invoicing";
 
 type DraftLine = {
   id: string;
@@ -20,6 +21,7 @@ type Props = {
   customerName: string;
   customerEmail?: string | null;
   variations: JobVariationRecord[];
+  invoices: InvoiceRecord[];
 };
 
 const newLine = (): DraftLine => ({
@@ -31,7 +33,7 @@ const newLine = (): DraftLine => ({
   vat_applicable: false
 });
 
-export function JobVariationsSection({ jobId, customerName, customerEmail, variations }: Props) {
+export function JobVariationsSection({ jobId, customerName, customerEmail, variations, invoices }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
@@ -42,6 +44,8 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
   const [lines, setLines] = useState<DraftLine[]>(() => [newLine()]);
   const [invoiceVariationId, setInvoiceVariationId] = useState<string | null>(null);
   const [invoiceDueDate, setInvoiceDueDate] = useState(addDays(7));
+  const [invoiceAmountMode, setInvoiceAmountMode] = useState<"remaining" | "custom">("remaining");
+  const [invoiceAmount, setInvoiceAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,13 +137,24 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
     refresh(result.message || "Approval recorded.");
   }
 
+  function openInvoiceForm(variation: JobVariationRecord) {
+    const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+    setInvoiceVariationId(variation.id);
+    setInvoiceDueDate(addDays(7));
+    setInvoiceAmountMode("remaining");
+    setInvoiceAmount(progress.remaining.toFixed(2));
+    setError(null);
+  }
+
   async function raiseInvoice(variation: JobVariationRecord) {
+    const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+    const amount = invoiceAmountMode === "remaining" ? progress.remaining : Number(invoiceAmount);
     setBusy(`invoice-${variation.id}`);
     setError(null);
     const response = await fetch(`/api/variations/${variation.id}/invoice`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ due_date: invoiceDueDate })
+      body: JSON.stringify({ due_date: invoiceDueDate, amount })
     });
     const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string; warning?: string } | null;
     setBusy(null);
@@ -221,7 +236,12 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
 
       <div className="mt-5 space-y-3">
         {variations.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No additional work recorded yet.</p> : null}
-        {variations.map((variation) => (
+        {variations.map((variation) => {
+          const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+          const linkedInvoices = invoices.filter((invoice) => invoice.variation_id === variation.id && invoice.status !== "Void");
+          const canInvoice = ["Accepted", "Invoiced"].includes(variation.status) && progress.remaining > 0.01;
+          const amountToCreate = invoiceAmountMode === "remaining" ? progress.remaining : Number(invoiceAmount || 0);
+          return (
           <div className="rounded-2xl border border-[var(--border)] p-4" key={variation.id}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -245,6 +265,19 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
                 </div>
               ))}
             </div>
+            {["Accepted", "Invoiced", "Paid"].includes(variation.status) ? (
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <VariationStat label="Approved" value={currency(variation.total)} />
+                <VariationStat label="Invoiced" value={currency(progress.invoiced)} />
+                <VariationStat label="Paid" value={currency(progress.paid)} />
+                <VariationStat label="Left to invoice" value={currency(progress.remaining)} highlight={progress.remaining > 0.01} />
+              </div>
+            ) : null}
+            {linkedInvoices.length > 0 ? (
+              <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">
+                Invoices on this job: {linkedInvoices.map((invoice) => `${invoice.invoice_ref} (${invoice.status}, ${currency(invoice.total)})`).join(" · ")}
+              </p>
+            ) : null}
             {variation.accepted_at ? <p className="mt-3 text-xs text-[var(--text-muted)]">Approved {formatDate(variation.accepted_at)} by {variation.approved_by_name || "customer"} ({variation.approval_method || "recorded"})</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               {variation.status === "Draft" || variation.status === "Sent" ? (
@@ -255,28 +288,62 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
               {variation.status === "Draft" || variation.status === "Sent" ? (
                 <Button disabled={busy !== null} onClick={() => recordApproval(variation)} size="sm" variant="ghost">Record Verbal Approval</Button>
               ) : null}
-              {variation.status === "Accepted" ? (
-                <Button disabled={busy !== null} onClick={() => setInvoiceVariationId(variation.id)} size="sm" variant="primary">Raise Variation Invoice</Button>
+              {canInvoice ? (
+                <Button disabled={busy !== null} onClick={() => openInvoiceForm(variation)} size="sm" variant="primary">
+                  {progress.invoiceCount > 0 ? "Raise Next Invoice" : "Raise Variation Invoice"}
+                </Button>
               ) : null}
+              {progress.invoiceCount > 0 && progress.remaining <= 0.01 ? <Badge size="sm" variant="complete">Fully invoiced</Badge> : null}
             </div>
             {invoiceVariationId === variation.id ? (
-              <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--gold)]/30 bg-black/15 p-3">
+              <div className="mt-4 grid gap-3 rounded-xl border border-[var(--gold)]/30 bg-black/15 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
+                <label>
+                  <span className="label">How much to invoice?</span>
+                  <select className="field mt-2 min-h-11" onChange={(event) => setInvoiceAmountMode(event.target.value as "remaining" | "custom")} value={invoiceAmountMode}>
+                    <option value="remaining">Full remaining balance ({currency(progress.remaining)})</option>
+                    <option value="custom">A set amount</option>
+                  </select>
+                </label>
+                {invoiceAmountMode === "custom" ? (
+                  <label>
+                    <span className="label">Invoice total including VAT</span>
+                    <input className="field mt-2 min-h-11" inputMode="decimal" max={progress.remaining} min="0.01" onChange={(event) => setInvoiceAmount(event.target.value)} placeholder="0.00" step="0.01" type="number" value={invoiceAmount} />
+                  </label>
+                ) : (
+                  <div className="rounded-lg border border-[var(--border)] px-3 py-2">
+                    <span className="label">Invoice total</span>
+                    <p className="mt-1 font-semibold text-[var(--text)]">{currency(progress.remaining)}</p>
+                  </div>
+                )}
                 <label>
                   <span className="label">Payment due date</span>
                   <input className="field mt-2 min-h-11" onChange={(event) => setInvoiceDueDate(event.target.value)} type="date" value={invoiceDueDate} />
                 </label>
-                <Button disabled={busy !== null || !invoiceDueDate} onClick={() => raiseInvoice(variation)} size="sm" variant="primary">
-                  {busy === `invoice-${variation.id}` ? "Creating..." : `Create ${currency(variation.total)} Invoice`}
-                </Button>
-                <Button onClick={() => setInvoiceVariationId(null)} size="sm" variant="ghost">Cancel</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={busy !== null || !invoiceDueDate || amountToCreate <= 0 || amountToCreate > progress.remaining + 0.01} onClick={() => raiseInvoice(variation)} size="sm" variant="primary">
+                    {busy === `invoice-${variation.id}` ? "Creating..." : `Create ${currency(amountToCreate)} Invoice`}
+                  </Button>
+                  <Button onClick={() => setInvoiceVariationId(null)} size="sm" variant="ghost">Cancel</Button>
+                </div>
+                {invoiceAmountMode === "custom" ? <p className="text-xs text-[var(--text-muted)] sm:col-span-2 lg:col-span-4">Enter the final invoice amount the customer will pay, including any VAT. Maximum available: {currency(progress.remaining)}.</p> : null}
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
       {message ? <p className="mt-4 text-sm text-[#7ce3a6]">{message}</p> : null}
       {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
     </PageSection>
+  );
+}
+
+function VariationStat({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-black/10 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
+      <p className={`mt-1 text-sm font-bold ${highlight ? "text-[var(--gold-l)]" : "text-[var(--text)]"}`}>{value}</p>
+    </div>
   );
 }
 

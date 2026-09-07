@@ -5,6 +5,7 @@ import { getJobBundle } from "@/lib/data";
 import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceRecord } from "@/lib/types";
+import { updateVariationInvoiceStatus } from "@/lib/variations/invoicing";
 import { canPersistToSupabase } from "@/lib/workflows";
 
 type Props = {
@@ -110,12 +111,7 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: update.error?.message ?? "Payment saved but invoice could not be updated." }, { status: 500 });
   }
 
-  if (fullyPaid && invoice.variation_id) {
-    await supabase
-      .from("job_variations")
-      .update({ status: "Paid", updated_at: new Date().toISOString() })
-      .eq("id", invoice.variation_id);
-  }
+  if (invoice.variation_id) await updateVariationInvoiceStatus(supabase, invoice.variation_id);
 
   await createActivity(supabase, {
     business_id: invoice.business_id ? String(invoice.business_id) : null,

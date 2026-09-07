@@ -313,6 +313,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
       <JobVariationsSection
         customerEmail={customerEmail}
         customerName={customerName}
+        invoices={invoices}
         jobId={jobId}
         variations={variations}
       />
@@ -458,6 +459,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-[var(--text)]">{invoice.invoice_ref}</p>
                     <Badge size="sm">{INVOICE_TYPE_LABELS[invoice.invoice_type ?? "standard"]}</Badge>
+                    {invoice.variation_id ? <Badge size="sm" variant="active">Additional work</Badge> : null}
                     <Badge size="sm" variant={invoice.status === "Paid" ? "complete" : invoice.status === "Overdue" ? "alert" : invoice.status === "Part Paid" ? "active" : "pending"}>
                       {invoice.status}
                     </Badge>
