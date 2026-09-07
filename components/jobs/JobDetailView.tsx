@@ -57,6 +57,7 @@ import type {
   JobDocumentRecord,
   JobExpense,
   JobPhoto,
+  JobVariationRecord,
   LabourPlanRecord,
   MaterialRecord,
   QuoteOption,
@@ -74,6 +75,7 @@ export type JobDetailViewProps = {
   materials: MaterialRecord[];
   labourPlan?: LabourPlanRecord | null;
   invoices: InvoiceRecord[];
+  variations: JobVariationRecord[];
   expenses?: JobExpense[];
   emailLogs: EmailLog[];
   activity?: ActivityRecord[];
@@ -95,7 +97,7 @@ const TABS: { value: TabId; label: string }[] = [
 ];
 
 export function JobDetailView(props: JobDetailViewProps) {
-  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, expenses, emailLogs, activity, paymentSchedule } = props;
+  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, variations, expenses, emailLogs, activity, paymentSchedule } = props;
 
   const router = useRouter();
   const pathname = usePathname();
@@ -183,6 +185,7 @@ export function JobDetailView(props: JobDetailViewProps) {
             jobTitle={job.job_title}
             quote={quote ?? null}
             invoices={invoices}
+            variations={variations}
             expenses={expenses ?? []}
             materials={materials}
             customerName={customer.full_name}

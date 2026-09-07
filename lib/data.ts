@@ -163,12 +163,13 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
   const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return null;
 
-  const [businessResult, customerResult, surveyResult, quoteResult, invoiceResult, materialResult, photoResult, documentResult, emailResult, activityResult] = await Promise.all([
+  const [businessResult, customerResult, surveyResult, quoteResult, invoiceResult, variationResult, materialResult, photoResult, documentResult, emailResult, activityResult] = await Promise.all([
     supabase.from("businesses").select("*").eq("id", job.business_id).single(),
     supabase.from("customers").select("*").eq("id", job.customer_id).single(),
     supabase.from("surveys").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("quotes").select("*").eq("job_id", jobId).order("version_number", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("invoices").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+    supabase.from("job_variations").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
     supabase.from("materials").select("*").eq("job_id", jobId).order("created_at", { ascending: true }),
     supabase.from("job_photos").select("*").eq("job_id", jobId).order("uploaded_at", { ascending: false }),
     supabase.from("job_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
@@ -184,6 +185,7 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     survey: (surveyResult.data as SurveyRecord | null) ?? null,
     quote: (quoteResult.data as QuoteRecord | null) ?? null,
     invoices: (invoiceResult.data as InvoiceRecord[] | null) ?? [],
+    variations: (variationResult.data as JobBundle["variations"] | null) ?? [],
     materials: (materialResult.data as JobBundle["materials"] | null) ?? [],
     labour_plan: labourPlan,
     photos: (photoResult.data as JobBundle["photos"] | null) ?? [],

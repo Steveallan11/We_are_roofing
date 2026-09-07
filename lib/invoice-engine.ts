@@ -53,6 +53,7 @@ export function calculateQuoteInvoiceableTotals(quote: QuoteRecord, vatRate: num
 export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceRecord) {
   const logoUrl = resolveAssetUrl(bundle.business.logo_url || "/we-are-roofing-logo.png");
   const isDeposit = invoice.invoice_type === "deposit";
+  const isVariation = Boolean(invoice.variation_id);
   const introHtml = isDeposit
     ? `
         <h2>Booking Deposit</h2>
@@ -61,7 +62,11 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
           <br/><br/>
           It allows us to begin arranging the items needed before work commences, including materials, scaffold/access, skips, welfare facilities, and other job preparation where required. Getting these in place early helps minimise delays once the works start.
         </div>`
-    : `
+    : isVariation
+      ? `
+        <h2>Approved Additional Work</h2>
+        <div class="terms">This invoice covers additional work approved separately for ${escapeHtml(bundle.job.property_address)}. The variation reference and agreed work are shown in the invoice items and notes below.</div>`
+      : `
         <h2>Works Completed</h2>
         <div class="terms">Works completed at ${escapeHtml(bundle.job.property_address)} as agreed for ${escapeHtml(bundle.job.job_title)}.</div>`;
   const rows = invoice.line_items
@@ -151,6 +156,7 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
 
 export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord) {
   const isDeposit = invoice.invoice_type === "deposit";
+  const isVariation = Boolean(invoice.variation_id);
   const pdf = new SimplePdf();
   let page = pdf.addPage();
   drawInvoiceHeader(page, bundle, invoice);
@@ -159,10 +165,12 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
   y = drawInvoiceMeta(page, bundle, invoice, y);
   y -= 18;
 
-  const introTitle = isDeposit ? "Booking Deposit" : "Works Completed";
+  const introTitle = isDeposit ? "Booking Deposit" : isVariation ? "Approved Additional Work" : "Works Completed";
   const introBody = isDeposit
     ? `Thank you for choosing We Are Roofing UK Ltd. This deposit secures your booking in our schedule for ${bundle.job.job_title} at ${bundle.job.property_address}. It allows us to begin arranging the items needed before work commences, including materials, scaffold/access, skips, welfare facilities, and other job preparation where required. Getting these in place early helps minimise delays once the works start.`
-    : `Works completed at ${bundle.job.property_address} as agreed for ${bundle.job.job_title}.`;
+    : isVariation
+      ? `This invoice covers additional work approved separately for ${bundle.job.property_address}. The variation reference and agreed work are shown in the invoice items and notes below.`
+      : `Works completed at ${bundle.job.property_address} as agreed for ${bundle.job.job_title}.`;
   y = drawSectionBlock(page, introTitle, introBody, 46, y, 503);
 
   ({ page, y } = ensureInvoiceSpace(pdf, page, y, 150));

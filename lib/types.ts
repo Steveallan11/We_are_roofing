@@ -736,6 +736,7 @@ export type InvoiceRecord = {
   business_id: string;
   job_id: string;
   quote_id?: string | null;
+  variation_id?: string | null;
   invoice_ref: string;
   status: InvoiceStatus;
   invoice_type?: InvoiceType;
@@ -798,6 +799,44 @@ export type JobExpense = {
   updated_at?: string;
   /** "job" = job_expenses table (editable), "diary" = logged via diary (read-only here) */
   source?: "job" | "diary";
+};
+
+export type VariationStatus = "Draft" | "Sent" | "Accepted" | "Declined" | "Invoiced" | "Paid" | "Void";
+
+export type VariationLineItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  vat_applicable: boolean;
+  total: number;
+};
+
+export type JobVariationRecord = {
+  id: string;
+  business_id: string;
+  job_id: string;
+  quote_id?: string | null;
+  variation_ref: string;
+  title: string;
+  description: string;
+  line_items: VariationLineItem[];
+  subtotal: number;
+  vat_amount: number;
+  total: number;
+  approval_required: boolean;
+  approval_method?: "online" | "verbal" | "email" | "other" | null;
+  status: VariationStatus;
+  approved_by_name?: string | null;
+  approved_by_email?: string | null;
+  public_token?: string | null;
+  public_token_created_at?: string | null;
+  sent_at?: string | null;
+  accepted_at?: string | null;
+  declined_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type ReceiptInboxRecord = {
@@ -878,6 +917,7 @@ export type JobBundle = {
   survey?: SurveyRecord | null;
   quote?: QuoteRecord | null;
   invoices: InvoiceRecord[];
+  variations: JobVariationRecord[];
   materials: MaterialRecord[];
   labour_plan?: LabourPlanRecord | null;
   photos: JobPhoto[];

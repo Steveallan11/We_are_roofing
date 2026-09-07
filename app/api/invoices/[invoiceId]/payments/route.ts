@@ -110,6 +110,13 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: update.error?.message ?? "Payment saved but invoice could not be updated." }, { status: 500 });
   }
 
+  if (fullyPaid && invoice.variation_id) {
+    await supabase
+      .from("job_variations")
+      .update({ status: "Paid", updated_at: new Date().toISOString() })
+      .eq("id", invoice.variation_id);
+  }
+
   await createActivity(supabase, {
     business_id: invoice.business_id ? String(invoice.business_id) : null,
     job_id: invoice.job_id ? String(invoice.job_id) : null,

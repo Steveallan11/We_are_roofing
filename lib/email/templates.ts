@@ -1,4 +1,4 @@
-import type { QuoteRecord } from "@/lib/types";
+import type { JobVariationRecord, QuoteRecord } from "@/lib/types";
 import { cleanCustomerEmailBody, DEFAULT_QUOTE_EMAIL_MESSAGE } from "@/lib/quotes/email";
 import { currency } from "@/lib/utils";
 
@@ -102,6 +102,39 @@ export function quoteSentEmail(props: {
   );
 }
 
+export function variationSentEmail(props: {
+  customerName: string;
+  variation: JobVariationRecord;
+  variationUrl: string;
+  propertyAddress: string;
+  businessPhone?: string | null;
+  businessEmail?: string | null;
+}) {
+  const helloName = greetingName(props.customerName);
+  return shell(
+    "Additional Work Approval",
+    `
+      <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${escapeHtml(helloName)},</p>
+      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
+        During the works at ${escapeHtml(props.propertyAddress)}, we identified some additional work that was not included in the original quotation.
+      </p>
+      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
+        Please open the additional work proposal to review the scope, price and VAT, then accept or decline it online before we proceed.
+      </p>
+      <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:16px 18px;margin:20px 0">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8d6a00">${escapeHtml(props.variation.variation_ref)}</div>
+        <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-top:8px">${escapeHtml(props.variation.title)}</div>
+        <div style="font-size:14px;color:#555;margin-top:8px">Total including VAT: <strong>${currency(props.variation.total)}</strong></div>
+      </div>
+      <p style="text-align:center;margin:26px 0">
+        <a href="${props.variationUrl}" style="background:#D4AF37;color:#000;padding:15px 30px;border-radius:8px;font-size:16px;font-weight:700;text-decoration:none;display:inline-block">Review Additional Work</a>
+      </p>
+      <p style="font-size:14px;color:#666;line-height:1.65;margin-bottom:0">If you would like to discuss anything first, simply reply to this email.</p>
+    `,
+    { businessEmail: props.businessEmail, businessPhone: props.businessPhone }
+  );
+}
+
 function paragraphsToHtml(value: string) {
   return value
     .replace(/\r\n/g, "\n")
@@ -131,6 +164,7 @@ export function invoiceSentEmail(props: {
   dueDate: string;
   total: number;
   invoiceType?: string | null;
+  isVariation?: boolean;
   bankName?: string | null;
   bankSortCode?: string | null;
   bankAccount?: string | null;
@@ -151,12 +185,17 @@ export function invoiceSentEmail(props: {
       <p style="font-size:14px;line-height:1.7;color:#555">
         Getting these in place early helps minimise delays and keeps the works moving smoothly once we start at ${props.propertyAddress}.
       </p>`
-    : `
+    : props.isVariation
+      ? `
+      <p style="font-size:14px;line-height:1.6;color:#555">
+        Please find your invoice for the additional work approved at ${props.propertyAddress}.
+      </p>`
+      : `
       <p style="font-size:14px;line-height:1.6;color:#555">
         Please find your invoice for ${props.jobTitle} at ${props.propertyAddress}.
       </p>`;
   return shell(
-    isDeposit ? "Your Roofing Deposit Invoice" : "Your Roofing Invoice",
+    isDeposit ? "Your Roofing Deposit Invoice" : props.isVariation ? "Your Additional Work Invoice" : "Your Roofing Invoice",
     `
       <div style="background:#faf6e8;border:1px solid #e8d7a1;border-left:4px solid #D4AF37;border-radius:6px;padding:14px 18px;margin-bottom:22px">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8d6a00">Payment Due</div>

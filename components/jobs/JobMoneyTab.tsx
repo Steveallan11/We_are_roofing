@@ -5,18 +5,20 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
+import { JobVariationsSection } from "@/components/jobs/JobVariationsSection";
 import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyseReceiptFile";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { currency, formatDate } from "@/lib/utils";
-import type { InvoiceRecord, InvoiceType, JobDocumentRecord, JobExpense, JobExpenseCategory, MaterialRecord, QuoteRecord } from "@/lib/types";
+import type { InvoiceRecord, InvoiceType, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
   jobId: string;
   jobTitle: string;
   quote: QuoteRecord | null;
   invoices: InvoiceRecord[];
+  variations: JobVariationRecord[];
   expenses: JobExpense[];
   materials: MaterialRecord[];
   customerName: string;
@@ -92,7 +94,7 @@ function formatReceiptFileSize(size: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
+export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [expenses, setExpenses] = useState<JobExpense[]>(initialExpenses);
@@ -109,10 +111,15 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceRecord | null>(null);
 
   const liveInvoices = invoices.filter((invoice) => invoice.status !== "Void");
+  const approvedVariations = variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
   const invoiceableQuoteTotal = quote ? calculateFirmQuoteTotal(quote) : 0;
   const summary = useMemo(() => {
     const quoteTotal = Number(quote?.total ?? 0);
     const quoteNet = Number(quote?.subtotal ?? 0);
+    const variationTotal = approvedVariations.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0);
+    const variationNet = approvedVariations.reduce((sum, variation) => sum + Number(variation.subtotal ?? 0), 0);
+    const contractTotal = quoteTotal + variationTotal;
+    const contractNet = quoteNet + variationNet;
     const invoiced = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0);
     const paid = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.amount_paid ?? 0), 0);
     const outstanding = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
@@ -146,10 +153,12 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
     const materialEstimatedCount = materials.filter((material) => getMaterialEstimatedNet(material) > 0).length;
     const resolvedMaterialCostNet = materialCostNet > 0 ? materialCostNet : materialExpensesNet;
     const totalCostNet = nonMaterialExpensesNet + resolvedMaterialCostNet;
-    const profit = quoteNet > 0 ? quoteNet - totalCostNet : null;
+    const profit = contractNet > 0 ? contractNet - totalCostNet : null;
     return {
       quoteTotal,
       quoteNet,
+      variationTotal,
+      contractTotal,
       invoiced,
       paid,
       outstanding,
@@ -172,7 +181,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
       totalCostNet,
       profit
     };
-  }, [quote, liveInvoices, expenses, materials]);
+  }, [quote, liveInvoices, expenses, materials, variations]);
 
   function notify(nextMessage: string | null, nextError: string | null) {
     setMessage(nextMessage);
@@ -280,6 +289,8 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
       <PageSection kicker="Job Money" title="Financial summary" description="Quote value, invoicing progress, and costs for this job.">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat label="Quote value" value={summary.quoteTotal ? currency(summary.quoteTotal) : "TBC"} hint="Inc VAT" />
+          <Stat label="Approved extras" value={currency(summary.variationTotal)} hint={`${approvedVariations.length} variation${approvedVariations.length === 1 ? "" : "s"}`} />
+          <Stat label="Revised job value" value={summary.contractTotal ? currency(summary.contractTotal) : "TBC"} hint="Quote + approved extras" />
           <Stat label="Invoiced" value={currency(summary.invoiced)} hint={`${liveInvoices.length} invoice${liveInvoices.length === 1 ? "" : "s"}`} />
           <Stat label="Paid" value={currency(summary.paid)} hint="Received to date" />
           <Stat label="Outstanding" value={currency(summary.outstanding)} hint="Awaiting payment" />
@@ -298,6 +309,13 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, expenses: initia
           />
         </div>
       </PageSection>
+
+      <JobVariationsSection
+        customerEmail={customerEmail}
+        customerName={customerName}
+        jobId={jobId}
+        variations={variations}
+      />
 
       <PageSection
         kicker="Invoicing"

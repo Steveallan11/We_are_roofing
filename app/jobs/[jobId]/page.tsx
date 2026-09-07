@@ -49,6 +49,7 @@ export default async function JobDetailPage({ params }: Props) {
         materials={bundle.materials}
         labourPlan={bundle.labour_plan ?? null}
         invoices={bundle.invoices}
+        variations={bundle.variations}
         expenses={expenses}
         emailLogs={bundle.email_logs}
         activity={bundle.activity ?? []}

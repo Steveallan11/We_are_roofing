@@ -86,7 +86,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const emailResult = await sendEmail({
     to: toEmail,
-    subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
+    subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : invoice.variation_id ? "Additional work invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
     html: invoiceSentEmail({
       customerName: emailCustomerName,
       customerGreeting: emailCustomerName,
@@ -97,6 +97,7 @@ export async function POST(request: Request, { params }: Props) {
       dueDate,
       total: Number(invoice.total ?? 0),
       invoiceType: invoice.invoice_type,
+      isVariation: Boolean(invoice.variation_id),
       bankName: bundle.business.bank_name,
       bankSortCode: bundle.business.bank_sort_code,
       bankAccount: bundle.business.bank_account,

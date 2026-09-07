@@ -16,6 +16,9 @@ function isPublicApi(pathname: string) {
     // admin session while every invoice mutation remains protected.
     return true;
   }
+  if (/^\/api\/variations\/[^/]+\/respond$/.test(pathname)) {
+    return true;
+  }
   return publicApiPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
