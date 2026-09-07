@@ -983,7 +983,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                         onClick={() => toggleOptionLineBilledSeparately(option.id, index)}
                         type="button"
                       >
-                        {line.billed_separately ? "Paid direct to supplier ✓" : "Customer pays supplier direct"}
+                        {line.billed_separately ? "Excluded from our totals ✓" : "Exclude from our totals (supplier paid direct)"}
                       </button>
                       {line.billed_separately ? (
                         <label className="mt-2 block">
@@ -1305,7 +1305,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                   onClick={() => toggleLineBilledSeparately(index)}
                   type="button"
                 >
-                  {line.billed_separately ? "Paid direct to supplier ✓" : "Customer pays supplier direct"}
+                  {line.billed_separately ? "Excluded from our totals ✓" : "Exclude from our totals (supplier paid direct)"}
                 </button>
                 <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
                   <span className="text-[var(--muted)]">Net: <strong className="text-white">{currency(Number(line.cost || 0))}</strong></span>

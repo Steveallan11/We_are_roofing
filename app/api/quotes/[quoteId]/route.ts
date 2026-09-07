@@ -13,16 +13,7 @@ type Props = {
 type QuoteUpdateBody = {
   roof_report?: string;
   scope_of_works?: string;
-  cost_breakdown?: Array<{
-    item: string;
-    cost: number;
-    vat_applicable: boolean;
-    notes: string;
-    quantity?: number;
-    unit?: string;
-    unit_rate?: number;
-    pricing_source?: string;
-  }>;
+  cost_breakdown?: CostLineItem[];
   guarantee_text?: string | null;
   exclusions?: string | null;
   terms?: string | null;
@@ -39,15 +30,9 @@ export async function PATCH(request: Request, { params }: Props) {
   const { quoteId } = await params;
   const body = (await request.json()) as QuoteUpdateBody;
 
-  const lineItems = body.cost_breakdown ?? [];
+  const lineItems = (body.cost_breakdown ?? []).map(normaliseCostLine);
   const normalisedOptions = normaliseQuoteOptions(body.options ?? []);
-  const subtotal = Math.round(lineItems.reduce((sum, item) => sum + Number(item.cost || 0), 0) * 100) / 100;
-  const vatAmount =
-    Math.round(
-      lineItems
-        .filter((item) => item.vat_applicable)
-        .reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100
-    ) / 100;
+  const previewTotals = calculateTotals(lineItems);
 
   if (!canPersistToSupabase()) {
     return NextResponse.json({
@@ -55,10 +40,11 @@ export async function PATCH(request: Request, { params }: Props) {
       quote: {
         id: quoteId,
         ...body,
+        cost_breakdown: lineItems,
         options: normalisedOptions,
-        subtotal,
-        vat_amount: vatAmount,
-        total: subtotal + vatAmount
+        subtotal: previewTotals.subtotal,
+        vat_amount: previewTotals.vat_amount,
+        total: previewTotals.total
       }
     });
   }
@@ -75,17 +61,14 @@ export async function PATCH(request: Request, { params }: Props) {
   const { data: job } = await supabase.from("jobs").select("business_id").eq("id", existingQuote.job_id).single();
   const { data: business } = await supabase.from("businesses").select("vat_rate").eq("id", job?.business_id).maybeSingle();
   const vatRate = Number(business?.vat_rate ?? 20) / 100;
-  const recomputedVat =
-    Math.round(
-      lineItems
-        .filter((item) => item.vat_applicable)
-        .reduce((sum, item) => sum + Number(item.cost || 0) * vatRate, 0) * 100
-    ) / 100;
+  const subtotal = calculateOptionNet({ cost_breakdown: lineItems });
+  const recomputedVat = calculateOptionVat({ cost_breakdown: lineItems }, vatRate);
 
   const { data: updatedQuote, error } = await supabase
     .from("quotes")
     .update({
       ...body,
+      cost_breakdown: lineItems,
       options: normalisedOptions,
       subtotal,
       vat_amount: recomputedVat,

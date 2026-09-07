@@ -10,6 +10,7 @@ import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyseReceiptFile";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
+import { getQuoteValueLines, isScaffoldLine } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import type { InvoiceRecord, InvoiceType, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
 
@@ -113,9 +114,12 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
   const liveInvoices = invoices.filter((invoice) => invoice.status !== "Void");
   const approvedVariations = variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
   const invoiceableQuoteTotal = quote ? calculateFirmQuoteTotal(quote) : 0;
+  const quoteFinancials = useMemo(() => calculateFinancialQuoteTotals(quote), [quote]);
+  const scaffoldLines = quote ? getQuoteValueLines(quote).filter(isScaffoldLine) : [];
+  const scaffoldExcluded = scaffoldLines.length > 0 && scaffoldLines.every((line) => line.billed_separately);
   const summary = useMemo(() => {
-    const quoteTotal = Number(quote?.total ?? 0);
-    const quoteNet = Number(quote?.subtotal ?? 0);
+    const quoteTotal = quoteFinancials.total;
+    const quoteNet = quoteFinancials.net;
     const variationTotal = approvedVariations.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0);
     const variationNet = approvedVariations.reduce((sum, variation) => sum + Number(variation.subtotal ?? 0), 0);
     const contractTotal = quoteTotal + variationTotal;
@@ -157,6 +161,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
     return {
       quoteTotal,
       quoteNet,
+      supplierPaidTotal: quoteFinancials.supplierPaidTotal,
       variationTotal,
       contractTotal,
       invoiced,
@@ -181,7 +186,32 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
       totalCostNet,
       profit
     };
-  }, [quote, liveInvoices, expenses, materials, variations]);
+  }, [quoteFinancials, liveInvoices, expenses, materials, variations]);
+
+  async function setScaffoldExcluded(excluded: boolean) {
+    if (!quote) return;
+    const confirmed = window.confirm(
+      excluded
+        ? "Exclude scaffold from our quote value, profit and future invoices? The scaffold price will remain visible to the customer as paid directly to the supplier."
+        : "Include scaffold in our quote value, profit and future invoices?"
+    );
+    if (!confirmed) return;
+    notify(null, null);
+    setBusy("scaffold-billing");
+    const response = await fetch(`/api/quotes/${quote.id}/scaffold-billing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billed_separately: excluded })
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      notify(null, result?.error || "Scaffold treatment could not be updated.");
+      return;
+    }
+    notify(result.message || "Scaffold treatment updated.", null);
+    startTransition(() => router.refresh());
+  }
 
   function notify(nextMessage: string | null, nextError: string | null) {
     setMessage(nextMessage);
@@ -287,8 +317,24 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
   return (
     <div className="stack">
       <PageSection kicker="Job Money" title="Financial summary" description="Quote value, invoicing progress, and costs for this job.">
+        {scaffoldLines.length > 0 ? (
+          <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-[var(--text)]">Scaffold in your company figures</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+                {scaffoldExcluded
+                  ? "The customer still sees the scaffold price, but it is paid directly to the supplier and excluded from your turnover, profit and invoices."
+                  : "Scaffold is currently included in your quote value, profit calculation and invoices."}
+              </p>
+            </div>
+            <Button disabled={busy !== null} onClick={() => setScaffoldExcluded(!scaffoldExcluded)} size="sm" variant={scaffoldExcluded ? "secondary" : "primary"}>
+              {busy === "scaffold-billing" ? "Updating..." : scaffoldExcluded ? "Include Scaffold in Our Figures" : "Exclude Scaffold From Our Figures"}
+            </Button>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat label="Quote value" value={summary.quoteTotal ? currency(summary.quoteTotal) : "TBC"} hint="Inc VAT" />
+          <Stat label="Our quote value" value={summary.quoteTotal ? currency(summary.quoteTotal) : "TBC"} hint="Inc VAT, excluding supplier-paid items" />
+          {summary.supplierPaidTotal > 0 ? <Stat label="Paid direct to suppliers" value={currency(summary.supplierPaidTotal)} hint="Shown on quote, excluded from our figures" /> : null}
           <Stat label="Approved extras" value={currency(summary.variationTotal)} hint={`${approvedVariations.length} variation${approvedVariations.length === 1 ? "" : "s"}`} />
           <Stat label="Revised job value" value={summary.contractTotal ? currency(summary.contractTotal) : "TBC"} hint="Quote + approved extras" />
           <Stat label="Invoiced" value={currency(summary.invoiced)} hint={`${liveInvoices.length} invoice${liveInvoices.length === 1 ? "" : "s"}`} />
@@ -554,10 +600,27 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
 }
 
 function calculateFirmQuoteTotal(quote: QuoteRecord) {
-  const firmLines = getFirmQuoteLines(quote.cost_breakdown);
+  const firmLines = getFirmQuoteLines(getQuoteValueLines(quote)).filter((line) => !line.billed_separately);
   const subtotal = firmLines.reduce((sum, line) => sum + Number(line.cost ?? 0), 0);
   const vat = firmLines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost ?? 0) * 0.2, 0);
   return Math.round((subtotal + vat) * 100) / 100;
+}
+
+function calculateFinancialQuoteTotals(quote: QuoteRecord | null) {
+  const firmLines = quote ? getFirmQuoteLines(getQuoteValueLines(quote)) : [];
+  const companyLines = firmLines.filter((line) => !line.billed_separately);
+  const supplierPaidLines = firmLines.filter((line) => line.billed_separately);
+  const net = companyLines.reduce((sum, line) => sum + Number(line.cost ?? 0), 0);
+  const vat = companyLines.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.cost ?? 0) * 0.2, 0);
+  const supplierPaidTotal = supplierPaidLines.reduce(
+    (sum, line) => sum + Number(line.cost ?? 0) * (line.vat_applicable ? 1.2 : 1),
+    0
+  );
+  return {
+    net: Math.round(net * 100) / 100,
+    total: Math.round((net + vat) * 100) / 100,
+    supplierPaidTotal: Math.round(supplierPaidTotal * 100) / 100
+  };
 }
 
 /* -----------------  Record payment modal  ----------------- */

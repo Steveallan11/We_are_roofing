@@ -1,7 +1,9 @@
 import type { CostLineItem, Job, QuoteOption, QuoteRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
-type QuoteValue = Pick<QuoteRecord, "total" | "options" | "accepted_option_id">;
+type QuoteValue = Pick<QuoteRecord, "total" | "options" | "accepted_option_id"> & {
+  cost_breakdown?: CostLineItem[] | null;
+};
 type JobValue = Pick<Job, "estimated_value" | "final_value" | "status"> & {
   quote?: QuoteValue | null;
 };
@@ -24,7 +26,29 @@ export function getAcceptedOptionTotal(quote?: Pick<QuoteValue, "options" | "acc
 
 export function getQuotePipelineValue(quote?: QuoteValue | null): number | null {
   if (!quote) return null;
-  return getAcceptedOptionTotal(quote) ?? getLowestOptionTotal(quote.options) ?? getPositiveNumber(quote.total);
+  const selectedLines = getQuoteValueLines(quote);
+  const calculatedBaseTotal = selectedLines.length ? calculateOptionTotal({ cost_breakdown: selectedLines }) : null;
+  return getAcceptedOptionTotal(quote) ?? getLowestOptionTotal(quote.options) ?? getPositiveNumber(calculatedBaseTotal) ?? getPositiveNumber(quote.total);
+}
+
+export function getQuoteValueLines(quote?: QuoteValue | null): CostLineItem[] {
+  if (!quote) return [];
+  const options = quote.options ?? [];
+  if (options.length) {
+    const accepted = quote.accepted_option_id
+      ? options.find((option) => option.id === quote.accepted_option_id)
+      : null;
+    const selected = accepted ?? [...options].sort((a, b) => (getOptionTotal(a) ?? Infinity) - (getOptionTotal(b) ?? Infinity))[0];
+    if (selected?.cost_breakdown?.length) return selected.cost_breakdown;
+  }
+  return quote.cost_breakdown ?? [];
+}
+
+export function isScaffoldLine(item: CostLineItem) {
+  const category = item.pricing_category?.trim().toLowerCase();
+  if (category === "standard_scaffold" || category === "scaffolding") return true;
+  const identity = `${item.item ?? ""} ${item.source_id ?? ""} ${item.source_label ?? ""}`.toLowerCase();
+  return /\bscaffold(?:ing)?\b/.test(identity);
 }
 
 export function getJobPipelineValue(job: JobValue): number | null {
