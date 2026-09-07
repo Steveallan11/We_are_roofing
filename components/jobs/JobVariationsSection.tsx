@@ -27,7 +27,7 @@ type Props = {
 
 type EmailTarget =
   | { type: "single"; variation: JobVariationRecord }
-  | { type: "combined"; variationIds: string[]; total: number };
+  | { type: "combined"; variationIds: string[]; total: number; reference: string; groupLeadId?: string };
 
 const newLine = (): DraftLine => ({
   id: crypto.randomUUID(),
@@ -117,7 +117,8 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
           customer_name: customerName,
           email_customer_name: draft.greeting,
           subject: draft.subject,
-          message: draft.message
+          message: draft.message,
+          copy: !["Draft", "Sent"].includes(variation.status)
         })
       });
       const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
@@ -137,12 +138,12 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
     );
   }
 
-  async function sendCombinedQuote(variationIds: string[], draft: VariationEmailDraft) {
+  async function sendCombinedQuote(variationIds: string[], groupLeadId: string | undefined, draft: VariationEmailDraft) {
     setBusy("send-combined");
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/jobs/${jobId}/variations/send`, {
+      const response = await fetch(groupLeadId ? `/api/variations/${groupLeadId}/send-group` : `/api/jobs/${jobId}/variations/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -244,7 +245,8 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
                 setEmailTarget({
                   type: "combined",
                   variationIds: [...selectedVariationIds],
-                  total: selected.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0)
+                  total: selected.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0),
+                  reference: "Combined additional-works quotation"
                 });
               }}
               size="sm"
@@ -319,6 +321,11 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
         {variations.map((variation) => {
           const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
           const linkedInvoices = invoices.filter((invoice) => invoice.variation_id === variation.id && invoice.status !== "Void");
+          const groupedVariations = variation.approval_group_id
+            ? variations.filter((item) => item.approval_group_id === variation.approval_group_id)
+            : [];
+          const groupLead = [...groupedVariations].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""))[0];
+          const isGroupLead = Boolean(groupLead && groupLead.id === variation.id);
           const canInvoice = ["Accepted", "Invoiced"].includes(variation.status) && progress.remaining > 0.01;
           const amountToCreate = invoiceAmountMode === "remaining" ? progress.remaining : Number(invoiceAmount || 0);
           return (
@@ -371,9 +378,25 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
             ) : null}
             {variation.accepted_at ? <p className="mt-3 text-xs text-[var(--text-muted)]">Approved {formatDate(variation.accepted_at)} by {variation.approved_by_name || "customer"} ({variation.approval_method || "recorded"})</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
-              {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
+              {variation.status !== "Void" && !variation.approval_group_id ? (
                 <Button disabled={busy !== null} onClick={() => setEmailTarget({ type: "single", variation })} size="sm" variant="secondary">
-                  {variation.status === "Sent" ? "Edit & Resend Quote Email" : "Prepare Quote Email"}
+                  {variation.status === "Draft" ? "Prepare Quote Email" : variation.status === "Sent" ? "Edit & Resend Quote Email" : "Email Quote Copy"}
+                </Button>
+              ) : null}
+              {isGroupLead ? (
+                <Button
+                  disabled={busy !== null}
+                  onClick={() => setEmailTarget({
+                    type: "combined",
+                    variationIds: groupedVariations.map((item) => item.id),
+                    total: groupedVariations.reduce((sum, item) => sum + Number(item.total ?? 0), 0),
+                    reference: variation.approval_group_ref || "Combined additional-works quotation",
+                    groupLeadId: variation.id
+                  })}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {variation.status === "Sent" ? "Edit & Resend Combined Quote Email" : "Email Combined Quote Copy"}
                 </Button>
               ) : null}
               {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
@@ -429,10 +452,11 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
         <SendVariationQuoteModal
           customerEmail={customerEmail}
           customerName={customerName}
+          isCopy={emailTarget.type === "single" ? !["Draft", "Sent"].includes(emailTarget.variation.status) : Boolean(emailTarget.groupLeadId && !variations.filter((item) => emailTarget.variationIds.includes(item.id)).every((item) => item.status === "Sent"))}
           itemCount={emailTarget.type === "single" ? 1 : emailTarget.variationIds.length}
           onClose={() => setEmailTarget(null)}
-          onSend={(draft) => emailTarget.type === "single" ? sendForApproval(emailTarget.variation, draft) : sendCombinedQuote(emailTarget.variationIds, draft)}
-          reference={emailTarget.type === "single" ? emailTarget.variation.variation_ref : "Combined additional-works quotation"}
+          onSend={(draft) => emailTarget.type === "single" ? sendForApproval(emailTarget.variation, draft) : sendCombinedQuote(emailTarget.variationIds, emailTarget.groupLeadId, draft)}
+          reference={emailTarget.type === "single" ? emailTarget.variation.variation_ref : emailTarget.reference}
           total={emailTarget.type === "single" ? emailTarget.variation.total : emailTarget.total}
         />
       ) : null}

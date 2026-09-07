@@ -17,20 +17,25 @@ type Props = {
   total: number;
   customerName: string;
   customerEmail?: string | null;
+  isCopy?: boolean;
   onClose: () => void;
   onSend: (draft: VariationEmailDraft) => Promise<void>;
 };
 
-export function SendVariationQuoteModal({ reference, itemCount, total, customerName, customerEmail, onClose, onSend }: Props) {
+export function SendVariationQuoteModal({ reference, itemCount, total, customerName, customerEmail, isCopy = false, onClose, onSend }: Props) {
   const [toEmail, setToEmail] = useState(customerEmail ?? "");
   const [greeting, setGreeting] = useState(customerName || "Customer");
   const [subject, setSubject] = useState(
-    itemCount > 1
+    isCopy
+      ? "Copy of your additional works quotation from We Are Roofing UK Ltd"
+      : itemCount > 1
       ? "Your additional works quotation from We Are Roofing UK Ltd"
       : "Your additional work quotation from We Are Roofing UK Ltd"
   );
   const [message, setMessage] = useState(
-    itemCount > 1
+    isCopy
+      ? "Please find a copy of the additional works quotation linked to your job. Use the button below to review the agreed scope and pricing."
+      : itemCount > 1
       ? "We have prepared one combined quotation covering the additional work discussed. Please use the button below to review each item and confirm whether you would like us to proceed."
       : "We have prepared a quotation for the additional work discussed. Please use the button below to review the scope and confirm whether you would like us to proceed."
   );
@@ -117,7 +122,7 @@ export function SendVariationQuoteModal({ reference, itemCount, total, customerN
         <footer className="shrink-0 border-t border-[var(--border)] bg-black/25 p-4 md:px-7 md:py-5">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button disabled={sending} onClick={onClose} size="sm" variant="ghost">Cancel</Button>
-            <Button disabled={sending} onClick={submit} size="sm" variant="primary">{sending ? "Sending..." : "Send Additional Works Quote"}</Button>
+            <Button disabled={sending} onClick={submit} size="sm" variant="primary">{sending ? "Sending..." : isCopy ? "Email Quote Copy" : "Send Additional Works Quote"}</Button>
           </div>
         </footer>
       </div>

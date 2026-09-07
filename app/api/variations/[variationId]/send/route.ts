@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: Props) {
     subject?: string;
     message?: string;
     test?: boolean;
+    copy?: boolean;
   };
   const isTest = body.test === true;
 
@@ -34,7 +35,11 @@ export async function POST(request: Request, { params }: Props) {
   if (variation.approval_group_id) {
     return NextResponse.json({ ok: false, error: `This item belongs to combined quote ${variation.approval_group_ref || ""}. Resend the combined quotation rather than sending this item separately.` }, { status: 400 });
   }
-  if (!["Draft", "Sent"].includes(variation.status)) {
+  const sendAsCopy = body.copy === true;
+  if (variation.status === "Void") {
+    return NextResponse.json({ ok: false, error: "A void additional-work item cannot be emailed." }, { status: 400 });
+  }
+  if (!["Draft", "Sent"].includes(variation.status) && !sendAsCopy) {
     return NextResponse.json({ ok: false, error: `This additional work is already ${variation.status.toLowerCase()}.` }, { status: 400 });
   }
 
@@ -68,20 +73,22 @@ export async function POST(request: Request, { params }: Props) {
     }),
     text: `${body.message?.trim() || `Additional work ${variation.variation_ref} is ready to review.`}\n\nOpen the secure quotation here: ${variationUrl}`,
     jobId: variation.job_id,
-    templateType: isTest ? "variation_test" : "variation_sent",
+    templateType: isTest ? "variation_test" : sendAsCopy ? "variation_quote_copy" : "variation_sent",
     log: !isTest
   });
 
   if (isTest) return NextResponse.json({ ok: true, message: "Test additional work email sent. Its status was not changed.", public_url: variationUrl });
 
   const now = new Date().toISOString();
-  const update = await supabase
-    .from("job_variations")
-    .update({ status: "Sent", sent_at: now, updated_at: now })
-    .eq("id", variation.id)
-    .select("*")
-    .single();
-  if (update.error) return NextResponse.json({ ok: false, error: update.error.message }, { status: 500 });
+  if (!sendAsCopy) {
+    const update = await supabase
+      .from("job_variations")
+      .update({ status: "Sent", sent_at: now, updated_at: now })
+      .eq("id", variation.id)
+      .select("*")
+      .single();
+    if (update.error) return NextResponse.json({ ok: false, error: update.error.message }, { status: 500 });
+  }
 
   if (toEmail !== (bundle.customer.email ?? "")) await supabase.from("customers").update({ email: toEmail }).eq("id", bundle.customer.id);
   await createActivity(supabase, {
@@ -90,16 +97,16 @@ export async function POST(request: Request, { params }: Props) {
     customer_id: bundle.customer.id,
     quote_id: variation.quote_id ?? null,
     activity_type: "variation_sent",
-    message: `${variation.variation_ref} sent to ${toEmail}`,
+    message: `${variation.variation_ref} ${sendAsCopy ? "quotation copy emailed" : "sent for approval"} to ${toEmail}`,
     actor_type: "user",
     actor_id: auth.session.user?.id ?? null,
     actor_name: auth.session.user?.email ?? null,
     linked_entity_type: "variation",
     linked_entity_id: variation.id,
-    details: { to_email: toEmail, provider_message_id: email.id ?? null, total: variation.total }
+    details: { to_email: toEmail, provider_message_id: email.id ?? null, total: variation.total, copy: sendAsCopy }
   });
 
-  return NextResponse.json({ ok: true, message: "Additional work sent for customer approval.", public_url: variationUrl });
+  return NextResponse.json({ ok: true, message: sendAsCopy ? "Additional-work quotation copy emailed. Approval and invoice status were unchanged." : "Additional work sent for customer approval.", public_url: variationUrl });
 }
 
 function getAppUrl() {
