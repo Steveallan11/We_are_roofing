@@ -10,6 +10,12 @@ function isPublicApi(pathname: string) {
   if (pathname.startsWith("/api/quotes/")) {
     return /\/api\/quotes\/[^/]+\/(accept|message)$/.test(pathname);
   }
+  if (/^\/api\/invoices\/[^/]+\/file$/.test(pathname)) {
+    // The route validates the signed customer token itself. Keeping only this
+    // read-only endpoint public lets emailed invoice links open without an
+    // admin session while every invoice mutation remains protected.
+    return true;
+  }
   return publicApiPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
