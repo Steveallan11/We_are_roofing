@@ -18,6 +18,9 @@ export async function POST(request: Request, { params }: Props) {
     variation_ids?: string[];
     to_email?: string;
     customer_name?: string;
+    email_customer_name?: string;
+    subject?: string;
+    message?: string;
   };
   const variationIds = [...new Set((body.variation_ids ?? []).filter(Boolean))];
   if (variationIds.length < 2) {
@@ -84,9 +87,11 @@ export async function POST(request: Request, { params }: Props) {
   try {
     const email = await sendEmail({
       to: toEmail,
-      subject: `Additional works quotation ${groupRef} from We Are Roofing UK Ltd`,
+      subject: body.subject?.trim() || `Additional works quotation ${groupRef} from We Are Roofing UK Ltd`,
       html: variationQuoteSentEmail({
         customerName,
+        customerGreeting: body.email_customer_name,
+        messageBody: body.message,
         variations: orderedVariations,
         quoteRef: groupRef,
         variationUrl,
@@ -94,7 +99,7 @@ export async function POST(request: Request, { params }: Props) {
         businessPhone: bundle.business.phone,
         businessEmail: bundle.business.email
       }),
-      text: `Your combined additional works quotation ${groupRef} is ready to review. Open it here: ${variationUrl}`,
+      text: `${body.message?.trim() || `Your combined additional works quotation ${groupRef} is ready to review.`}\n\nOpen the secure quotation here: ${variationUrl}`,
       jobId,
       templateType: "variation_quote_sent"
     });

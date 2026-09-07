@@ -13,7 +13,14 @@ type Props = { params: Promise<{ variationId: string }> };
 
 export async function POST(request: Request, { params }: Props) {
   const { variationId } = await params;
-  const body = (await request.json().catch(() => ({}))) as { to_email?: string; customer_name?: string; test?: boolean };
+  const body = (await request.json().catch(() => ({}))) as {
+    to_email?: string;
+    customer_name?: string;
+    email_customer_name?: string;
+    subject?: string;
+    message?: string;
+    test?: boolean;
+  };
   const isTest = body.test === true;
 
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true, message: "Additional work email preview completed." });
@@ -48,16 +55,18 @@ export async function POST(request: Request, { params }: Props) {
   }
   const email = await sendEmail({
     to: toEmail,
-    subject: `${isTest ? "[TEST] " : ""}Additional work approval - ${variation.variation_ref}`,
+    subject: `${isTest ? "[TEST] " : ""}${body.subject?.trim() || `Additional work quotation - ${variation.variation_ref}`}`,
     html: variationSentEmail({
       customerName,
+      customerGreeting: body.email_customer_name,
+      messageBody: body.message,
       variation,
       variationUrl,
       propertyAddress: bundle.job.property_address,
       businessPhone: bundle.business.phone,
       businessEmail: bundle.business.email
     }),
-    text: `Additional work ${variation.variation_ref} is ready to review. Open it here: ${variationUrl}`,
+    text: `${body.message?.trim() || `Additional work ${variation.variation_ref} is ready to review.`}\n\nOpen the secure quotation here: ${variationUrl}`,
     jobId: variation.job_id,
     templateType: isTest ? "variation_test" : "variation_sent",
     log: !isTest

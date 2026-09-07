@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, PageSection } from "@/components/ui/primitives";
+import { SendVariationQuoteModal, type VariationEmailDraft } from "@/components/variations/SendVariationQuoteModal";
 import type { InvoiceRecord, JobVariationRecord } from "@/lib/types";
 import { currency, formatDate } from "@/lib/utils";
 import { getVariationInvoiceProgress } from "@/lib/variations/invoicing";
@@ -23,6 +24,10 @@ type Props = {
   variations: JobVariationRecord[];
   invoices: InvoiceRecord[];
 };
+
+type EmailTarget =
+  | { type: "single"; variation: JobVariationRecord }
+  | { type: "combined"; variationIds: string[]; total: number };
 
 const newLine = (): DraftLine => ({
   id: crypto.randomUUID(),
@@ -47,6 +52,7 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
   const [invoiceAmountMode, setInvoiceAmountMode] = useState<"remaining" | "custom">("remaining");
   const [invoiceAmount, setInvoiceAmount] = useState("");
   const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
+  const [emailTarget, setEmailTarget] = useState<EmailTarget | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,25 +105,30 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
     refresh(result.message || "Additional work saved.");
   }
 
-  async function sendForApproval(variation: JobVariationRecord) {
-    if (!customerEmail) {
-      setError("Add the customer's email address before sending this additional work.");
-      return;
-    }
+  async function sendForApproval(variation: JobVariationRecord, draft: VariationEmailDraft) {
     setBusy(`send-${variation.id}`);
     setError(null);
-    const response = await fetch(`/api/variations/${variation.id}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: customerEmail, customer_name: customerName })
-    });
-    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
-    setBusy(null);
-    if (!response.ok || !result?.ok) {
-      setError(result?.error || "Additional work could not be sent.");
-      return;
+    try {
+      const response = await fetch(`/api/variations/${variation.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to_email: draft.toEmail,
+          customer_name: customerName,
+          email_customer_name: draft.greeting,
+          subject: draft.subject,
+          message: draft.message
+        })
+      });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || "Additional work could not be sent.");
+      }
+      setEmailTarget(null);
+      refresh(result.message || "Sent for customer approval.");
+    } finally {
+      setBusy(null);
     }
-    refresh(result.message || "Sent for customer approval.");
   }
 
   function toggleCombinedSelection(variationId: string) {
@@ -126,31 +137,33 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
     );
   }
 
-  async function sendCombinedQuote() {
-    if (!customerEmail) {
-      setError("Add the customer's email address before sending this quotation.");
-      return;
-    }
-    if (selectedVariationIds.length < 2) {
-      setError("Select at least two draft items to send as one quotation.");
-      return;
-    }
+  async function sendCombinedQuote(variationIds: string[], draft: VariationEmailDraft) {
     setBusy("send-combined");
     setError(null);
     setMessage(null);
-    const response = await fetch(`/api/jobs/${jobId}/variations/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ variation_ids: selectedVariationIds, to_email: customerEmail, customer_name: customerName })
-    });
-    const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
-    setBusy(null);
-    if (!response.ok || !result?.ok) {
-      setError(result?.error || "The combined additional-works quotation could not be sent.");
-      return;
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/variations/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variation_ids: variationIds,
+          to_email: draft.toEmail,
+          customer_name: customerName,
+          email_customer_name: draft.greeting,
+          subject: draft.subject,
+          message: draft.message
+        })
+      });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || "The combined additional-works quotation could not be sent.");
+      }
+      setSelectedVariationIds([]);
+      setEmailTarget(null);
+      refresh(result.message || "Combined additional-works quotation sent.");
+    } finally {
+      setBusy(null);
     }
-    setSelectedVariationIds([]);
-    refresh(result.message || "Combined additional-works quotation sent.");
   }
 
   async function recordApproval(variation: JobVariationRecord) {
@@ -224,8 +237,20 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
               Select all drafts
             </Button>
             {selectedVariationIds.length > 0 ? <Button disabled={busy !== null} onClick={() => setSelectedVariationIds([])} size="sm" variant="ghost">Clear</Button> : null}
-            <Button disabled={busy !== null || selectedVariationIds.length < 2} onClick={sendCombinedQuote} size="sm" variant="primary">
-              {busy === "send-combined" ? "Sending..." : `Send ${selectedVariationIds.length || "selected"} as one quote`}
+            <Button
+              disabled={busy !== null || selectedVariationIds.length < 2}
+              onClick={() => {
+                const selected = variations.filter((variation) => selectedVariationIds.includes(variation.id));
+                setEmailTarget({
+                  type: "combined",
+                  variationIds: [...selectedVariationIds],
+                  total: selected.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0)
+                });
+              }}
+              size="sm"
+              variant="primary"
+            >
+              {`Prepare email for ${selectedVariationIds.length || "selected"} items`}
             </Button>
           </div>
         </div>
@@ -347,8 +372,8 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
             {variation.accepted_at ? <p className="mt-3 text-xs text-[var(--text-muted)]">Approved {formatDate(variation.accepted_at)} by {variation.approved_by_name || "customer"} ({variation.approval_method || "recorded"})</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
-                <Button disabled={busy !== null} onClick={() => sendForApproval(variation)} size="sm" variant="secondary">
-                  {busy === `send-${variation.id}` ? "Sending..." : variation.status === "Sent" ? "Resend Quote" : "Send This Quote"}
+                <Button disabled={busy !== null} onClick={() => setEmailTarget({ type: "single", variation })} size="sm" variant="secondary">
+                  {variation.status === "Sent" ? "Edit & Resend Quote Email" : "Prepare Quote Email"}
                 </Button>
               ) : null}
               {(variation.status === "Draft" || variation.status === "Sent") && !variation.approval_group_id ? (
@@ -400,6 +425,17 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
       </div>
       {message ? <p className="mt-4 text-sm text-[#7ce3a6]">{message}</p> : null}
       {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}
+      {emailTarget ? (
+        <SendVariationQuoteModal
+          customerEmail={customerEmail}
+          customerName={customerName}
+          itemCount={emailTarget.type === "single" ? 1 : emailTarget.variationIds.length}
+          onClose={() => setEmailTarget(null)}
+          onSend={(draft) => emailTarget.type === "single" ? sendForApproval(emailTarget.variation, draft) : sendCombinedQuote(emailTarget.variationIds, draft)}
+          reference={emailTarget.type === "single" ? emailTarget.variation.variation_ref : "Combined additional-works quotation"}
+          total={emailTarget.type === "single" ? emailTarget.variation.total : emailTarget.total}
+        />
+      ) : null}
     </PageSection>
   );
 }

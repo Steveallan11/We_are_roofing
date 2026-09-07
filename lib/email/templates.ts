@@ -104,23 +104,23 @@ export function quoteSentEmail(props: {
 
 export function variationSentEmail(props: {
   customerName: string;
+  customerGreeting?: string | null;
+  messageBody?: string | null;
   variation: JobVariationRecord;
   variationUrl: string;
   propertyAddress: string;
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
-  const helloName = greetingName(props.customerName);
+  const helloName = props.customerGreeting?.trim() || greetingName(props.customerName);
+  const messageHtml = props.messageBody?.trim()
+    ? paragraphsToHtml(props.messageBody)
+    : paragraphsToHtml("We have prepared a quotation for the additional work discussed. Please use the button below to review the scope and confirm whether you would like us to proceed.");
   return shell(
     "Additional Work Approval",
     `
       <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${escapeHtml(helloName)},</p>
-      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
-        During the works at ${escapeHtml(props.propertyAddress)}, we identified some additional work that was not included in the original quotation.
-      </p>
-      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
-        Please open the additional work proposal to review the scope, price and VAT, then accept or decline it online before we proceed.
-      </p>
+      ${messageHtml}
       <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:16px 18px;margin:20px 0">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8d6a00">${escapeHtml(props.variation.variation_ref)}</div>
         <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-top:8px">${escapeHtml(props.variation.title)}</div>
@@ -137,6 +137,8 @@ export function variationSentEmail(props: {
 
 export function variationQuoteSentEmail(props: {
   customerName: string;
+  customerGreeting?: string | null;
+  messageBody?: string | null;
   variations: JobVariationRecord[];
   quoteRef: string;
   variationUrl: string;
@@ -144,7 +146,10 @@ export function variationQuoteSentEmail(props: {
   businessPhone?: string | null;
   businessEmail?: string | null;
 }) {
-  const helloName = greetingName(props.customerName);
+  const helloName = props.customerGreeting?.trim() || greetingName(props.customerName);
+  const messageHtml = props.messageBody?.trim()
+    ? paragraphsToHtml(props.messageBody)
+    : paragraphsToHtml("We have prepared one combined quotation covering the additional work discussed. Please use the button below to review each item and confirm whether you would like us to proceed.");
   const total = props.variations.reduce((sum, variation) => sum + Number(variation.total ?? 0), 0);
   const itemRows = props.variations
     .map(
@@ -162,12 +167,7 @@ export function variationQuoteSentEmail(props: {
     "Additional Works Quotation",
     `
       <p style="font-size:18px;line-height:1.5;margin-top:0;color:#1a1a1a">Hi ${escapeHtml(helloName)},</p>
-      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
-        During the works at ${escapeHtml(props.propertyAddress)}, we identified some additional items that were not included in the original quotation.
-      </p>
-      <p style="font-size:16px;line-height:1.75;color:#555;margin:0 0 18px">
-        We have combined them into one clear additional-works quotation. Please open it to review every item, the combined price and VAT, then approve or decline the quotation before we proceed.
-      </p>
+      ${messageHtml}
       <div style="background:#faf9f6;border:1px solid #e8e4da;border-radius:8px;padding:4px 18px 16px;margin:20px 0">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8d6a00;margin-top:16px">${escapeHtml(props.quoteRef)}</div>
         ${itemRows}
