@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Props = {
   jobId: string;
@@ -16,6 +17,8 @@ const DOCUMENT_TYPES = [
   { value: "warranty_document", label: "Warranty / guarantee" },
   { value: "site_document", label: "Site document" }
 ];
+
+const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
 
 export function DocumentUploadButton({ jobId }: Props) {
   const router = useRouter();
@@ -34,28 +37,72 @@ export function DocumentUploadButton({ jobId }: Props) {
     setUploading(true);
 
     try {
+      let uploadedCount = 0;
+      const failures: string[] = [];
       for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("document_type", documentType);
-        if (displayName.trim() && files.length === 1) {
-          formData.append("display_name", displayName.trim());
+        if (file.size > MAX_DOCUMENT_SIZE) {
+          failures.push(`${file.name} is larger than 25 MB.`);
+          continue;
         }
 
-        const response = await fetch(`/api/jobs/${jobId}/documents`, {
+        const prepareResponse = await fetch(`/api/jobs/${jobId}/documents`, {
           method: "POST",
-          body: formData
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "create-upload",
+            document_type: documentType,
+            file_name: file.name,
+            file_size: file.size,
+            content_type: file.type || "application/octet-stream"
+          })
         });
-
-        const result = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-        if (!response.ok || !result?.ok) {
-          throw new Error(result?.error || `Upload failed for ${file.name}`);
+        const prepareResult = (await prepareResponse.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+          storage_path?: string;
+          token?: string;
+        } | null;
+        if (!prepareResponse.ok || !prepareResult?.ok || !prepareResult.storage_path || !prepareResult.token) {
+          failures.push(`${file.name}: ${prepareResult?.error || uploadStatusMessage(prepareResponse.status)}`);
+          continue;
         }
+
+        const storageUpload = await getSupabaseBrowserClient()
+          .storage.from("job-documents")
+          .uploadToSignedUrl(prepareResult.storage_path, prepareResult.token, file, {
+            contentType: file.type || "application/octet-stream"
+          });
+        if (storageUpload.error) {
+          failures.push(`${file.name}: ${storageUpload.error.message}`);
+          continue;
+        }
+
+        const completeResponse = await fetch(`/api/jobs/${jobId}/documents`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "complete-upload",
+            document_type: documentType,
+            display_name: displayName.trim() && files.length === 1 ? displayName.trim() : file.name,
+            storage_path: prepareResult.storage_path
+          })
+        });
+        const completeResult = (await completeResponse.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+        if (!completeResponse.ok || !completeResult?.ok) {
+          failures.push(`${file.name}: ${completeResult?.error || uploadStatusMessage(completeResponse.status)}`);
+          continue;
+        }
+        uploadedCount += 1;
       }
 
-      setDisplayName("");
-      setMessage(`${files.length} document${files.length === 1 ? "" : "s"} added to this job file.`);
-      startTransition(() => router.refresh());
+      if (uploadedCount > 0) {
+        setDisplayName("");
+        setMessage(`${uploadedCount} document${uploadedCount === 1 ? "" : "s"} added to this job file.`);
+        startTransition(() => router.refresh());
+      }
+      if (failures.length > 0) {
+        setError(failures.join(" "));
+      }
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Document upload failed.");
     } finally {
@@ -68,7 +115,7 @@ export function DocumentUploadButton({ jobId }: Props) {
     <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-black/20 p-4">
       <div>
         <p className="text-sm font-semibold text-white">Add supporting documents</p>
-        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Upload PDFs, images, Word docs, supplier quotes, warranties, or reports. You can attach them when sending a quote.</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Upload PDFs, images, Word docs, supplier quotes, warranties, or reports up to 25 MB. You can attach them when sending a quote.</p>
       </div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,170px)_1fr_auto]">
         <select className="field" disabled={isPending || uploading} onChange={(event) => setDocumentType(event.target.value)} value={documentType}>
@@ -91,6 +138,7 @@ export function DocumentUploadButton({ jobId }: Props) {
             ref={inputRef}
             accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,image/*"
             className="hidden"
+            disabled={isPending || uploading}
             multiple
             onChange={(event) => {
               void onFilesSelected(event.target.files);
@@ -103,4 +151,10 @@ export function DocumentUploadButton({ jobId }: Props) {
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
     </div>
   );
+}
+
+function uploadStatusMessage(status: number) {
+  if (status === 413) return "file is too large for the upload service";
+  if (status === 401 || status === 403) return "your session expired; refresh and sign in again";
+  return "upload failed";
 }

@@ -9,6 +9,16 @@ type Props = {
 };
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const DIRECT_UPLOAD_DOCUMENT_TYPES = new Set([
+  "expense_receipt",
+  "customer_upload",
+  "supplier_quote",
+  "building_control",
+  "insurance_document",
+  "warranty_document",
+  "site_document",
+  "quote_attachment"
+]);
 
 export async function POST(request: Request, { params }: Props) {
   const { jobId } = await params;
@@ -29,25 +39,26 @@ export async function POST(request: Request, { params }: Props) {
       file_name?: string;
       file_size?: number;
       content_type?: string;
+      document_type?: string;
       display_name?: string;
       storage_path?: string;
     };
     const quoteId = String(body.quote_id || "").trim();
-    if (!quoteId) {
-      return NextResponse.json({ ok: false, error: "A quote is required for this upload." }, { status: 400 });
-    }
-
-    const { data: quote, error: quoteError } = await supabase
-      .from("quotes")
-      .select("id")
-      .eq("id", quoteId)
-      .eq("job_id", jobId)
-      .maybeSingle();
-    if (quoteError) {
-      return NextResponse.json({ ok: false, error: quoteError.message }, { status: 500 });
-    }
-    if (!quote) {
-      return NextResponse.json({ ok: false, error: "Quote not found on this job." }, { status: 404 });
+    const requestedDocumentType = String(body.document_type || (quoteId ? "quote_attachment" : "customer_upload")).trim();
+    const documentType = DIRECT_UPLOAD_DOCUMENT_TYPES.has(requestedDocumentType) ? requestedDocumentType : "customer_upload";
+    if (quoteId) {
+      const { data: quote, error: quoteError } = await supabase
+        .from("quotes")
+        .select("id")
+        .eq("id", quoteId)
+        .eq("job_id", jobId)
+        .maybeSingle();
+      if (quoteError) {
+        return NextResponse.json({ ok: false, error: quoteError.message }, { status: 500 });
+      }
+      if (!quote) {
+        return NextResponse.json({ ok: false, error: "Quote not found on this job." }, { status: 404 });
+      }
     }
 
     if (body.mode === "create-upload") {
@@ -100,8 +111,8 @@ export async function POST(request: Request, { params }: Props) {
         .from("job_documents")
         .insert({
           job_id: jobId,
-          quote_id: quoteId,
-          document_type: "quote_attachment",
+          quote_id: quoteId || null,
+          document_type: documentType,
           display_name: String(body.display_name || "").trim() || fallbackName,
           storage_bucket: JOB_DOCUMENTS_BUCKET,
           storage_path: storagePath,
@@ -119,7 +130,7 @@ export async function POST(request: Request, { params }: Props) {
       }
 
       await supabase.from("jobs").update({ updated_at: new Date().toISOString() }).eq("id", jobId);
-      return NextResponse.json({ ok: true, message: "Document saved to this quote.", document });
+      return NextResponse.json({ ok: true, message: quoteId ? "Document saved to this quote." : "Document saved to this job.", document });
     }
 
     return NextResponse.json({ ok: false, error: "Unsupported document upload mode." }, { status: 400 });
