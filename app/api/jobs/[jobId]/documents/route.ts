@@ -24,6 +24,7 @@ export async function POST(request: Request, { params }: Props) {
   const file = formData.get("file");
   const displayName = String(formData.get("display_name") || "").trim();
   const expenseId = String(formData.get("expense_id") || "").trim();
+  const quoteId = String(formData.get("quote_id") || "").trim();
   const requestedDocumentType = String(formData.get("document_type") || "customer_upload").trim() || "customer_upload";
   const documentType = expenseId ? "expense_receipt" : requestedDocumentType;
 
@@ -36,6 +37,22 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const supabase = createSupabaseAdminClient();
+  if (quoteId) {
+    const { data: quote, error: quoteError } = await supabase
+      .from("quotes")
+      .select("id")
+      .eq("id", quoteId)
+      .eq("job_id", jobId)
+      .maybeSingle();
+
+    if (quoteError) {
+      return NextResponse.json({ ok: false, error: quoteError.message }, { status: 500 });
+    }
+    if (!quote) {
+      return NextResponse.json({ ok: false, error: "Quote not found on this job." }, { status: 404 });
+    }
+  }
+
   if (expenseId) {
     const { data: expense, error: expenseError } = await supabase
       .from("job_expenses")
@@ -90,6 +107,7 @@ export async function POST(request: Request, { params }: Props) {
     .from("job_documents")
     .insert({
       job_id: jobId,
+      quote_id: quoteId || null,
       document_type: documentType,
       display_name: displayName || file.name,
       storage_bucket: JOB_DOCUMENTS_BUCKET,
@@ -139,7 +157,7 @@ export async function POST(request: Request, { params }: Props) {
 
   // Trigger AI analysis for analyzable document types (images and PDFs)
   const ANALYZABLE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
-  if (document && ANALYZABLE_TYPES.includes(mimeType)) {
+  if (document && documentType !== "quote_attachment" && ANALYZABLE_TYPES.includes(mimeType)) {
     // Non-blocking: trigger analysis in background
     fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/jobs/${jobId}/documents/${document.id}/analyze`, {
       method: "POST",

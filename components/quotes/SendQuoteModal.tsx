@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DEFAULT_QUOTE_EMAIL_MESSAGE } from "@/lib/quotes/email";
 import { currency } from "@/lib/utils";
 import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
+  jobId: string;
   quoteId: string;
   quoteRef: string;
   jobTitle: string;
@@ -21,6 +23,7 @@ type Props = {
 };
 
 export function SendQuoteModal({
+  jobId,
   quoteId,
   quoteRef,
   jobTitle,
@@ -33,18 +36,26 @@ export function SendQuoteModal({
   onClose,
   onSent
 }: Props) {
+  const router = useRouter();
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [email, setEmail] = useState(customerEmail ?? "");
   const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
   const [emailSubject, setEmailSubject] = useState(defaultEmailSubject || `Your We Are Roofing quotation - ${quoteRef}`);
   const [emailBody, setEmailBody] = useState(DEFAULT_QUOTE_EMAIL_MESSAGE);
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [availableDocuments, setAvailableDocuments] = useState(documents);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(() =>
+    documents.filter((document) => document.quote_id === quoteId && document.document_type === "quote_attachment").map((document) => document.id)
+  );
+  const [attachmentDisplayName, setAttachmentDisplayName] = useState("");
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [includeRoofPlan, setIncludeRoofPlan] = useState(false);
   const [roofPlanDocumentId, setRoofPlanDocumentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingMode, setSendingMode] = useState<"test" | "customer" | null>(null);
-  const attachableDocuments = documents.filter(isAttachableDocument);
-  const roofPlanDocuments = documents.filter(isRoofPlanDocument);
+  const attachableDocuments = availableDocuments.filter(isAttachableDocument);
+  const roofPlanDocuments = availableDocuments.filter(isRoofPlanDocument);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -54,6 +65,65 @@ export function SendQuoteModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  async function uploadQuoteAttachments(files: FileList | null) {
+    if (!files?.length) return;
+
+    setUploadingAttachments(true);
+    setUploadMessage(null);
+    setError(null);
+    const uploadedDocuments: JobDocumentRecord[] = [];
+    const failedFiles: string[] = [];
+
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("document_type", "quote_attachment");
+        formData.append("quote_id", quoteId);
+        if (files.length === 1 && attachmentDisplayName.trim()) {
+          formData.append("display_name", attachmentDisplayName.trim());
+        }
+
+        const response = await fetch(`/api/jobs/${jobId}/documents`, {
+          method: "POST",
+          body: formData
+        });
+        const result = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          document?: JobDocumentRecord;
+        } | null;
+
+        if (!response.ok || !result?.ok || !result.document) {
+          failedFiles.push(`${file.name}: ${result?.message || result?.error || "upload failed"}`);
+          continue;
+        }
+        uploadedDocuments.push(result.document);
+      }
+
+      if (uploadedDocuments.length > 0) {
+        setAvailableDocuments((current) => [
+          ...uploadedDocuments,
+          ...current.filter((document) => !uploadedDocuments.some((uploaded) => uploaded.id === document.id))
+        ]);
+        setSelectedDocumentIds((current) => [...new Set([...current, ...uploadedDocuments.map((document) => document.id)])]);
+        setAttachmentDisplayName("");
+        setUploadMessage(
+          `${uploadedDocuments.length} file${uploadedDocuments.length === 1 ? "" : "s"} uploaded and selected for this quote.`
+        );
+        router.refresh();
+      }
+
+      if (failedFiles.length > 0) {
+        setError(`Some files could not be uploaded. ${failedFiles.join(" ")}`);
+      }
+    } finally {
+      setUploadingAttachments(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+    }
+  }
 
   async function sendQuote(mode: "test" | "customer") {
     const nextEmail = email.trim();
@@ -227,6 +297,35 @@ export function SendQuoteModal({
               </button>
             ) : null}
           </div>
+          <div className="mt-4 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4">
+            <p className="text-sm font-bold text-white">Upload a brochure or supporting file</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              The file is saved privately against this quote and job, then selected for the outgoing email automatically.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+              <input
+                className="field"
+                disabled={uploadingAttachments || sendingMode !== null}
+                onChange={(event) => setAttachmentDisplayName(event.target.value)}
+                placeholder="Optional customer-facing file name"
+                value={attachmentDisplayName}
+              />
+              <label className="button-secondary min-h-11 cursor-pointer text-center">
+                {uploadingAttachments ? "Uploading..." : "Upload Files"}
+                <input
+                  ref={attachmentInputRef}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,image/*"
+                  className="hidden"
+                  disabled={uploadingAttachments || sendingMode !== null}
+                  multiple
+                  onChange={(event) => void uploadQuoteAttachments(event.target.files)}
+                  type="file"
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Maximum 15 MB per file and 25 MB total per email.</p>
+            {uploadMessage ? <p className="mt-2 text-sm font-semibold text-[#7ce3a6]">{uploadMessage}</p> : null}
+          </div>
           {attachableDocuments.length > 0 ? (
             <div className="mt-4 grid gap-2">
               {attachableDocuments.map((document) => {
@@ -331,6 +430,7 @@ function isAttachableDocument(document: JobDocumentRecord) {
 }
 
 function getDocumentTypeLabel(document: JobDocumentRecord) {
+  if (document.document_type === "quote_attachment") return "Quote attachment";
   if (document.source_type === "uploaded") return "Uploaded document";
   if (document.document_type === "quote_pdf") return "Quote PDF";
   if (document.document_type === "invoice_pdf") return "Invoice PDF";

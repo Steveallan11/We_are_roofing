@@ -227,6 +227,7 @@ export function QuoteActions({ autoGenerate = false, jobId, quote, jobTitle, cus
               defaultEmailBody={quote.customer_email_body}
               defaultEmailSubject={quote.customer_email_subject}
               documents={documents}
+              jobId={jobId}
               jobTitle={jobTitle}
               isFromPrice={isQuoteFromOptionValue(quote)}
               onClose={() => setShowSendModal(false)}
