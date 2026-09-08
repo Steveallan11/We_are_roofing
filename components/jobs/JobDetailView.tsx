@@ -693,8 +693,8 @@ function ActivityTab({
 
       <PageSection
         kicker="Email Log"
-        title={`${emailLogs.length} ${emailLogs.length === 1 ? "email" : "emails"} sent`}
-        description="Everything sent from this job file."
+        title={`${emailLogs.length} email ${emailLogs.length === 1 ? "attempt" : "attempts"}`}
+        description="Provider acceptance and delivery updates for messages from this job file."
       >
         {emailLogs.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No quote emails have been sent yet.</p>

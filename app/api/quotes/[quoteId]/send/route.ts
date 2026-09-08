@@ -121,25 +121,33 @@ export async function POST(request: Request, { params }: Props) {
       return NextResponse.json({ ok: false, error: tokenError.message }, { status: 500 });
     }
   }
-  const emailResult = await sendEmail({
-    to: toEmail,
-    subject: `${isTestSend ? "[TEST] " : ""}${subject}`,
-    html: quoteSentEmail({
-      customerName: emailCustomerName,
-      customerGreeting: emailCustomerName,
-      messageBody,
-      quote,
-      quoteUrl,
-      businessPhone: bundle.business.phone,
-      businessEmail: bundle.business.email
-    }),
-    text: `${messageBody}\n\nView your quote: ${quoteUrl}${extraAttachments.length ? `\n\nAttached documents: ${extraAttachments.map((item) => item.filename).join(", ")}` : ""}`,
-    attachments: extraAttachments,
-    jobId: quote.job_id,
-    quoteId,
-    templateType: isTestSend ? "quote_test" : "quote_sent",
-    log: !isTestSend
-  });
+  let emailResult: Awaited<ReturnType<typeof sendEmail>>;
+  try {
+    emailResult = await sendEmail({
+      to: toEmail,
+      subject: `${isTestSend ? "[TEST] " : ""}${subject}`,
+      html: quoteSentEmail({
+        customerName: emailCustomerName,
+        customerGreeting: emailCustomerName,
+        messageBody,
+        quote,
+        quoteUrl,
+        businessPhone: bundle.business.phone,
+        businessEmail: bundle.business.email
+      }),
+      text: `${messageBody}\n\nView your quote: ${quoteUrl}${extraAttachments.length ? `\n\nAttached documents: ${extraAttachments.map((item) => item.filename).join(", ")}` : ""}`,
+      attachments: extraAttachments,
+      jobId: quote.job_id,
+      quoteId,
+      templateType: isTestSend ? "quote_test" : "quote_sent",
+      log: !isTestSend
+    });
+  } catch (emailError) {
+    return NextResponse.json(
+      { ok: false, error: `Quote email was not sent. ${emailError instanceof Error ? emailError.message : "The email provider rejected it."}` },
+      { status: 502 }
+    );
+  }
 
   if (isTestSend) {
     return NextResponse.json({
@@ -289,9 +297,7 @@ export async function POST(request: Request, { params }: Props) {
     quoteId,
     provider_message_id: emailResult.id,
     pdf_url: artifacts.pdfUrl,
-    message: process.env.RESEND_API_KEY
-      ? "Quote email sent and saved."
-      : "Quote send logged in Supabase. RESEND_API_KEY not configured, so no provider email was sent.",
+    message: `Quote email accepted by ${emailResult.provider === "gmail" ? "Gmail" : "Resend"} and saved.`,
     next_job_status: "Quote Sent",
     next_quote_status: "Sent"
   });

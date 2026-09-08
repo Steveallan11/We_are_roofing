@@ -84,32 +84,40 @@ export async function POST(request: Request, { params }: Props) {
   const invoiceUrl = appendInvoiceFileToken(rawInvoiceUrl, invoiceId);
   const dueDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(invoice.due_date));
 
-  const emailResult = await sendEmail({
-    to: toEmail,
-    subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : invoice.variation_id ? "Additional work invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
-    html: invoiceSentEmail({
-      customerName: emailCustomerName,
-      customerGreeting: emailCustomerName,
-      invoiceRef: invoice.invoice_ref,
-      invoiceUrl,
-      jobTitle: bundle.job.job_title,
-      propertyAddress: bundle.job.property_address,
-      dueDate,
-      total: Number(invoice.total ?? 0),
-      invoiceType: invoice.invoice_type,
-      isVariation: Boolean(invoice.variation_id),
-      bankName: bundle.business.bank_name,
-      bankSortCode: bundle.business.bank_sort_code,
-      bankAccount: bundle.business.bank_account,
-      bankAccountName: bundle.business.bank_account_name,
-      businessPhone: bundle.business.phone,
-      businessEmail: bundle.business.email
-    }),
-    text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Payment is due by ${dueDate}. Open it here: ${invoiceUrl}`,
-    jobId: bundle.job.id,
-    templateType: isTestSend ? "invoice_test" : "invoice_sent",
-    log: !isTestSend
-  });
+  let emailResult: Awaited<ReturnType<typeof sendEmail>>;
+  try {
+    emailResult = await sendEmail({
+      to: toEmail,
+      subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : invoice.variation_id ? "Additional work invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
+      html: invoiceSentEmail({
+        customerName: emailCustomerName,
+        customerGreeting: emailCustomerName,
+        invoiceRef: invoice.invoice_ref,
+        invoiceUrl,
+        jobTitle: bundle.job.job_title,
+        propertyAddress: bundle.job.property_address,
+        dueDate,
+        total: Number(invoice.total ?? 0),
+        invoiceType: invoice.invoice_type,
+        isVariation: Boolean(invoice.variation_id),
+        bankName: bundle.business.bank_name,
+        bankSortCode: bundle.business.bank_sort_code,
+        bankAccount: bundle.business.bank_account,
+        bankAccountName: bundle.business.bank_account_name,
+        businessPhone: bundle.business.phone,
+        businessEmail: bundle.business.email
+      }),
+      text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Payment is due by ${dueDate}. Open it here: ${invoiceUrl}`,
+      jobId: bundle.job.id,
+      templateType: isTestSend ? "invoice_test" : "invoice_sent",
+      log: !isTestSend
+    });
+  } catch (emailError) {
+    return NextResponse.json(
+      { ok: false, error: `Invoice email was not sent. ${emailError instanceof Error ? emailError.message : "The email provider rejected it."}` },
+      { status: 502 }
+    );
+  }
 
   if (isTestSend) {
     return NextResponse.json({
@@ -140,9 +148,7 @@ export async function POST(request: Request, { params }: Props) {
     invoiceId,
     provider_message_id: emailResult.id,
     pdf_url: artifacts.pdfUrl,
-    message: process.env.RESEND_API_KEY
-      ? "Invoice email sent and saved."
-      : "Invoice send logged in Supabase. RESEND_API_KEY not configured, so no provider email was sent."
+    message: `Invoice email accepted by ${emailResult.provider === "gmail" ? "Gmail" : "Resend"} and saved.`
   });
 }
 

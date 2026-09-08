@@ -25,10 +25,12 @@ type SendEmailParams = {
 export async function sendEmail({ to, subject, html, text, attachments, jobId, quoteId, templateType, sequenceDay, log = true }: SendEmailParams) {
   const sender = getEmailSenderConfig(to);
   let resendId: string | null = null;
+  let provider: "gmail" | "resend" | null = null;
   let status = "Logged - no provider configured";
 
   try {
-    if (shouldUseGmailSmtp()) {
+    provider = resolveEmailProvider();
+    if (provider === "gmail") {
       const result = await sendViaGmailSmtp({
         sender,
         to,
@@ -39,7 +41,7 @@ export async function sendEmail({ to, subject, html, text, attachments, jobId, q
       });
       resendId = result.id;
       status = "Sent";
-    } else if (process.env.RESEND_API_KEY) {
+    } else {
       const resend = new Resend(process.env.RESEND_API_KEY);
       const result = await resend.emails.send({
         from: sender.from,
@@ -61,6 +63,12 @@ export async function sendEmail({ to, subject, html, text, attachments, jobId, q
     }
   } catch (error) {
     status = `Failed - ${error instanceof Error ? error.message : "provider rejected email"}`;
+    console.error("Email provider rejected send", {
+      provider,
+      templateType,
+      attachmentCount: attachments?.length ?? 0,
+      error: error instanceof Error ? error.message : String(error)
+    });
     if (log) {
       await logEmail({
         jobId,
@@ -93,7 +101,7 @@ export async function sendEmail({ to, subject, html, text, attachments, jobId, q
     });
   }
 
-  return { id: resendId, status };
+  return { id: resendId, status, provider };
 }
 
 export function getEmailSenderConfig(toEmail?: string | null) {
@@ -114,6 +122,27 @@ export function getEmailSenderConfig(toEmail?: string | null) {
 
 function shouldUseGmailSmtp() {
   return process.env.EMAIL_PROVIDER === "gmail" || Boolean(process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_APP_PASSWORD && !process.env.RESEND_API_KEY);
+}
+
+function resolveEmailProvider(): "gmail" | "resend" {
+  if (process.env.EMAIL_PROVIDER === "gmail") {
+    if (!process.env.GMAIL_SMTP_USER || !process.env.GMAIL_SMTP_APP_PASSWORD) {
+      throw new Error("Gmail sending is selected but the Gmail address or app password is missing in Vercel.");
+    }
+    return "gmail";
+  }
+
+  if (process.env.EMAIL_PROVIDER === "resend") {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("Resend sending is selected but RESEND_API_KEY is missing in Vercel.");
+    }
+    return "resend";
+  }
+
+  if (process.env.RESEND_API_KEY) return "resend";
+  if (process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_APP_PASSWORD) return "gmail";
+
+  throw new Error("No email provider is configured. Add Resend or Gmail SMTP credentials in Vercel before sending.");
 }
 
 async function sendViaGmailSmtp({
@@ -208,7 +237,7 @@ async function logEmail({
       body: text || html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
       html_body: html,
       subject,
-      status: status === "Sent" ? "delivered" : "failed",
+      status: status === "Sent" ? "sent" : "failed",
       sent_at: new Date().toISOString()
     });
   } catch (err) {
