@@ -104,6 +104,8 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const autosaveReadyRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSignatureRef = useRef("");
+  const activeSectionTypeRef = useRef("Pitched - Tile");
+  const activeSectionColorRef = useRef("#D4AF37");
   const activeLineTypeRef = useRef("Roof Work Section");
 
   const [sections, setSections] = useState<DrawnSection[]>([]);
@@ -130,6 +132,11 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    activeSectionTypeRef.current = sectionType;
+    activeSectionColorRef.current = sectionColor;
+  }, [sectionColor, sectionType]);
 
   useEffect(() => {
     activeLineTypeRef.current = lineType;
@@ -330,7 +337,8 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
         const map = new google.maps.Map(mapElRef.current, {
           zoom: 19,
           center: { lat: 51.279, lng: -0.833 },
-          mapTypeId: "satellite",
+          // Hybrid keeps the satellite detail while adding place and road labels.
+          mapTypeId: "hybrid",
           gestureHandling: "greedy",
           tilt: 0,
           heading: 0,
@@ -343,7 +351,7 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
         const drawingManager = new google.maps.drawing.DrawingManager({
           drawingMode: null,
           drawingControl: false,
-          polygonOptions: sectionOptions(sectionColor),
+          polygonOptions: sectionOptions(activeSectionColorRef.current),
           polylineOptions: lineOptions(activeLineTypeRef.current)
         });
         drawingManager.setMap(map);
@@ -351,18 +359,20 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
 
         google.maps.event.addListener(drawingManager, "polygoncomplete", (polygon: google.maps.Polygon) => {
           const id = crypto.randomUUID();
-          polygon.setOptions(sectionOptions(sectionColor));
+          const activeSectionType = activeSectionTypeRef.current;
+          const activeSectionColor = activeSectionColorRef.current;
+          polygon.setOptions(sectionOptions(activeSectionColor));
           attachPolygonListeners(id, polygon);
           const area_m2 = round2(google.maps.geometry.spherical.computeArea(polygon.getPath()));
           setSections((current) => [
             ...current,
             {
               id,
-              label: `${sectionType} Section ${current.length + 1}`,
-              type: sectionType,
+              label: `${activeSectionType} Section ${current.length + 1}`,
+              type: activeSectionType,
               polygon,
               area_m2,
-              color: sectionColor,
+              color: activeSectionColor,
               notes: ""
             }
           ]);
@@ -405,12 +415,14 @@ export function GoogleMapsTakeoff({ surveyId, jobId, address, jobRef, customerNa
     return () => {
       cancelled = true;
     };
-  }, [address, apiKey, attachPolygonListeners, attachPolylineListeners, geocodeAddress, loadExistingShapes, sectionColor, sectionType]);
+  }, [address, apiKey, attachPolygonListeners, attachPolylineListeners, geocodeAddress, loadExistingShapes]);
 
   function startDrawSection() {
     if (!drawingRef.current) return;
     featureClickRef.current?.remove();
     featureClickRef.current = null;
+    activeSectionTypeRef.current = sectionType;
+    activeSectionColorRef.current = sectionColor;
     drawingRef.current.setOptions({ polygonOptions: sectionOptions(sectionColor) });
     drawingRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
     setDrawMode("section");
