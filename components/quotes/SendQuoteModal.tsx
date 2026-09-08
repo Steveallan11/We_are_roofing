@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_QUOTE_EMAIL_MESSAGE } from "@/lib/quotes/email";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { currency } from "@/lib/utils";
 import type { JobDocumentRecord } from "@/lib/types";
+
+const MAX_QUOTE_ATTACHMENT_SIZE = 25 * 1024 * 1024;
 
 type Props = {
   jobId: string;
@@ -77,30 +80,69 @@ export function SendQuoteModal({
 
     try {
       for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("document_type", "quote_attachment");
-        formData.append("quote_id", quoteId);
-        if (files.length === 1 && attachmentDisplayName.trim()) {
-          formData.append("display_name", attachmentDisplayName.trim());
+        if (file.size > MAX_QUOTE_ATTACHMENT_SIZE) {
+          failedFiles.push(`${file.name}: file is larger than 25 MB`);
+          continue;
         }
 
-        const response = await fetch(`/api/jobs/${jobId}/documents`, {
+        const displayName = files.length === 1 && attachmentDisplayName.trim() ? attachmentDisplayName.trim() : file.name;
+        const prepareResponse = await fetch(`/api/jobs/${jobId}/documents`, {
           method: "POST",
-          body: formData
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "create-upload",
+            quote_id: quoteId,
+            document_type: "quote_attachment",
+            file_name: file.name,
+            file_size: file.size,
+            content_type: file.type || "application/octet-stream"
+          })
         });
-        const result = (await response.json().catch(() => null)) as {
+        const prepareResult = (await prepareResponse.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          storage_path?: string;
+          token?: string;
+        } | null;
+
+        if (!prepareResponse.ok || !prepareResult?.ok || !prepareResult.storage_path || !prepareResult.token) {
+          failedFiles.push(`${file.name}: ${prepareResult?.message || prepareResult?.error || formatUploadError(prepareResponse.status)}`);
+          continue;
+        }
+
+        const storageUpload = await getSupabaseBrowserClient()
+          .storage.from("job-documents")
+          .uploadToSignedUrl(prepareResult.storage_path, prepareResult.token, file, {
+            contentType: file.type || "application/octet-stream"
+          });
+        if (storageUpload.error) {
+          failedFiles.push(`${file.name}: ${storageUpload.error.message}`);
+          continue;
+        }
+
+        const completeResponse = await fetch(`/api/jobs/${jobId}/documents`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "complete-upload",
+            quote_id: quoteId,
+            document_type: "quote_attachment",
+            display_name: displayName,
+            storage_path: prepareResult.storage_path
+          })
+        });
+        const completeResult = (await completeResponse.json().catch(() => null)) as {
           ok?: boolean;
           error?: string;
           message?: string;
           document?: JobDocumentRecord;
         } | null;
-
-        if (!response.ok || !result?.ok || !result.document) {
-          failedFiles.push(`${file.name}: ${result?.message || result?.error || "upload failed"}`);
+        if (!completeResponse.ok || !completeResult?.ok || !completeResult.document) {
+          failedFiles.push(`${file.name}: ${completeResult?.message || completeResult?.error || formatUploadError(completeResponse.status)}`);
           continue;
         }
-        uploadedDocuments.push(result.document);
+        uploadedDocuments.push(completeResult.document);
       }
 
       if (uploadedDocuments.length > 0) {
@@ -119,6 +161,8 @@ export function SendQuoteModal({
       if (failedFiles.length > 0) {
         setError(`Some files could not be uploaded. ${failedFiles.join(" ")}`);
       }
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "The selected files could not be uploaded.");
     } finally {
       setUploadingAttachments(false);
       if (attachmentInputRef.current) attachmentInputRef.current.value = "";
@@ -323,7 +367,7 @@ export function SendQuoteModal({
                 />
               </label>
             </div>
-            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Maximum 15 MB per file and 25 MB total per email.</p>
+            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Maximum 25 MB per file and 25 MB total across selected email attachments.</p>
             {uploadMessage ? <p className="mt-2 text-sm font-semibold text-[#7ce3a6]">{uploadMessage}</p> : null}
           </div>
           {attachableDocuments.length > 0 ? (
@@ -455,4 +499,10 @@ function isRoofPlanDocument(document: JobDocumentRecord) {
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatUploadError(status: number) {
+  if (status === 413) return "file was too large for the upload service";
+  if (status === 401 || status === 403) return "your session expired; refresh the page and sign in again";
+  return "upload failed";
 }

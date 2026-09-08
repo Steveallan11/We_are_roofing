@@ -334,8 +334,8 @@ async function buildDocumentAttachments(
   for (const document of documents) {
     const fileSize = Number(document.file_size ?? 0);
     totalBytes += fileSize;
-    if (fileSize > 15 * 1024 * 1024 || totalBytes > 25 * 1024 * 1024) {
-      throw new Error("One or more selected documents are too large to email. Please send fewer or smaller attachments.");
+    if (fileSize > 25 * 1024 * 1024 || totalBytes > 25 * 1024 * 1024) {
+      throw new Error("Selected documents exceed the 25 MB email attachment allowance. Please deselect a file or send fewer attachments.");
     }
 
     const download = await supabase.storage.from(document.storage_bucket as string).download(document.storage_path as string);
