@@ -10,7 +10,7 @@ import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyseReceiptFile";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
-import { getQuoteValueLines, isScaffoldLine } from "@/lib/quotes/value";
+import { getQuoteLineItemCategory, getQuoteValueLines, isScaffoldLine } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import type { InvoiceRecord, InvoiceType, InvoiceVatTreatment, Job, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
 
@@ -114,6 +114,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
   const [vatTreatment, setVatTreatment] = useState<InvoiceVatTreatment>(() => invoices.find((invoice) => invoice.status !== "Void")?.vat_treatment ?? "standard");
   const [customerVatNumber, setCustomerVatNumber] = useState(() => invoices.find((invoice) => invoice.status !== "Void")?.customer_vat_number ?? "");
   const [reverseChargeConfirmed, setReverseChargeConfirmed] = useState(() => Boolean(invoices.find((invoice) => invoice.status !== "Void")?.reverse_charge_confirmed_at));
+  const [cisRate, setCisRate] = useState(() => Number(invoices.find((invoice) => invoice.status !== "Void")?.cis_deduction_rate ?? 0));
 
   const liveInvoices = invoices.filter((invoice) => invoice.status !== "Void");
   const approvedVariations = variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
@@ -132,6 +133,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
     const invoiced = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0);
     const paid = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.amount_paid ?? 0), 0);
     const outstanding = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+    const invoiceCisWithheld = liveInvoices.reduce((sum, invoice) => sum + Number(invoice.cis_deduction_amount ?? 0), 0);
     const expensesGross = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
     const expensesVat = expenses.reduce((sum, expense) => sum + Number(expense.vat_amount ?? 0), 0);
     const expensesNet = expensesGross - expensesVat;
@@ -173,6 +175,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
       invoiced,
       paid,
       outstanding,
+      invoiceCisWithheld,
       expensesGross,
       expensesVat,
       expensesNet,
@@ -193,6 +196,12 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
       profit
     };
   }, [quoteFinancials, liveInvoices, expenses, materials, variations]);
+
+  function estimateAmountDue(grossAmount: number) {
+    if (!(cisRate > 0) || invoiceablePayableTotal <= 0 || quoteFinancials.labourNet <= 0) return grossAmount;
+    const ratio = Math.min(1, Math.max(0, grossAmount / invoiceablePayableTotal));
+    return Math.max(0, grossAmount - quoteFinancials.labourNet * ratio * (cisRate / 100));
+  }
 
   async function setScaffoldExcluded(excluded: boolean) {
     if (!quote) return;
@@ -235,7 +244,9 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
         .reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0);
       const amount = type === "final" ? Math.max(0, invoiceablePayableTotal - previouslyInvoiced) : invoiceablePayableTotal;
       const label = type === "final" ? "final balance" : "full invoice";
-      if (!window.confirm(`Create the ${label} for ${currency(amount)}? You can preview it before sending.`)) return;
+      const amountDue = estimateAmountDue(amount);
+      const cisNote = cisRate > 0 ? ` after an estimated ${currency(amount - amountDue)} CIS deduction` : "";
+      if (!window.confirm(`Create the ${label} for ${currency(amountDue)} due${cisNote}? You can preview it before sending.`)) return;
     }
     notify(null, null);
     setBusy(`create-${type}`);
@@ -247,7 +258,8 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
         deposit_percentage: depositPercentage,
         vat_treatment: vatTreatment,
         customer_vat_number: customerVatNumber,
-        reverse_charge_confirmed: reverseChargeConfirmed
+        reverse_charge_confirmed: reverseChargeConfirmed,
+        cis_deduction_rate: cisRate
       })
     });
     const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
@@ -274,7 +286,8 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
       description: interimDescription.trim() || undefined,
       vat_treatment: vatTreatment,
       customer_vat_number: customerVatNumber,
-      reverse_charge_confirmed: reverseChargeConfirmed
+      reverse_charge_confirmed: reverseChargeConfirmed,
+      cis_deduction_rate: cisRate
     };
     if (interimMode === "fixed") body.amount = value;
     else body.percentage = value;
@@ -349,8 +362,9 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
   const hasFinal = liveInvoices.some((invoice) => invoice.invoice_type === "final");
   const quoteAccepted = quote?.status === "Accepted" || ["Accepted", "Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress", "Completed"].includes(job.status);
   const workflowContractTotal = vatTreatment === "domestic_reverse_charge" ? summary.contractNet : summary.contractTotal;
+  const workflowPayableTotal = Math.max(0, workflowContractTotal - summary.invoiceCisWithheld);
   const contractFullyInvoiced = workflowContractTotal > 0 && summary.invoiced >= workflowContractTotal - 0.01;
-  const allPaid = contractFullyInvoiced && summary.outstanding <= 0.01 && summary.paid >= workflowContractTotal - 0.01;
+  const allPaid = contractFullyInvoiced && summary.outstanding <= 0.01 && summary.paid >= workflowPayableTotal - 0.01;
   const nextOutstandingInvoice = liveInvoices.find((invoice) => Number(invoice.balance_due ?? 0) > 0.01);
 
   async function completeJob() {
@@ -490,6 +504,29 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
           ) : null}
           {liveInvoices.length > 0 ? <p className="mt-2 text-xs text-[var(--text-muted)]">VAT treatment is locked once the first live invoice is raised. Void existing invoices before changing it.</p> : null}
         </div>
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] p-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-end">
+            <div>
+              <p className="font-semibold text-[var(--text-primary)]">CIS deduction from labour</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">CIS is deducted from the VAT-exclusive labour amount only. Materials and VAT remain outside the deduction.</p>
+            </div>
+            <label>
+              <span className="label">CIS deduction rate</span>
+              <select className="field" disabled={liveInvoices.length > 0} onChange={(event) => setCisRate(Number(event.target.value))} value={cisRate}>
+                <option value={0}>No CIS deduction</option>
+                <option value={20}>20% — registered subcontractor</option>
+                <option value={30}>30% — unregistered subcontractor</option>
+              </select>
+            </label>
+          </div>
+          {cisRate > 0 ? (
+            <div className="mt-3 rounded-lg border border-[var(--gold-border)] bg-[var(--gold-bg)] p-3 text-sm text-[var(--text-primary)]">
+              <p>Labour subject to CIS: <strong>{currency(quoteFinancials.labourNet)}</strong> · Estimated CIS withheld: <strong>{currency(quoteFinancials.labourNet * (cisRate / 100))}</strong> · Full-invoice amount due: <strong>{currency(estimateAmountDue(invoiceablePayableTotal))}</strong>.</p>
+              {quoteFinancials.labourNet <= 0 ? <p className="mt-2 text-[#ffcf7d]">No labour split is recorded yet. Split the quote into materials and labour before raising a CIS invoice.</p> : null}
+            </div>
+          ) : null}
+          {liveInvoices.length > 0 ? <p className="mt-2 text-xs text-[var(--text-muted)]">The CIS rate is locked once the first live invoice is raised. Void existing invoices before changing it.</p> : null}
+        </div>
         {!quote ? (
           <p className="text-sm text-[#ffcf7d]">Create a quote first — invoices are raised from the approved quote.</p>
         ) : (
@@ -532,7 +569,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
                 value={depositPct}
               />
               <span className="text-sm text-[var(--text-muted)]">
-                = {currency((invoiceablePayableTotal * (Number(depositPct) || 0)) / 100)}
+                = {currency(estimateAmountDue((invoiceablePayableTotal * (Number(depositPct) || 0)) / 100))} due
               </span>
             </div>
             <div className="mt-3 flex gap-2">
@@ -596,7 +633,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
               />
               {interimMode === "percentage" ? (
                 <span className="text-sm text-[var(--text-muted)]">
-                  = {currency((invoiceablePayableTotal * (Number(interimValue) || 0)) / 100)}
+                  = {currency(estimateAmountDue((invoiceablePayableTotal * (Number(interimValue) || 0)) / 100))} due
                 </span>
               ) : null}
             </div>
@@ -631,13 +668,15 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
                       {invoice.status}
                     </Badge>
                     {invoice.vat_treatment === "domestic_reverse_charge" ? <Badge size="sm" variant="neutral">Reverse charge</Badge> : null}
+                    {Number(invoice.cis_deduction_amount ?? 0) > 0 ? <Badge size="sm" variant="neutral">CIS {Number(invoice.cis_deduction_rate ?? 0)}%</Badge> : null}
                   </div>
                   <p className="mt-1 text-sm text-[var(--text-muted)]">
                     Due {formatDate(invoice.due_date)} · Paid {currency(invoice.amount_paid ?? 0)} · Balance {currency(invoice.balance_due ?? 0)}
                   </p>
                   {invoice.vat_treatment === "domestic_reverse_charge" ? <p className="mt-1 text-xs text-[var(--text-muted)]">Customer accounts to HMRC for {currency(invoice.reverse_charge_vat_amount ?? 0)} VAT.</p> : null}
+                  {Number(invoice.cis_deduction_amount ?? 0) > 0 ? <p className="mt-1 text-xs text-[var(--text-muted)]">CIS withheld from labour: {currency(Number(invoice.cis_deduction_amount ?? 0))}. Invoice total {currency(invoice.total ?? 0)}.</p> : null}
                 </div>
-                <p className="text-right font-display text-2xl text-[var(--gold-l)]">{currency(invoice.total ?? 0)}</p>
+                <div className="text-right"><p className="font-display text-2xl text-[var(--gold-l)]">{currency(invoice.balance_due ?? invoice.total ?? 0)}</p><p className="text-xs text-[var(--text-muted)]">amount due</p></div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="ghost" size="sm" asChild>
@@ -766,10 +805,14 @@ function calculateFinancialQuoteTotals(quote: QuoteRecord | null) {
     (sum, line) => sum + Number(line.cost ?? 0) * (line.vat_applicable ? 1.2 : 1),
     0
   );
+  const labourNet = companyLines
+    .filter((line) => getQuoteLineItemCategory(line) === "labour")
+    .reduce((sum, line) => sum + Number(line.cost ?? 0), 0);
   return {
     net: Math.round(net * 100) / 100,
     total: Math.round((net + vat) * 100) / 100,
-    supplierPaidTotal: Math.round(supplierPaidTotal * 100) / 100
+    supplierPaidTotal: Math.round(supplierPaidTotal * 100) / 100,
+    labourNet: Math.round(labourNet * 100) / 100
   };
 }
 

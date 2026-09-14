@@ -63,11 +63,12 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const total = Number(invoice.total ?? 0);
+  const payableTotal = Math.max(0, total - Number(invoice.cis_deduction_amount ?? 0));
   const alreadyPaid = Number(invoice.amount_paid ?? 0);
   const rounded = Math.round(amount * 100) / 100;
-  if (alreadyPaid + rounded > total + 0.01) {
+  if (alreadyPaid + rounded > payableTotal + 0.01) {
     return NextResponse.json(
-      { ok: false, error: `Payment would exceed the invoice total. Balance due is £${(total - alreadyPaid).toFixed(2)}.` },
+      { ok: false, error: `Payment would exceed the amount payable after CIS. Balance due is £${(payableTotal - alreadyPaid).toFixed(2)}.` },
       { status: 400 }
     );
   }
@@ -91,7 +92,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const newPaid = Math.round((alreadyPaid + rounded) * 100) / 100;
-  const balanceDue = Math.max(0, Math.round((total - newPaid) * 100) / 100);
+  const balanceDue = Math.max(0, Math.round((payableTotal - newPaid) * 100) / 100);
   const fullyPaid = balanceDue <= 0;
 
   const update = await supabase

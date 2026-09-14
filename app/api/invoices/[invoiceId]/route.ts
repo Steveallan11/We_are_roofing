@@ -40,9 +40,10 @@ export async function PATCH(request: Request, { params }: Props) {
   }
 
   const invoiceTotal = Number(invoice.total ?? 0);
+  const payableTotal = Math.max(0, invoiceTotal - Number(invoice.cis_deduction_amount ?? 0));
   const paidAmount =
-    body.status === "Paid" ? Math.min(invoiceTotal, Number(body.amount_paid ?? invoiceTotal)) : Number(invoice.amount_paid ?? 0);
-  const balanceDue = Math.max(0, invoiceTotal - paidAmount);
+    body.status === "Paid" ? Math.min(payableTotal, Number(body.amount_paid ?? payableTotal)) : Number(invoice.amount_paid ?? 0);
+  const balanceDue = Math.max(0, payableTotal - paidAmount);
   const payload = {
     status: body.status,
     amount_paid: paidAmount,

@@ -727,6 +727,7 @@ export type InvoiceLineItem = {
   unit_price: number;
   vat_applicable: boolean;
   total: number;
+  category?: "materials" | "labour" | "roof_works" | "access" | string;
 };
 
 export type InvoiceType = "standard" | "deposit" | "interim" | "final";
@@ -750,6 +751,9 @@ export type InvoiceRecord = {
   reverse_charge_vat_amount?: number;
   customer_vat_number?: string | null;
   reverse_charge_confirmed_at?: string | null;
+  cis_deduction_rate?: number;
+  cis_labour_amount?: number;
+  cis_deduction_amount?: number;
   total: number;
   amount_paid: number;
   balance_due: number;

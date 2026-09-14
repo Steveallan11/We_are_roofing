@@ -97,7 +97,7 @@ export async function POST(request: Request, { params }: Props) {
         jobTitle: bundle.job.job_title,
         propertyAddress: bundle.job.property_address,
         dueDate,
-        total: Number(invoice.total ?? 0),
+        total: Math.max(0, Number(invoice.total ?? 0) - Number(invoice.cis_deduction_amount ?? 0)),
         invoiceType: invoice.invoice_type,
         isVariation: Boolean(invoice.variation_id),
         bankName: bundle.business.bank_name,

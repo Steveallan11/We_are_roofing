@@ -5,6 +5,7 @@ import { getJobBundle } from "@/lib/data";
 import {
   buildInvoiceLineItemsFromQuote,
   buildProportionalInvoiceLineItemsFromQuote,
+  calculateCisDeduction,
   calculateQuoteInvoiceableTotals,
   persistInvoiceArtifacts,
   round2,
@@ -29,6 +30,7 @@ export async function POST(request: Request, { params }: Props) {
     vat_treatment?: InvoiceVatTreatment;
     customer_vat_number?: string;
     reverse_charge_confirmed?: boolean;
+    cis_deduction_rate?: number;
   };
   const invoiceType: InvoiceType =
     body.type === "deposit" || body.type === "final" || body.type === "interim" ? body.type : "standard";
@@ -68,6 +70,17 @@ export async function POST(request: Request, { params }: Props) {
   if (reverseCharge && (!body.reverse_charge_confirmed || !customerVatNumber)) {
     return NextResponse.json(
       { ok: false, error: "Confirm the reverse-charge conditions and enter the customer's VAT number before raising this invoice." },
+      { status: 400 }
+    );
+  }
+  const requestedCisRate = Number(body.cis_deduction_rate ?? 0);
+  if (![0, 20, 30].includes(requestedCisRate)) {
+    return NextResponse.json({ ok: false, error: "CIS deduction rate must be 0%, 20% or 30%." }, { status: 400 });
+  }
+  const existingCisRate = Number(liveInvoicesForQuote[0]?.cis_deduction_rate ?? 0);
+  if (liveInvoicesForQuote.length > 0 && requestedCisRate !== existingCisRate) {
+    return NextResponse.json(
+      { ok: false, error: `This quote already has invoices using a ${existingCisRate}% CIS deduction. Void them before changing the CIS rate.` },
       { status: 400 }
     );
   }
@@ -225,6 +238,15 @@ export async function POST(request: Request, { params }: Props) {
     dueInDays = 14;
   }
 
+  const cis = calculateCisDeduction(lineItems, requestedCisRate);
+  if (requestedCisRate > 0 && cis.labourAmount <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "No labour amount was found. Split the quote into materials and labour before applying CIS." },
+      { status: 400 }
+    );
+  }
+  const amountDue = round2(Math.max(0, total - cis.deductionAmount));
+
   const invoiceRef = await getNextInvoiceRef();
   const today = new Date();
   const issueDate = today.toISOString().slice(0, 10);
@@ -249,9 +271,12 @@ export async function POST(request: Request, { params }: Props) {
       reverse_charge_vat_amount: reverseChargeVatAmount,
       customer_vat_number: reverseCharge ? customerVatNumber : null,
       reverse_charge_confirmed_at: reverseCharge ? new Date().toISOString() : null,
+      cis_deduction_rate: cis.rate,
+      cis_labour_amount: cis.labourAmount,
+      cis_deduction_amount: cis.deductionAmount,
       total,
       amount_paid: 0,
-      balance_due: total,
+      balance_due: amountDue,
       notes,
       payment_terms: bundle.business.payment_terms
     })
@@ -280,13 +305,13 @@ export async function POST(request: Request, { params }: Props) {
     quote_id: quote.id,
     invoice_id: invoice.id,
     activity_type: "invoice_created",
-    message: `${typeLabel} ${invoiceRef} created for £${total.toFixed(2)}`,
+    message: `${typeLabel} ${invoiceRef} created for £${amountDue.toFixed(2)}${cis.deductionAmount > 0 ? ` after £${cis.deductionAmount.toFixed(2)} CIS deduction` : ""}`,
     actor_type: "user",
     actor_id: auth.session.user?.id ?? null,
     actor_name: auth.session.user?.email ?? null,
     linked_entity_type: "invoice",
     linked_entity_id: invoice.id,
-    details: { invoice_ref: invoiceRef, total, quote_ref: quote.quote_ref, invoice_type: invoiceType }
+    details: { invoice_ref: invoiceRef, total, amount_due: amountDue, cis_deduction_amount: cis.deductionAmount, quote_ref: quote.quote_ref, invoice_type: invoiceType }
   });
 
   return NextResponse.json({

@@ -2,6 +2,7 @@ import { getDocumentFileHref, getInvoicePdfHref } from "@/lib/documents";
 import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
+import { getQuoteLineItemCategory } from "@/lib/quotes/value";
 import type { InvoiceLineItem, InvoiceRecord, JobBundle, QuoteRecord } from "@/lib/types";
 
 /**
@@ -35,8 +36,21 @@ export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineI
     unit: "item",
     unit_price: line.cost,
     vat_applicable: line.vat_applicable,
-    total: line.cost
+    total: line.cost,
+    category: getQuoteLineItemCategory(line)
     }));
+}
+
+export function calculateCisDeduction(lineItems: InvoiceLineItem[], rate: number) {
+  const validRate = rate === 20 || rate === 30 ? rate : 0;
+  const labourAmount = round2(
+    lineItems.filter((line) => line.category === "labour").reduce((sum, line) => sum + Number(line.total ?? 0), 0)
+  );
+  return {
+    rate: validRate,
+    labourAmount,
+    deductionAmount: round2(labourAmount * (validRate / 100))
+  };
 }
 
 export function calculateQuoteInvoiceableTotals(quote: QuoteRecord, vatRate: number) {
@@ -143,10 +157,12 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
           <div><span>Subtotal</span><span>${formatCurrency(invoice.subtotal)}</span></div>
           <div><span>VAT charged</span><span>${formatCurrency(invoice.vat_amount)}</span></div>
           ${isReverseCharge ? `<div><span>Reverse charge VAT (customer accounts to HMRC)</span><span>${formatCurrency(invoice.reverse_charge_vat_amount ?? 0)}</span></div>` : ""}
-          <div><span>Total</span><span>${formatCurrency(invoice.total)}</span></div>
+          <div><span>Invoice total</span><span>${formatCurrency(invoice.total)}</span></div>
+          ${Number(invoice.cis_deduction_amount ?? 0) > 0 ? `<div><span>CIS deduction (${Number(invoice.cis_deduction_rate ?? 0)}% of labour)</span><span>-${formatCurrency(Number(invoice.cis_deduction_amount ?? 0))}</span></div>` : ""}
           <div><span>Paid</span><span>${formatCurrency(invoice.amount_paid)}</span></div>
-          <div><span>Balance Due</span><span>${formatCurrency(invoice.balance_due)}</span></div>
+          <div><span>Amount due</span><span>${formatCurrency(invoice.balance_due)}</span></div>
         </div>
+        ${Number(invoice.cis_deduction_amount ?? 0) > 0 ? `<h2>Construction Industry Scheme (CIS)</h2><div class="terms">CIS deduction calculated on the VAT-exclusive labour amount of ${formatCurrency(Number(invoice.cis_labour_amount ?? 0))}. Materials and VAT have not been included in the deduction calculation. CIS withheld: <strong>${formatCurrency(Number(invoice.cis_deduction_amount ?? 0))}</strong>.</div>` : ""}
         ${isReverseCharge ? `<h2>Domestic Reverse Charge</h2><div class="terms"><strong>Reverse charge: VAT Act 1994 Section 55A applies.</strong><br/>Customer VAT number: ${escapeHtml(invoice.customer_vat_number || "Not supplied")}<br/>Customer to account to HMRC for reverse charge output tax of ${formatCurrency(invoice.reverse_charge_vat_amount ?? 0)}. This VAT is not included in the amount due.</div>` : ""}
         <h2>Payment Terms</h2>
         <div class="terms">${escapeHtml(invoice.payment_terms || bundle.business.payment_terms || "Payment due on receipt.")}</div>
@@ -179,8 +195,20 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
   ({ page, y } = ensureInvoiceSpace(pdf, page, y, 150));
   y = drawInvoiceItems(page, invoice, y);
 
-  ({ page, y } = ensureInvoiceSpace(pdf, page, y, invoice.vat_treatment === "domestic_reverse_charge" ? 235 : 210));
+  ({ page, y } = ensureInvoiceSpace(pdf, page, y, invoice.vat_treatment === "domestic_reverse_charge" || Number(invoice.cis_deduction_amount ?? 0) > 0 ? 255 : 210));
   y = drawInvoiceTotals(page, invoice, y);
+
+  if (Number(invoice.cis_deduction_amount ?? 0) > 0) {
+    ({ page, y } = ensureInvoiceSpace(pdf, page, y, 100));
+    y = drawSectionBlock(
+      page,
+      "Construction Industry Scheme (CIS)",
+      `CIS deduction calculated at ${Number(invoice.cis_deduction_rate ?? 0)}% on the VAT-exclusive labour amount of ${formatCurrency(Number(invoice.cis_labour_amount ?? 0))}. Materials and VAT are excluded. CIS withheld: ${formatCurrency(Number(invoice.cis_deduction_amount ?? 0))}.`,
+      46,
+      y,
+      503
+    );
+  }
 
   if (invoice.vat_treatment === "domestic_reverse_charge") {
     ({ page, y } = ensureInvoiceSpace(pdf, page, y, 100));
@@ -233,7 +261,8 @@ export function buildProportionalInvoiceLineItemsFromQuote(
       unit: "item",
       unit_price: net,
       vat_applicable: line.vat_applicable,
-      total: net
+      total: net,
+      category: getQuoteLineItemCategory(line)
     } satisfies InvoiceLineItem;
   });
   const subtotal = round2(lineItems.reduce((sum, line) => sum + line.total, 0));
@@ -381,18 +410,23 @@ function drawInvoiceItems(page: PdfPage, invoice: InvoiceRecord, y: number) {
 function drawInvoiceTotals(page: PdfPage, invoice: InvoiceRecord, y: number) {
   const x = 295;
   const w = 254;
-  rect(page, x, y - 118, w, 118, PDF.cream);
-  strokeRect(page, x, y - 118, w, 118, PDF.border, 0.8);
+  const rowCount = 5 + (invoice.vat_treatment === "domestic_reverse_charge" ? 1 : 0) + (Number(invoice.cis_deduction_amount ?? 0) > 0 ? 1 : 0);
+  const height = rowCount * 20 + 18;
+  rect(page, x, y - height, w, height, PDF.cream);
+  strokeRect(page, x, y - height, w, height, PDF.border, 0.8);
   y -= 20;
   y = drawTotalRow(page, x + 14, y, w - 28, "Subtotal", formatCurrency(invoice.subtotal));
   y = drawTotalRow(page, x + 14, y, w - 28, "VAT charged", formatCurrency(invoice.vat_amount));
   if (invoice.vat_treatment === "domestic_reverse_charge") {
     y = drawTotalRow(page, x + 14, y, w - 28, "Reverse charge VAT (customer accounts)", formatCurrency(invoice.reverse_charge_vat_amount ?? 0));
   }
-  y = drawTotalRow(page, x + 14, y, w - 28, "Total", formatCurrency(invoice.total), true);
+  y = drawTotalRow(page, x + 14, y, w - 28, "Invoice total", formatCurrency(invoice.total), true);
+  if (Number(invoice.cis_deduction_amount ?? 0) > 0) {
+    y = drawTotalRow(page, x + 14, y, w - 28, `CIS deduction (${Number(invoice.cis_deduction_rate ?? 0)}%)`, `-${formatCurrency(Number(invoice.cis_deduction_amount ?? 0))}`);
+  }
   y = drawTotalRow(page, x + 14, y, w - 28, "Paid", formatCurrency(invoice.amount_paid));
-  drawTotalRow(page, x + 14, y, w - 28, "Balance Due", formatCurrency(invoice.balance_due), true);
-  return y - 42;
+  drawTotalRow(page, x + 14, y, w - 28, "Amount Due", formatCurrency(invoice.balance_due), true);
+  return y - 44;
 }
 
 function drawTotalRow(page: PdfPage, x: number, y: number, width: number, label: string, value: string, emphasis = false) {

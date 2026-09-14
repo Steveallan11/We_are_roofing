@@ -53,11 +53,25 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
           totals={[
             { label: "Subtotal", value: currency(invoice.subtotal) },
             { label: "VAT", value: currency(invoice.vat_amount) },
-            { label: "Total", value: currency(invoice.total), strong: true },
+            { label: "Invoice Total", value: currency(invoice.total), strong: true },
+            ...(Number(invoice.cis_deduction_amount ?? 0) > 0
+              ? [
+                  { label: `CIS Deduction (${Number(invoice.cis_deduction_rate ?? 0)}%)`, value: `-${currency(Number(invoice.cis_deduction_amount ?? 0))}` },
+                  { label: "Amount Payable", value: currency(Math.max(0, invoice.total - Number(invoice.cis_deduction_amount ?? 0))), strong: true }
+                ]
+              : []),
             { label: "Paid", value: currency(invoice.amount_paid) },
             { label: "Balance Due", value: currency(invoice.balance_due), strong: invoice.balance_due > 0 }
           ]}
         />
+        {Number(invoice.cis_deduction_amount ?? 0) > 0 ? (
+          <div style={{ marginTop: 22, borderLeft: `4px solid ${DOC.gold}`, background: "#f2eddf", borderRadius: 12, padding: 16 }}>
+            <p style={{ ...paragraphStyle, fontWeight: 700 }}>Construction Industry Scheme (CIS)</p>
+            <p style={{ ...paragraphStyle, marginTop: 6 }}>
+              CIS is calculated at {Number(invoice.cis_deduction_rate ?? 0)}% on the VAT-exclusive labour amount of {currency(Number(invoice.cis_labour_amount ?? 0))}. Materials and VAT are excluded. CIS withheld: {currency(Number(invoice.cis_deduction_amount ?? 0))}.
+            </p>
+          </div>
+        ) : null}
         <div style={{ marginTop: 24, borderLeft: `4px solid ${invoice.balance_due > 0 ? "#f59e0b" : "#10b981"}`, background: "#f2eddf", borderRadius: 12, padding: 16 }}>
           <p style={paragraphStyle}>{invoice.payment_terms || bundle.business.payment_terms || "Payment due on receipt."}</p>
         </div>
