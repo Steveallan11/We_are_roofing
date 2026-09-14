@@ -37,7 +37,7 @@ type NavGroup = {
 
 const NAV: NavGroup[] = [
   {
-    section: null,
+    section: "Everyday",
     items: [
       {
         id: "today",
@@ -58,29 +58,34 @@ const NAV: NavGroup[] = [
         icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
       },
       {
-        id: "calendar",
-        label: "Calendar",
-        href: "/calendar",
-        icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
-      },
-      {
         id: "money",
         label: "Money",
         href: "/money",
         icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
       },
       {
-        id: "insights",
-        label: "Insights",
-        href: "/insights",
-        icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-      },
-      {
         id: "comms",
-        label: "Comms",
+        label: "Messages",
         href: "/comms",
         icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
         badgeColor: "#ef4444"
+      }
+    ]
+  },
+  {
+    section: "Planning and setup",
+    items: [
+      {
+        id: "calendar",
+        label: "Calendar",
+        href: "/calendar",
+        icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+      },
+      {
+        id: "insights",
+        label: "Reports",
+        href: "/insights",
+        icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
       },
       {
         id: "settings",
@@ -88,13 +93,13 @@ const NAV: NavGroup[] = [
         href: "/settings",
         icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z",
         children: [
-          { label: "Business Settings", href: "/settings" },
-          { label: "Rate Card", href: "/settings/rates" },
+          { label: "Business details", href: "/settings" },
+          { label: "Prices and rates", href: "/settings/rates" },
           { label: "Labour", href: "/settings/labour" },
           { label: "Suppliers", href: "/settings/suppliers" },
-          { label: "Quote Templates", href: "/settings/templates" },
-          { label: "Nurture Templates", href: "/settings/nurture" },
-          { label: "Knowledge Base", href: "/knowledge" }
+          { label: "Quote templates", href: "/settings/templates" },
+          { label: "Follow-up messages", href: "/settings/nurture" },
+          { label: "AI knowledge", href: "/knowledge" }
         ]
       }
     ]
@@ -182,7 +187,7 @@ export function AdminSidebar() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--gold)", letterSpacing: "0.03em", fontFamily: "var(--font-display)" }}>
                 We Are Roofing
               </div>
-              <div style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 1 }}>Admin</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>Work manager</div>
             </div>
           </div>
         ) : null}
@@ -203,7 +208,7 @@ export function AdminSidebar() {
         {NAV.map((group, groupIndex) => (
           <div key={groupIndex}>
             {group.section && !collapsed ? (
-              <div style={{ padding: "14px 18px 4px", fontSize: 9, color: "#2a2a2a", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "var(--font-ui)", fontWeight: 700 }}>
+              <div style={{ padding: "16px 18px 6px", fontSize: 10, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "var(--font-ui)", fontWeight: 700 }}>
                 {group.section}
               </div>
             ) : null}

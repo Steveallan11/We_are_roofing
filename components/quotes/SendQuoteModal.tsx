@@ -46,9 +46,7 @@ export function SendQuoteModal({
   const [emailSubject, setEmailSubject] = useState(defaultEmailSubject || `Your We Are Roofing quotation - ${quoteRef}`);
   const [emailBody, setEmailBody] = useState(DEFAULT_QUOTE_EMAIL_MESSAGE);
   const [availableDocuments, setAvailableDocuments] = useState(documents);
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(() =>
-    documents.filter((document) => document.quote_id === quoteId && document.document_type === "quote_attachment").map((document) => document.id)
-  );
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [attachmentDisplayName, setAttachmentDisplayName] = useState("");
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
@@ -325,7 +323,7 @@ export function SendQuoteModal({
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="label">Attach job documents</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">Optional. These will be sent as email attachments alongside the secure quote link.</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">{selectedDocumentIds.length} files selected. Tick or untick each file to choose what is sent with the secure quote link.</p>
             </div>
             {attachableDocuments.length > 0 ? (
               <button
@@ -337,7 +335,7 @@ export function SendQuoteModal({
                 }
                 type="button"
               >
-                {selectedDocumentIds.length === attachableDocuments.length ? "Clear all" : "Select all"}
+                {selectedDocumentIds.length === attachableDocuments.length ? "Deselect all" : "Select all"}
               </button>
             ) : null}
           </div>
@@ -375,13 +373,13 @@ export function SendQuoteModal({
               {attachableDocuments.map((document) => {
                 const selected = selectedDocumentIds.includes(document.id);
                 return (
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border)] bg-black/20 p-3" key={document.id}>
+                  <label className={`flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-4 ${selected ? "border-[var(--gold)] bg-[var(--gold)]/10" : "border-[var(--border)] bg-black/20"}`} key={document.id}>
                     <input
                       checked={selected}
-                      className="mt-1"
+                      className="mt-1 h-5 w-5 shrink-0 accent-[var(--gold)]"
                       onChange={(event) =>
                         setSelectedDocumentIds((current) =>
-                          event.target.checked ? [...current, document.id] : current.filter((id) => id !== document.id)
+                          event.target.checked ? [...new Set([...current, document.id])] : current.filter((id) => id !== document.id)
                         )
                       }
                       type="checkbox"
@@ -389,7 +387,7 @@ export function SendQuoteModal({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-white">{document.display_name}</span>
                       <span className="mt-1 block text-xs text-[var(--muted)]">
-                        {getDocumentTypeLabel(document)}{document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
+                        {selected ? "Will be sent | " : "Not included | "}{getDocumentTypeLabel(document)}{document.file_size ? ` | ${formatFileSize(document.file_size)}` : ""}
                       </span>
                     </span>
                   </label>
@@ -451,13 +449,13 @@ export function SendQuoteModal({
 
         <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.25)] md:p-5">
           <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
-          <button className="button-ghost" disabled={sendingMode !== null} onClick={onClose} type="button">
+          <button className="button-ghost" disabled={sendingMode !== null || uploadingAttachments} onClick={onClose} type="button">
             Cancel
           </button>
-          <button className="button-secondary" disabled={sendingMode !== null} onClick={() => sendQuote("test")} type="button">
+          <button className="button-secondary" disabled={sendingMode !== null || uploadingAttachments} onClick={() => sendQuote("test")} type="button">
             {sendingMode === "test" ? "Sending test..." : "Send Test Email"}
           </button>
-          <button className="button-primary" disabled={sendingMode !== null} onClick={() => sendQuote("customer")} type="button">
+          <button className="button-primary" disabled={sendingMode !== null || uploadingAttachments} onClick={() => sendQuote("customer")} type="button">
             {sendingMode === "customer" ? "Sending..." : "Send To Customer"}
           </button>
           </div>

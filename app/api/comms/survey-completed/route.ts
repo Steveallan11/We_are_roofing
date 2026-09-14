@@ -1,3 +1,4 @@
+import { EmailShell, EmailIntro, EmailSection, ProjectSummaryCard, Checklist, ContactPanel, greeting } from "@/lib/email/components";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireAdminApi } from "@/lib/auth";
@@ -68,37 +69,10 @@ async function generateSurveyReport(bundle: Awaited<ReturnType<typeof getJobBund
 function buildSurveyReportHtml(customerName: string, jobRef: string, report: any) {
   const findings = Array.isArray(report.findings) ? report.findings : [];
   const recommendations = Array.isArray(report.recommendations) ? report.recommendations : [];
-  const helloName = greetingName(customerName);
-  return `
-    <div style="background:#f8f7f4;padding:40px 20px;font-family:Helvetica,Arial,sans-serif">
-      <div style="max-width:620px;margin:0 auto;background:white;border:1px solid #e8e4da">
-        <div style="background:#0a0a0a;padding:28px 32px;color:white">
-          <div style="color:#D4AF37;font-size:22px;font-weight:700;font-family:Georgia,serif">We Are Roofing UK Ltd</div>
-          <div style="color:#777;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-top:4px">Survey Report ${jobRef}</div>
-        </div>
-        <div style="padding:32px">
-          <p>Hi ${helloName},</p>
-          <div style="border-left:3px solid #D4AF37;background:#faf9f6;padding:16px;margin:18px 0;color:#333">${report.executiveSummary || ""}</div>
-          <p><strong>Overall condition:</strong> ${report.conditionOverall || "Fair"}</p>
-          <h3>Findings</h3>
-          ${findings.map((item: any) => `<p><strong>${item.area || "Roof"} - ${item.condition || ""}</strong><br/>${item.detail || ""}</p>`).join("")}
-          <h3>Recommendations</h3>
-          <ul>${recommendations.map((item: string) => `<li>${item}</li>`).join("")}</ul>
-          <p><strong>Indicative budget:</strong> ${report.budgetRange || "To be confirmed"}</p>
-          <p><strong>Urgency:</strong> ${report.urgency || "We will advise timing in the quote."}</p>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function greetingName(customerName: string) {
-  const clean = customerName.replace(/\s+/g, " ").trim();
-  if (!clean) return "there";
-  const lower = clean.toLowerCase();
-  const parts = clean.split(" ");
-  const startsWithInitials = parts.length >= 2 && parts.slice(0, 2).every((part) => /^[a-z]\.?$/i.test(part));
-  const looksLikeBusiness = /\b(ltd|limited|llp|plc|company|co\.?|group|holdings|maintenance|management|properties|property|contractors?|builders?|services?|roofing)\b/i.test(clean);
-  if (/^(mr|mrs|ms|miss|dr|prof|sir|lady|lord)\b/.test(lower) || /\b(and|&)\b/.test(lower) || startsWithInitials || looksLikeBusiness) return clean;
-  return parts[0] || clean;
+  return EmailShell("Roof survey report", "Your roofing assessment",
+    greeting(customerName) + EmailIntro(report.executiveSummary || "") +
+    ProjectSummaryCard([["Reference", jobRef], ["Overall condition", report.conditionOverall]]) +
+    EmailSection("Findings", findings.map((item: any) => EmailSection(item.area || "Roof", EmailIntro(item.detail || ""))).join("")) +
+    EmailSection("Recommendations", Checklist(recommendations)) +
+    ProjectSummaryCard([["Indicative budget",report.budgetRange],["Timing",report.urgency]], "Next steps") + ContactPanel());
 }

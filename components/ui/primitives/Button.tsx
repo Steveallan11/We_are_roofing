@@ -7,7 +7,7 @@ type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary:
-    "border border-[var(--gold)] bg-[var(--gold)] text-black font-bold hover:bg-[var(--gold-light)] hover:border-[var(--gold-light)]",
+    "border border-[var(--gold)] bg-[var(--gold)] text-[var(--gold-contrast)] font-bold hover:bg-[var(--gold-dim)] hover:border-[var(--gold-dim)]",
   secondary:
     "border border-[var(--border-mid)] bg-[var(--elevated)] text-[var(--text-second)] font-semibold hover:border-[var(--gold)] hover:text-[var(--gold)]",
   ghost:

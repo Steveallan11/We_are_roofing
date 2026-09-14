@@ -76,9 +76,9 @@ export function LoginForm({ defaultEmail, authEnabled }: Props) {
       </div>
       <div className="flex flex-wrap gap-3">
         <button className="button-primary" disabled={isPending} type="submit">
-          {isPending ? "Signing In..." : "Enter Admin Dashboard"}
+          {isPending ? "Signing in..." : "Sign in"}
         </button>
-        <span className="button-ghost">Session stays live until sign out</span>
+        <span className="button-ghost">Secure business access</span>
       </div>
       {error ? <p className="text-sm text-[#ff9a91]">{error}</p> : null}
     </form>

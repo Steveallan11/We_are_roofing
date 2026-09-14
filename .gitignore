@@ -10,6 +10,7 @@ coverage
 dist
 *.log
 tsconfig.tsbuildinfo
+/outputs/
 
 
 we-are-roofing-app/

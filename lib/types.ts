@@ -730,6 +730,7 @@ export type InvoiceLineItem = {
 };
 
 export type InvoiceType = "standard" | "deposit" | "interim" | "final";
+export type InvoiceVatTreatment = "standard" | "domestic_reverse_charge";
 
 export type InvoiceRecord = {
   id: string;
@@ -745,6 +746,10 @@ export type InvoiceRecord = {
   line_items: InvoiceLineItem[];
   subtotal: number;
   vat_amount: number;
+  vat_treatment?: InvoiceVatTreatment;
+  reverse_charge_vat_amount?: number;
+  customer_vat_number?: string | null;
+  reverse_charge_confirmed_at?: string | null;
   total: number;
   amount_paid: number;
   balance_due: number;

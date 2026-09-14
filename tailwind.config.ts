@@ -45,12 +45,12 @@ const config: Config = {
         "gold-dark": "#B8960C"
       },
       fontFamily: {
-        display: ["Playfair Display", "Georgia", "Times New Roman", "serif"],
-        body: ["Cormorant Garamond", "Georgia", "Times New Roman", "serif"],
+        display: ["Montserrat", "Helvetica Neue", "Helvetica", "sans-serif"],
+        body: ["Montserrat", "Helvetica Neue", "Helvetica", "sans-serif"],
         ui: ["Montserrat", "Helvetica Neue", "Helvetica", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "Courier New", "monospace"],
         sans: ["Montserrat", "Helvetica Neue", "Helvetica", "sans-serif"],
-        condensed: ["Playfair Display", "Georgia", "Times New Roman", "serif"]
+        condensed: ["Montserrat", "Helvetica Neue", "Helvetica", "sans-serif"]
       },
       borderRadius: {
         sm: "4px",

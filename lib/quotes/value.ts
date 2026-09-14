@@ -120,7 +120,7 @@ export function calculateOptionTotal(option: Pick<QuoteOption, "cost_breakdown">
 }
 
 export type QuotePriceSummaryRow = {
-  id: "roof_works" | "access";
+  id: "materials" | "labour" | "roof_works" | "access";
   label: string;
   vatLabel: string;
   net: number;
@@ -182,7 +182,7 @@ export function buildQuoteOptionPriceSummary(option: Pick<QuoteOption, "cost_bre
     groups.set(groupId, existing);
   }
 
-  return (["roof_works", "access"] as const).map((id) => groups.get(id)).filter((row): row is QuotePriceSummaryRow => Boolean(row));
+  return (["materials", "labour", "roof_works", "access"] as const).map((id) => groups.get(id)).filter((row): row is QuotePriceSummaryRow => Boolean(row));
 }
 
 export function buildQuoteOptionPriceDetailRows(option: Pick<QuoteOption, "cost_breakdown">): QuotePriceDetailRow[] {
@@ -294,6 +294,14 @@ function getLineItemCategory(item: CostLineItem): QuotePriceSummaryRow["id"] {
 export function getQuoteLineItemCategory(item: CostLineItem): QuotePriceSummaryRow["id"] {
   const identity = `${item.quote_section ?? ""} ${item.item ?? ""} ${item.source_label ?? ""}`.toLowerCase();
   const category = `${item.pricing_category ?? ""}`.toLowerCase();
+
+  if (category === "materials" || /\bmaterials?\b/.test(identity)) {
+    return "materials";
+  }
+
+  if (category === "labour" || /\b(labour|labor|crew|workmanship)\b/.test(identity)) {
+    return "labour";
+  }
 
   if (/\b(scaffold|access|temporary roof|temp roof|weather protection|protection system|edge protection|tower)\b/.test(`${identity} ${category}`)) {
     return "access";
@@ -461,6 +469,9 @@ function getLineItemSummaryLabel(item: CostLineItem, category: QuotePriceSummary
     return labelSource;
   }
 
+  if (category === "materials") return "Materials";
+  if (category === "labour") return "Labour";
+
   return "Roof works";
 }
 
@@ -487,8 +498,10 @@ function getDetailedLineItemLabel(item: CostLineItem, category: QuotePriceSummar
 function getCustomerLineItemLabel(item: CostLineItem) {
   const identity = `${item.source_id ?? ""} ${item.item ?? ""} ${item.pricing_category ?? ""} ${item.quote_section ?? ""} ${item.source_label ?? ""}`.toLowerCase();
   const category = getQuoteLineItemCategory(item);
-  const section = item.quote_section && !["roof_works", "access"].includes(item.quote_section) ? item.quote_section : "";
+  const section = item.quote_section && !["roof_works", "materials", "labour", "access"].includes(item.quote_section) ? item.quote_section : "";
 
+  if (category === "materials") return section ? `${section} materials` : "Materials";
+  if (category === "labour") return section ? `${section} labour` : "Labour";
   if (category === "roof_works") return section ? `${section} roof works` : "Roof works";
   if (identity.includes("temporary roof") || identity.includes("weather protection") || identity.includes("temp roof")) {
     return section ? `${section} temporary roof protection` : "Temporary roof protection";
@@ -556,13 +569,15 @@ function truncateOptionText(value: string, maxLength: number) {
 }
 
 function pickBetterSummaryLabel(current: string, next: string, category: QuotePriceSummaryRow["id"]) {
-  if (category === "roof_works") return "Roof works";
+  if (category === "roof_works" || category === "materials" || category === "labour") return getDefaultSummaryLabel(category);
   if (current === getDefaultSummaryLabel(category)) return next;
   if (current === "Standard scaffold" && next.includes("Temporary roof")) return next;
   return current;
 }
 
 function getDefaultSummaryLabel(category: QuotePriceSummaryRow["id"]) {
+  if (category === "materials") return "Materials";
+  if (category === "labour") return "Labour";
   return category === "access" ? "Scaffold/access allowance" : "Roof works";
 }
 

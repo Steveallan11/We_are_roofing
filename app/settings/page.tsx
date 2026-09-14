@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { NurtureTemplatesEditor } from "@/components/settings/NurtureTemplatesEditor";
 import { SettingsWorkspace } from "@/components/settings/settings-workspace";
@@ -15,6 +16,10 @@ export default async function SettingsPage() {
       <div className="stack">
         <SettingsWorkspace business={business} />
         <div className="grid gap-3 md:grid-cols-2">
+          <Link className="card p-4 no-underline" href={"/admin/email-preview" as Route}>
+            <p className="section-kicker">Email previews</p>
+            <p className="mt-2 text-sm">Review customer emails in desktop and mobile layouts without sending.</p>
+          </Link>
           <Link className="card p-4 no-underline transition hover:border-[var(--gold)]/60" href="/settings/templates">
             <p className="section-kicker text-[0.65rem] uppercase">Quote Templates</p>
             <p className="mt-2 text-sm text-[var(--text-second)]">Manage quote templates, pricing bounds, and knowledge examples.</p>

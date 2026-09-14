@@ -16,14 +16,12 @@ import { JobTitleEditor } from "@/components/jobs/job-title-editor";
 import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { FieldActionBar } from "@/components/jobs/FieldActionBar";
 import { NurtureSequenceStatus } from "@/components/jobs/NurtureSequenceStatus";
 
 import {
   Badge,
   Button,
   Card,
-  CardKicker,
   PageSection,
   Stat,
   Tabs,
@@ -35,7 +33,6 @@ import {
 import { getJobStage, getStageColor } from "@/lib/jobs/statusColors";
 import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
-import { getJobDocumentHref } from "@/lib/documents";
 import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
 import { currency, formatDate, cn } from "@/lib/utils";
@@ -44,9 +41,7 @@ import { NextActionButton } from "@/components/jobs/NextActionButton";
 import { JobDiaryTab } from "@/components/diary/JobDiaryTab";
 import type { ActivityRecord } from "@/lib/activity/types";
 import {
-  getDocumentDisplayType,
   groupDocuments,
-  formatFileSize,
   summarizeMaterials
 } from "@/lib/jobs/jobDetail";
 import type {
@@ -82,19 +77,25 @@ export type JobDetailViewProps = {
   paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 };
 
-type TabId = "overview" | "diary" | "survey" | "quote" | "materials" | "labour" | "money" | "documents" | "activity";
+type TabId = "overview" | "survey" | "quote" | "work" | "money" | "files" | "history";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
-  { value: "diary", label: "Diary" },
   { value: "survey", label: "Survey" },
   { value: "quote", label: "Quote" },
-  { value: "materials", label: "Materials" },
-  { value: "labour", label: "Labour" },
+  { value: "work", label: "Work" },
   { value: "money", label: "Money" },
-  { value: "documents", label: "Documents" },
-  { value: "activity", label: "Activity" }
+  { value: "files", label: "Files" },
+  { value: "history", label: "History" }
 ];
+
+const LEGACY_TABS: Record<string, TabId> = {
+  diary: "work",
+  materials: "work",
+  labour: "work",
+  documents: "files",
+  activity: "history"
+};
 
 export function JobDetailView(props: JobDetailViewProps) {
   const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, variations, expenses, emailLogs, activity, paymentSchedule } = props;
@@ -102,8 +103,9 @@ export function JobDetailView(props: JobDetailViewProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const initialTab = (searchParams?.get("tab") as TabId) || "overview";
-  const validInitialTab = TABS.find((t) => t.value === initialTab) ? initialTab : "overview";
+  const requestedTab = searchParams?.get("tab") || "overview";
+  const initialTab = LEGACY_TABS[requestedTab] ?? requestedTab;
+  const validInitialTab = TABS.some((tab) => tab.value === initialTab) ? (initialTab as TabId) : "overview";
 
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams?.toString());
@@ -132,13 +134,16 @@ export function JobDetailView(props: JobDetailViewProps) {
         customer={customer}
         nextAction={nextAction}
         stageColors={stageColors}
+        survey={survey}
+        quote={quote}
+        invoices={invoices}
       />
 
       <MobileNextActionBar job={{ ...job, customer, quote: quote ?? null }} />
 
       <Tabs value={validInitialTab} onValueChange={handleTabChange} className="stack">
-        <div className="sticky top-0 z-20 -mx-4 bg-[var(--ink)]/80 px-4 backdrop-blur-md md:relative md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none">
-          <TabsList>
+        <div className="sticky top-0 z-20 -mx-4 bg-[var(--obsidian)]/95 px-4 py-1 backdrop-blur-md md:relative md:mx-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+          <TabsList className="job-tabs">
             {TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
@@ -154,13 +159,7 @@ export function JobDetailView(props: JobDetailViewProps) {
             survey={survey}
             documents={documents}
             commercialLabel={commercialLabel}
-            quote={quote}
-            paymentSchedule={paymentSchedule}
           />
-        </TabsContent>
-
-        <TabsContent value="diary">
-          <JobDiaryTab jobId={job.id} />
         </TabsContent>
 
         <TabsContent value="survey">
@@ -171,29 +170,29 @@ export function JobDetailView(props: JobDetailViewProps) {
           <QuoteTab job={job} quote={quote} />
         </TabsContent>
 
-        <TabsContent value="materials">
-          <MaterialsTab job={job} materials={materials} />
-        </TabsContent>
-
-        <TabsContent value="labour">
-          <LabourTab job={job} labourPlan={labourPlan ?? null} />
+        <TabsContent value="work">
+          <WorkTab job={job} materials={materials} labourPlan={labourPlan ?? null} />
         </TabsContent>
 
         <TabsContent value="money">
-          <JobMoneyTab
-            jobId={job.id}
-            jobTitle={job.job_title}
-            quote={quote ?? null}
-            invoices={invoices}
-            variations={variations}
-            expenses={expenses ?? []}
-            materials={materials}
-            customerName={customer.full_name}
-            customerEmail={customer.email}
-          />
+          <div className="stack">
+            <JobMoneyTab
+              job={job}
+              jobId={job.id}
+              jobTitle={job.job_title}
+              quote={quote ?? null}
+              invoices={invoices}
+              variations={variations}
+              expenses={expenses ?? []}
+              materials={materials}
+              customerName={customer.full_name}
+              customerEmail={customer.email}
+            />
+            <PaymentSchedule initialSchedule={paymentSchedule} job={job} quote={quote ?? null} />
+          </div>
         </TabsContent>
 
-        <TabsContent value="documents">
+        <TabsContent value="files">
           <DocumentsTab
             job={job}
             documents={documents}
@@ -202,12 +201,11 @@ export function JobDetailView(props: JobDetailViewProps) {
           />
         </TabsContent>
 
-        <TabsContent value="activity">
+        <TabsContent value="history">
           <ActivityTab job={job} emailLogs={emailLogs} activity={activity ?? []} />
         </TabsContent>
       </Tabs>
 
-      <FieldActionBar jobId={job.id} />
     </div>
   );
 }
@@ -218,57 +216,113 @@ function JobDetailHeader({
   job,
   customer,
   nextAction,
-  stageColors
+  stageColors,
+  survey,
+  quote,
+  invoices
 }: {
   job: Job;
   customer: Customer;
   nextAction: ReturnType<typeof getNextAction>;
   stageColors: { bg: string; border: string; text: string };
+  survey?: SurveyRecord | null;
+  quote?: QuoteRecord | null;
+  invoices: InvoiceRecord[];
 }) {
+  const missingDetails = [
+    !customer.phone ? "customer phone" : null,
+    !customer.email ? "customer email" : null,
+    !job.property_address ? "property address" : null,
+    !job.roof_type ? "roof type" : null
+  ].filter(Boolean) as string[];
+
   return (
-    <Card padding="none">
-      <div className="border-b border-[var(--border)] p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <CardKicker>{job.job_ref ?? "WR-J-TBC"}</CardKicker>
-              <StatusBadge status={job.status} />
-            </div>
-            <div className="mt-3">
-              <JobTitleEditor jobId={job.id} jobRef={job.job_ref} title={job.job_title} />
-            </div>
-            <h2 className="mt-2 font-condensed text-3xl leading-tight text-[var(--text)] md:text-4xl">{customer.full_name}</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">{job.property_address}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {job.roof_type ? <Badge size="sm" variant="neutral">{job.roof_type}</Badge> : null}
-              {job.job_type ? <Badge size="sm" variant="neutral">{job.job_type}</Badge> : null}
-              {(customer.town ?? job.postcode) ? <Badge size="sm" variant="neutral">{customer.town ?? job.postcode}</Badge> : null}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
-              <SmartButton variant="secondary" size="md" href={customer.phone ? `tel:${customer.phone}` : `/customers/${customer.id}`}>
-                Call
-              </SmartButton>
-              <SmartButton variant="secondary" size="md" href={`/comms?job=${job.id}&channel=sms`}>
-                Message
-              </SmartButton>
-            </div>
+    <Card className="job-workspace-header" padding="none">
+      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:p-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-[var(--text-muted)]">{job.job_ref ?? "Job reference pending"}</span>
+            <StatusBadge status={job.status} />
           </div>
-
-          <div
-            className="rounded-xl border p-4 lg:min-w-[260px] lg:max-w-[280px]"
-            style={{ backgroundColor: stageColors.bg, borderColor: stageColors.border }}
-          >
-            <p className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">Next Action</p>
-            <p className="mt-1.5 text-base font-semibold text-[var(--text)]">{nextAction.label}</p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">{getNextActionLabel(job)}</p>
-            <SmartButton variant="primary" size="lg" href={nextAction.href} fullWidth className="mt-3">
-              {nextAction.label}
+          <div className="mt-3">
+            <JobTitleEditor jobId={job.id} jobRef={job.job_ref} title={job.job_title} />
+          </div>
+          <div className="mt-3 flex flex-col gap-1 text-sm text-[var(--text-muted)] sm:flex-row sm:flex-wrap sm:gap-x-5">
+            <span className="font-semibold text-[var(--text-primary)]">{customer.full_name}</span>
+            <span>{job.property_address}</span>
+            {customer.phone ? <a className="font-semibold" href={`tel:${customer.phone}`}>{customer.phone}</a> : null}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <SmartButton variant="secondary" size="sm" href={customer.phone ? `tel:${customer.phone}` : `/customers/${customer.id}`}>
+              Call customer
+            </SmartButton>
+            <SmartButton variant="secondary" size="sm" href={`/comms?job=${job.id}&compose=1`}>
+              Send message
+            </SmartButton>
+            <SmartButton variant="ghost" size="sm" href={`/customers/${customer.id}`}>
+              Customer details
             </SmartButton>
           </div>
         </div>
+
+        <div className="job-next-action" style={{ backgroundColor: stageColors.bg, borderColor: stageColors.border }}>
+          <p>Next step</p>
+          <h3>{nextAction.label}</h3>
+          <span>{getNextActionLabel(job)}</span>
+          <SmartButton className="mt-4" fullWidth href={nextAction.href} size="lg" variant="primary">
+            {nextAction.label}
+          </SmartButton>
+        </div>
       </div>
+
+      <JobProgress invoices={invoices} job={job} quote={quote} survey={survey} />
+
+      {missingDetails.length > 0 ? (
+        <div className="job-missing-details">
+          <span aria-hidden="true">i</span>
+          <p><strong>Details to add:</strong> {missingDetails.join(", ")}.</p>
+          <Link href={`/customers/${customer.id}` as Route}>Add details</Link>
+        </div>
+      ) : null}
     </Card>
+  );
+}
+
+function JobProgress({
+  job,
+  survey,
+  quote,
+  invoices
+}: {
+  job: Job;
+  survey?: SurveyRecord | null;
+  quote?: QuoteRecord | null;
+  invoices: InvoiceRecord[];
+}) {
+  const workStatuses: Job["status"][] = ["Accepted", "Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress"];
+  const quoteStatuses: Job["status"][] = ["Survey Complete", "Ready For AI Quote", "Quote Drafted", "Ready To Send", "Quote Sent", "Follow-Up Needed"];
+  const currentIndex = job.status === "Completed" ? 4 : workStatuses.includes(job.status) ? 3 : quoteStatuses.includes(job.status) ? 2 : job.status === "Survey Needed" ? 1 : 0;
+  const paid = invoices.some((invoice) => invoice.status === "Paid");
+  const steps = [
+    { label: "Details", complete: currentIndex > 0 },
+    { label: "Survey", complete: Boolean(survey) || currentIndex > 1 },
+    { label: "Quote", complete: Boolean(quote) && currentIndex > 2 },
+    { label: "Work", complete: job.status === "Completed" },
+    { label: "Payment", complete: paid }
+  ];
+
+  return (
+    <div className="job-progress" aria-label="Job progress">
+      {steps.map((step, index) => {
+        const current = !step.complete && index === currentIndex;
+        return (
+          <div className={`job-progress__step ${step.complete ? "is-complete" : ""} ${current ? "is-current" : ""}`} key={step.label}>
+            <span aria-hidden="true">{step.complete ? "✓" : index + 1}</span>
+            <p>{step.label}</p>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -279,17 +333,13 @@ function OverviewTab({
   customer,
   survey,
   documents,
-  commercialLabel,
-  quote,
-  paymentSchedule
+  commercialLabel
 }: {
   job: Job;
   customer: Customer;
   survey?: SurveyRecord | null;
   documents: JobDocumentRecord[];
   commercialLabel: string;
-  quote?: QuoteRecord | null;
-  paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 }) {
   return (
     <div className="stack">
@@ -300,7 +350,7 @@ function OverviewTab({
           hint={customer.email ?? "No email"}
           href={customer.phone ? `tel:${customer.phone}` : undefined}
         />
-        <Stat label="Job Value" value={commercialLabel} hint="Current pipeline value" />
+        <Stat label="Job value" value={commercialLabel} hint="Current quoted value" />
         <Stat
           label="Survey"
           value={survey ? "Saved" : "Not started"}
@@ -308,14 +358,14 @@ function OverviewTab({
           href={`/jobs/${job.id}/survey`}
           tone={survey ? "active" : "pending"}
         />
-        <Stat label="Documents" value={documents.length.toString()} hint="Uploads, reports, and PDFs" />
+        <Stat label="Files" value={documents.length.toString()} hint="Reports, PDFs and uploads" />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <PageSection kicker="Customer">
           <CustomerContactEditor compact customer={customer} />
         </PageSection>
-        <PageSection kicker="Job Snapshot">
+        <PageSection kicker="Job details">
           <div className="space-y-2 text-sm">
             <InfoRow label="Job ref" value={job.job_ref ?? "WR-J-TBC"} />
             <InfoRow label="Roof type" value={job.roof_type ?? "TBC"} />
@@ -324,9 +374,6 @@ function OverviewTab({
           </div>
         </PageSection>
       </div>
-
-      <ScheduleWorks job={job} />
-      <PaymentSchedule initialSchedule={paymentSchedule} job={job} quote={quote ?? null} />
     </div>
   );
 }
@@ -351,28 +398,28 @@ function SurveyTab({
   return (
     <div className="stack">
       <PageSection
-        kicker="Survey Summary"
+        kicker="Survey"
         title="Site findings"
         actions={
           <>
             <SmartButton variant="primary" size="md" href={`/jobs/${job.id}/survey`}>
-              Open Workspace
+              Open survey
             </SmartButton>
             <SmartButton variant="ghost" size="md" href={`/jobs/${job.id}/roof-survey`}>
-              Takeoff Tool
+              Measure roof
             </SmartButton>
           </>
         }
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <SurveyField label="Observed Problem" value={survey?.problem_observed} />
-          <SurveyField label="Recommended Works" value={survey?.recommended_works} />
+          <SurveyField label="Problem found" value={survey?.problem_observed} />
+          <SurveyField label="Recommended work" value={survey?.recommended_works} />
           <SurveyField label="Measurements" value={measurements} />
-          <SurveyField label="Access Notes" value={survey?.access_notes} />
-          <SurveyField label="Specialist Highlights" value={highlights.length ? highlights.join(" | ") : null} />
+          <SurveyField label="Access notes" value={survey?.access_notes} />
+          <SurveyField label="Important findings" value={highlights.length ? highlights.join(" | ") : null} />
           <SurveyField
-            label="Survey Snapshot"
-            value={hasSnapshot ? "Saved in Documents" : "Will appear after survey save"}
+            label="Saved report"
+            value={hasSnapshot ? "Available in Files" : "Created when the survey is saved"}
           />
         </div>
       </PageSection>
@@ -434,10 +481,10 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <SmartButton variant="primary" size="md" href={`/jobs/${job.id}/survey`}>
-            Generate From Survey
+            Create from survey
           </SmartButton>
           <SmartButton variant="ghost" size="md" href={`/jobs/${job.id}/quote`}>
-            Open Quote Workspace
+            Create quote manually
           </SmartButton>
         </div>
       </PageSection>
@@ -452,10 +499,10 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
       actions={
         <>
           <SmartButton variant="secondary" size="md" href={`/jobs/${job.id}/quote`}>
-            Open Review
+            Review quote
           </SmartButton>
           <SmartButton variant="primary" size="md" href={`/jobs/${job.id}/quote/preview`}>
-            Preview
+            Preview customer copy
           </SmartButton>
         </>
       }
@@ -525,7 +572,28 @@ function QuoteOptionCard({ option }: { option: QuoteOption }) {
   );
 }
 
-/* -----------------  Materials tab  ----------------- */
+/* -----------------  Work tab  ----------------- */
+
+function WorkTab({ job, materials, labourPlan }: { job: Job; materials: MaterialRecord[]; labourPlan?: LabourPlanRecord | null }) {
+  return (
+    <div className="stack">
+      <PageSection
+        kicker="Site diary"
+        title="Notes, photos and daily updates"
+        description="Keep the whole team up to date from the job site."
+      >
+        <JobDiaryTab jobId={job.id} />
+      </PageSection>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <MaterialsTab job={job} materials={materials} />
+        <LabourTab job={job} labourPlan={labourPlan} />
+      </div>
+      <ScheduleWorks job={job} />
+    </div>
+  );
+}
+
+/* -----------------  Materials section  ----------------- */
 
 function MaterialsTab({ job, materials }: { job: Job; materials: MaterialRecord[] }) {
   const summary = summarizeMaterials(materials);
@@ -537,7 +605,7 @@ function MaterialsTab({ job, materials }: { job: Job; materials: MaterialRecord[
       description={summary || undefined}
       actions={
         <SmartButton variant={materials.length > 0 ? "primary" : "secondary"} size="md" href={`/jobs/${job.id}/materials`}>
-          {materials.length > 0 ? "Open Materials" : "Create List"}
+          {materials.length > 0 ? "Open materials" : "Create list"}
         </SmartButton>
       }
     >
@@ -554,7 +622,7 @@ function MaterialsTab({ job, materials }: { job: Job; materials: MaterialRecord[
   );
 }
 
-/* -----------------  Labour tab  ----------------- */
+/* -----------------  Labour section  ----------------- */
 
 function LabourTab({ job, labourPlan }: { job: Job; labourPlan?: LabourPlanRecord | null }) {
   const entries = labourPlan?.entries ?? [];
@@ -566,10 +634,10 @@ function LabourTab({ job, labourPlan }: { job: Job; labourPlan?: LabourPlanRecor
     <PageSection
       kicker="Labour"
       title={entries.length > 0 ? `${entries.length} labour ${entries.length === 1 ? "row" : "rows"} planned` : "No labour plan yet"}
-      description="Estimate crew days, assign staff or subcontractors, track real labour cost, and pull the charge total into quote options."
+      description="Plan the crew, working days, labour cost and customer charge."
       actions={
         <SmartButton variant={entries.length > 0 ? "primary" : "secondary"} size="md" href={`/jobs/${job.id}/labour`}>
-          {entries.length > 0 ? "Open Labour Plan" : "Create Labour Plan"}
+          {entries.length > 0 ? "Open labour plan" : "Create labour plan"}
         </SmartButton>
       }
     >
@@ -608,14 +676,14 @@ function DocumentsTab({
   return (
     <div className="stack">
       <PageSection
-        kicker="Documents"
+        kicker="Files and paperwork"
         title={`${documents.length} ${documents.length === 1 ? "file" : "files"} on job`}
-        description="Quote PDFs, invoices, customer paperwork, supplier docs."
+        description="Quotes, invoices, reports, photos and uploaded paperwork in one place."
         actions={<DocumentUploadButton jobId={job.id} />}
       >
         <div className="grid gap-3 sm:grid-cols-3">
           <Stat label="All files" value={String(documents.length)} hint="Everything filed" />
-          <Stat label="Uploaded" value={String(uploadedCount)} hint="Manual + third-party" />
+          <Stat label="Uploaded" value={String(uploadedCount)} hint="Your uploaded files" />
           <Stat label="Generated" value={String(generatedCount)} hint="Quotes, invoices, reports" />
         </div>
 
@@ -636,6 +704,11 @@ function DocumentsTab({
           <SmartButton variant="ghost" size="md" href={`/jobs/${job.id}/survey/report/preview`}>
             Preview Survey Report
           </SmartButton>
+          {job.status === "Completed" ? (
+            <SmartButton variant="primary" size="md" href={`/jobs/${job.id}/completion/preview`}>
+              Preview Completion & Guarantee
+            </SmartButton>
+          ) : null}
         </div>
 
         {documents.length > 0 ? (
@@ -647,29 +720,6 @@ function DocumentsTab({
         )}
       </PageSection>
 
-    </div>
-  );
-}
-
-function DocumentRow({ document }: { document: JobDocumentRecord }) {
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-[var(--text)]">{document.display_name}</p>
-        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-          {getDocumentDisplayType(document)}
-          {document.created_at ? ` · ${formatDate(document.created_at)}` : ""}
-          {document.file_size ? ` · ${formatFileSize(document.file_size)}` : ""}
-        </p>
-      </div>
-      <a
-        className="shrink-0 text-xs font-semibold text-[var(--gold)] underline-offset-4 hover:underline"
-        href={getJobDocumentHref(document)}
-        target="_blank"
-        rel="noreferrer"
-      >
-        Open →
-      </a>
     </div>
   );
 }
@@ -687,14 +737,14 @@ function ActivityTab({
 }) {
   return (
     <div className="stack">
-      <PageSection kicker="Recent activity" title="Timeline" description="Audited log of everything that happens on this job.">
+      <PageSection kicker="Job history" title="What has happened" description="A dated record of updates made to this job.">
         <ActivityTimeline entries={activity} jobId={job.id} emptyMessage="No activity logged yet. Activity is recorded automatically as the job progresses." />
       </PageSection>
 
       <PageSection
-        kicker="Email Log"
-        title={`${emailLogs.length} email ${emailLogs.length === 1 ? "attempt" : "attempts"}`}
-        description="Provider acceptance and delivery updates for messages from this job file."
+        kicker="Sent messages"
+        title={`${emailLogs.length} ${emailLogs.length === 1 ? "email" : "emails"}`}
+        description="Delivery information for emails sent from this job."
       >
         {emailLogs.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No quote emails have been sent yet.</p>

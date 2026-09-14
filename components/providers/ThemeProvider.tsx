@@ -9,17 +9,17 @@ const ThemeContext = createContext<{
   toggle: () => void;
   setTheme: (theme: Theme) => void;
 }>({
-  theme: "dark",
+  theme: "light",
   toggle: () => {},
   setTheme: () => {}
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark");
+  const [theme, setThemeState] = useState<Theme>("light");
 
   useEffect(() => {
     const saved = localStorage.getItem("war_theme") as Theme | null;
-    const initial = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const initial = saved || "light";
     setThemeState(initial);
     document.documentElement.setAttribute("data-theme", initial);
   }, []);

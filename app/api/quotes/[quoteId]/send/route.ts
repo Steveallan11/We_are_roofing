@@ -132,6 +132,9 @@ export async function POST(request: Request, { params }: Props) {
         messageBody,
         quote,
         quoteUrl,
+        jobTitle: bundle.job.job_title,
+        propertyAddress: bundle.job.property_address,
+        revised: Number(quote.version_number) > 1,
         businessPhone: bundle.business.phone,
         businessEmail: bundle.business.email
       }),

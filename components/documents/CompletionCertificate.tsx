@@ -10,8 +10,9 @@ import type { JobBundle } from "@/lib/types";
 
 export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
   const completedAt = bundle.job.completed_at || new Date().toISOString();
+  const guaranteeYears = extractGuaranteeYears(bundle.quote?.guarantee_text) ?? 10;
   const guaranteeEnd = new Date(completedAt);
-  guaranteeEnd.setFullYear(guaranteeEnd.getFullYear() + 10);
+  guaranteeEnd.setFullYear(guaranteeEnd.getFullYear() + guaranteeYears);
 
   return (
     <DocumentFrame>
@@ -21,7 +22,7 @@ export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
           items={[
             { label: "Job Ref", value: bundle.job.job_ref },
             { label: "Completion Date", value: formatDate(completedAt) },
-            { label: "Guarantee", value: "10 Years" },
+            { label: "Guarantee", value: `${guaranteeYears} ${guaranteeYears === 1 ? "Year" : "Years"}` },
             { label: "Expiry", value: formatDate(guaranteeEnd.toISOString()) }
           ]}
         />
@@ -37,10 +38,11 @@ export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
         <SectionHead>Works Completed</SectionHead>
         <p style={paragraphStyle}>{bundle.quote?.scope_of_works || bundle.survey?.recommended_works || bundle.job.job_title}</p>
         <div style={{ marginTop: 22, background: DOC.dark, color: DOC.white, borderRadius: 14, padding: 20 }}>
-          <div style={{ color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>10 Year Workmanship Guarantee</div>
+          <div style={{ color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>{guaranteeYears} Year Workmanship Guarantee</div>
           <p style={{ margin: "12px 0 0", color: "#e8e4da", fontFamily: DOC.fontSerif, fontSize: 16, lineHeight: 1.7 }}>
             Guarantee starts {formatDate(completedAt)} and expires {formatDate(guaranteeEnd.toISOString())}. Certificate number CC-{bundle.job.job_ref ?? bundle.job.id}.
           </p>
+          {bundle.quote?.guarantee_text ? <p style={{ margin: "10px 0 0", color: "#cfc8b8", fontFamily: DOC.fontSerif, fontSize: 14, lineHeight: 1.65 }}>{bundle.quote.guarantee_text}</p> : null}
         </div>
         <SectionHead>Signatures</SectionHead>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
@@ -51,6 +53,13 @@ export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
       <DocFooter business={bundle.business} />
     </DocumentFrame>
   );
+}
+
+function extractGuaranteeYears(value?: string | null) {
+  const match = value?.match(/\b(\d{1,2})\s*[- ]?years?\b/i);
+  if (!match) return null;
+  const years = Number(match[1]);
+  return Number.isFinite(years) && years > 0 && years <= 50 ? years : null;
 }
 
 function Signature({ label }: { label: string }) {

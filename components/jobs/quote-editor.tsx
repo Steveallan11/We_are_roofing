@@ -86,6 +86,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
     const vat = Math.round(billableLines.filter((item) => item.vat_applicable).reduce((sum, item) => sum + Number(item.cost || 0) * 0.2, 0) * 100) / 100;
     return { subtotal, vat, total: subtotal + vat };
   }, [costBreakdown]);
+  const priceSummary = useMemo(() => buildQuoteOptionPriceSummary({ cost_breakdown: costBreakdown }), [costBreakdown]);
   const unpricedLines = useMemo(
     () => costBreakdown.filter((line) => Number(line.cost || 0) === 0 && !findRateForItem(line.item, rateCard, line.pricing_category)),
     [costBreakdown, rateCard]
@@ -129,6 +130,17 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   function deleteLine(index: number) {
     setCostBreakdown((current) => current.filter((_, itemIndex) => itemIndex !== index));
     setSuccess("Line item removed. Save changes to keep this cost breakdown.");
+    setError(null);
+  }
+
+  function splitLineIntoMaterialsAndLabour(index: number) {
+    const line = costBreakdown[index];
+    if (!line) return;
+    const split = requestMaterialSplit(line);
+    if (!split) return;
+
+    setCostBreakdown((current) => current.flatMap((item, itemIndex) => (itemIndex === index ? split : [item])));
+    setSuccess("Cost split into materials and labour. Check the customer VAT setting on both lines, then save changes.");
     setError(null);
   }
 
@@ -409,6 +421,24 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
         return { ...option, cost_breakdown, ...calculateOption(cost_breakdown) };
       })
     );
+  }
+
+  function splitOptionLineIntoMaterialsAndLabour(optionId: string, index: number) {
+    const option = options.find((item) => item.id === optionId);
+    const line = option?.cost_breakdown[index];
+    if (!line) return;
+    const split = requestMaterialSplit(line);
+    if (!split) return;
+
+    setOptions((current) =>
+      current.map((item) => {
+        if (item.id !== optionId) return item;
+        const cost_breakdown = item.cost_breakdown.flatMap((costLine, lineIndex) => (lineIndex === index ? split : [costLine]));
+        return { ...item, cost_breakdown, ...calculateOption(cost_breakdown) };
+      })
+    );
+    setSuccess("Option cost split into materials and labour. Check the customer VAT setting on both lines, then save changes.");
+    setError(null);
   }
 
   function deleteOption(optionId: string) {
@@ -941,6 +971,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                               value={line.pricing_category || getQuoteLineItemCategory(line)}
                             >
                               <option value="roof_works">Roof works</option>
+                              <option value="materials">Materials</option>
                               <option value="labour">Labour</option>
                               <option value="standard_scaffold">Standard scaffold</option>
                               <option value="temporary_roof_protection">Temporary roof protection</option>
@@ -953,11 +984,18 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                         </label>
                         <label className="mt-6 flex min-h-11 items-center gap-2 text-sm text-[var(--text)]">
                           <input checked={line.vat_applicable} onChange={(event) => updateOptionLine(option.id, index, { vat_applicable: event.target.checked })} type="checkbox" />
-                          VAT
+                          Customer VAT
                         </label>
-                        <button className="button-ghost mt-5 !min-h-11 !w-full !px-3 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteOptionLine(option.id, index)} type="button">
-                          Delete
-                        </button>
+                        <div className="mt-5 grid gap-2">
+                          {!isMaterialOrLabourLine(line) ? (
+                            <button className="button-ghost !min-h-10 !w-full !px-2 !py-2 text-xs" onClick={() => splitOptionLineIntoMaterialsAndLabour(option.id, index)} type="button">
+                              Split cost
+                            </button>
+                          ) : null}
+                          <button className="button-ghost !min-h-10 !w-full !px-2 !py-2 text-xs text-[#ff9a91]" onClick={() => deleteOptionLine(option.id, index)} type="button">
+                            Delete
+                          </button>
+                        </div>
                       </div>
                       <label className="mt-3 block">
                         <span className="label">Notes</span>
@@ -1111,6 +1149,12 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
             </Link>
           </div>
         </div>
+        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] p-4 text-sm text-[var(--text-muted)]">
+          <p className="font-semibold text-[var(--text-primary)]">Materials, labour and VAT</p>
+          <p className="mt-1 leading-6">
+            Use <strong>Split cost</strong> to show materials and labour separately. The VAT switch means VAT charged to the customer; supplier VAT on materials and wages with no VAT are tracked as internal job costs.
+          </p>
+        </div>
         {unpricedLines.length ? (
           <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4 text-sm text-[var(--gold-l)]">
             {unpricedLines.length} line{unpricedLines.length === 1 ? "" : "s"} still need pricing. Add matching item names in the Rate Card, or enter the total manually.
@@ -1221,6 +1265,8 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
                     value={line.pricing_category || getQuoteLineItemCategory(line)}
                   >
                     <option value="roof_works">Roof works</option>
+                    <option value="materials">Materials</option>
+                    <option value="labour">Labour</option>
                     <option value="standard_scaffold">Scaffold/access</option>
                     <option value="temporary_roof_protection">Temporary roof protection</option>
                     <option value="access">Other access</option>
@@ -1283,8 +1329,13 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-black/15 p-3 text-sm">
                 <label className="flex items-center gap-3 text-[var(--text)]">
                   <input checked={line.vat_applicable} onChange={(event) => updateLine(index, { vat_applicable: event.target.checked })} type="checkbox" />
-                  VAT applies to this line
+                  Charge customer VAT on this line
                 </label>
+                {!isMaterialOrLabourLine(line) ? (
+                  <button className="button-ghost !min-h-10 !px-3 !py-2 text-xs" onClick={() => splitLineIntoMaterialsAndLabour(index)} type="button">
+                    Split into materials + labour
+                  </button>
+                ) : null}
                 <button
                   className={`min-h-10 rounded-lg border px-3 py-2 text-xs font-bold transition ${
                     isPriceToBeConfirmed(line)
@@ -1364,6 +1415,18 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
           </button>
         </div>
         <div className="mt-5 grid gap-2 rounded-2xl border border-[var(--border)] p-4 text-sm md:max-w-sm md:ml-auto">
+          {priceSummary.map((row) => (
+            <div className="border-b border-[var(--border)] pb-2" key={row.id}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[var(--muted)]">{row.label}</span>
+                <span>{currency(row.net)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                <span className="text-[var(--muted)]">{row.vatLabel}</span>
+                <span>{currency(row.vat)}</span>
+              </div>
+            </div>
+          ))}
           <div className="flex items-center justify-between">
             <span className="text-[var(--muted)]">Subtotal</span>
             <span>{currency(totals.subtotal)}</span>
@@ -1449,6 +1512,51 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
 
 function normaliseOption(option: QuoteOption, index: number): QuoteOption {
   return normaliseQuoteOption(option, index);
+}
+
+function requestMaterialSplit(line: CostLineItem): CostLineItem[] | null {
+  const total = Math.round(Math.max(0, Number(line.cost || 0)) * 100) / 100;
+  const suggested = Math.round(total * 0.5 * 100) / 100;
+  const response = window.prompt(`Materials portion of the ${currency(total)} net price`, suggested.toFixed(2));
+  if (response === null) return null;
+
+  const materialCost = Math.round(Number(response) * 100) / 100;
+  if (!Number.isFinite(materialCost) || materialCost < 0 || materialCost > total) {
+    window.alert(`Enter a materials amount between ${currency(0)} and ${currency(total)}.`);
+    return null;
+  }
+
+  const labourCost = Math.round((total - materialCost) * 100) / 100;
+  const baseId = line.source_id || slugify(line.quote_section || line.item || "quote-line");
+  const common = {
+    ...line,
+    quantity: 1,
+    unit: "item",
+    source_type: line.source_type || "cost_split"
+  };
+
+  return [
+    {
+      ...common,
+      item: "Materials",
+      cost: materialCost,
+      unit_rate: materialCost,
+      pricing_category: "materials",
+      source_id: `${baseId}-materials`
+    },
+    {
+      ...common,
+      item: "Labour",
+      cost: labourCost,
+      unit_rate: labourCost,
+      pricing_category: "labour",
+      source_id: `${baseId}-labour`
+    }
+  ];
+}
+
+function isMaterialOrLabourLine(line: CostLineItem) {
+  return line.pricing_category === "materials" || line.pricing_category === "labour";
 }
 
 function normaliseCostLine(line: CostLineItem, updates: Partial<CostLineItem> = {}) {

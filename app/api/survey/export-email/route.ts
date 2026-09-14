@@ -1,3 +1,4 @@
+import { EmailShell, EmailIntro, ProjectSummaryCard, ContactPanel, greeting } from "@/lib/email/components";
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -121,27 +122,8 @@ function getMaxDimension(sections: Array<{ points: Array<{ x?: number; y?: numbe
 }
 
 function buildEmailHtml(opts: { toName: string; message?: string; jobRef: string; address: string; totalArea: number; totalLength: number; includeKml: boolean; includeCsv: boolean }) {
-  const firstName = opts.toName.split(" ")[0] || "there";
-  return `<!DOCTYPE html><html><body style="font-family:Helvetica Neue,Arial,sans-serif;background:#f8f7f4;margin:0;padding:0;">
-<div style="max-width:560px;margin:0 auto;padding:32px 16px;">
-  <div style="background:#0a0a0a;padding:24px 32px;border-radius:8px 8px 0 0;">
-    <div style="color:#D4AF37;font-size:18px;font-weight:700;font-family:Georgia,serif;">We Are Roofing UK Ltd</div>
-    <div style="color:#777;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Roof Takeoff Survey</div>
-  </div>
-  <div style="background:#fff;border:1px solid #e8e4da;border-top:none;padding:28px 32px;">
-    <p style="font-size:14px;color:#1a1a1a;margin:0 0 16px;">Hi ${firstName},</p>
-    ${opts.message ? `<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 20px;">${opts.message}</p>` : ""}
-    <div style="background:#faf9f6;border:1px solid #e8e4da;border-left:3px solid #D4AF37;border-radius:0 6px 6px 0;padding:14px 18px;margin:0 0 20px;">
-      <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px;margin:0 0 6px;">Survey Details</div>
-      <div style="font-size:14px;font-weight:700;color:#0a0a0a;">${opts.jobRef}</div>
-      <div style="font-size:12px;color:#555;margin-top:4px;">${opts.address}</div>
-    </div>
-    <div style="display:flex;gap:16px;margin:0 0 20px;">
-      <div style="flex:1;background:#0a0a0a;padding:14px 16px;border-radius:6px;"><div style="color:#D4AF37;font-size:9px;letter-spacing:2px;text-transform:uppercase;">Total Area</div><div style="color:#fff;font-size:20px;font-weight:700;margin-top:4px;">${opts.totalArea.toFixed(1)} m2</div></div>
-      <div style="flex:1;background:#0a0a0a;padding:14px 16px;border-radius:6px;"><div style="color:#D4AF37;font-size:9px;letter-spacing:2px;text-transform:uppercase;">Linear Runs</div><div style="color:#fff;font-size:20px;font-weight:700;margin-top:4px;">${opts.totalLength.toFixed(1)} lm</div></div>
-    </div>
-    <p style="font-size:12px;color:#555;margin:0;">Attached: ${[opts.includeKml ? "KML file" : "", opts.includeCsv ? "CSV measurements" : ""].filter(Boolean).join(" + ")}.</p>
-    <p style="font-size:11px;color:#888;margin:20px 0 0;">Any questions, please call Andy on 01252 000000.</p>
-  </div>
-</div></body></html>`;
+  return EmailShell("Roof takeoff survey", "Your roof measurements",
+    greeting(opts.toName) + EmailIntro(opts.message || "Please find your roof measurement files attached.") +
+    ProjectSummaryCard([["Reference",opts.jobRef],["Property",opts.address],["Measured area",opts.totalArea > 0 ? opts.totalArea.toFixed(1) + " m2" : null],["Linear measurements",opts.totalLength > 0 ? opts.totalLength.toFixed(1) + " lm" : null]]) +
+    EmailIntro("Attached: " + [opts.includeKml ? "KML file" : "", opts.includeCsv ? "CSV measurements" : ""].filter(Boolean).join(" and ")) + ContactPanel());
 }

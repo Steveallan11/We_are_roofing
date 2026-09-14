@@ -46,7 +46,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
       <div className={compact ? "p-3" : "p-4"}>
         <div className="relative z-10 flex items-start gap-3 pointer-events-none">
           <div
-            className={`relative flex shrink-0 items-center justify-center border border-[var(--border)] bg-black/30 font-bold text-[var(--gold-l)] ${
+            className={`relative flex shrink-0 items-center justify-center border border-[var(--border)] bg-[var(--surface-deep)] font-bold text-[var(--gold-l)] ${
               compact ? "h-9 w-9 rounded-xl text-xs" : "h-12 w-12 rounded-2xl text-sm"
             }`}
           >
@@ -61,7 +61,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className={`${compact ? "text-sm" : "text-lg"} line-clamp-2 font-semibold text-white`}>{job.job_title}</h3>
+                <h3 className={`${compact ? "text-sm" : "text-lg"} line-clamp-2 font-semibold text-[var(--text-primary)]`}>{job.job_title}</h3>
                 <p className="mt-1 truncate text-xs text-[var(--muted)]">
                   {job.job_ref ?? "WR-J-TBC"} | {job.customer?.full_name ?? "Customer missing"} | {town}
                 </p>
@@ -77,7 +77,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
         </div>
 
         <div className={`${compact ? "mt-3" : "mt-4"} pointer-events-none relative z-10 grid gap-2 text-sm text-[var(--muted)]`}>
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-black/20 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] px-3 py-2">
             <span>
               {roofLabel(job.roof_type)} {job.roof_type ? "" : "TBC"}
             </span>
@@ -101,7 +101,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
         </div>
       </div>
 
-      <div className={`${compact ? "px-3 py-2" : "px-4 py-3"} relative z-10 flex items-center justify-between border-t border-[var(--border)] bg-black/20 pointer-events-none`}>
+      <div className={`${compact ? "px-3 py-2" : "px-4 py-3"} relative z-10 flex items-center justify-between border-t border-[var(--border)] bg-[var(--surface-deep)] pointer-events-none`}>
         <Link className="pointer-events-auto text-xs text-[var(--muted)] underline-offset-4 hover:text-[var(--gold-l)] hover:underline" href={`/jobs/${job.id}` as Route}>
           Open job file
         </Link>
@@ -177,7 +177,7 @@ function DocumentQuickLinks({ compact, jobId, links }: { compact: boolean; jobId
   const hiddenCount = links.length - visible.length;
 
   return (
-    <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-black/20 px-3 py-2">
+    <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] px-3 py-2">
       <span className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Docs</span>
       {visible.map((link, index) =>
         link.external && link.href ? (

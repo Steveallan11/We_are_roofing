@@ -12,9 +12,10 @@ import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyse
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { getQuoteValueLines, isScaffoldLine } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
-import type { InvoiceRecord, InvoiceType, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
+import type { InvoiceRecord, InvoiceType, InvoiceVatTreatment, Job, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
+  job: Job;
   jobId: string;
   jobTitle: string;
   quote: QuoteRecord | null;
@@ -95,7 +96,7 @@ function formatReceiptFileSize(size: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
+export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [expenses, setExpenses] = useState<JobExpense[]>(initialExpenses);
@@ -110,11 +111,15 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
   const [interimDescription, setInterimDescription] = useState("");
   const [sendInvoice, setSendInvoice] = useState<InvoiceRecord | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceRecord | null>(null);
+  const [vatTreatment, setVatTreatment] = useState<InvoiceVatTreatment>(() => invoices.find((invoice) => invoice.status !== "Void")?.vat_treatment ?? "standard");
+  const [customerVatNumber, setCustomerVatNumber] = useState(() => invoices.find((invoice) => invoice.status !== "Void")?.customer_vat_number ?? "");
+  const [reverseChargeConfirmed, setReverseChargeConfirmed] = useState(() => Boolean(invoices.find((invoice) => invoice.status !== "Void")?.reverse_charge_confirmed_at));
 
   const liveInvoices = invoices.filter((invoice) => invoice.status !== "Void");
   const approvedVariations = variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
   const invoiceableQuoteTotal = quote ? calculateFirmQuoteTotal(quote) : 0;
   const quoteFinancials = useMemo(() => calculateFinancialQuoteTotals(quote), [quote]);
+  const invoiceablePayableTotal = vatTreatment === "domestic_reverse_charge" ? quoteFinancials.net : invoiceableQuoteTotal;
   const scaffoldLines = quote ? getQuoteValueLines(quote).filter(isScaffoldLine) : [];
   const scaffoldExcluded = scaffoldLines.length > 0 && scaffoldLines.every((line) => line.billed_separately);
   const summary = useMemo(() => {
@@ -164,6 +169,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
       supplierPaidTotal: quoteFinancials.supplierPaidTotal,
       variationTotal,
       contractTotal,
+      contractNet,
       invoiced,
       paid,
       outstanding,
@@ -219,12 +225,30 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
   }
 
   async function createInvoice(type: InvoiceType, depositPercentage?: number) {
+    if (vatTreatment === "domestic_reverse_charge" && (!reverseChargeConfirmed || !customerVatNumber.trim())) {
+      notify(null, "Enter the customer's VAT number and confirm the reverse-charge checks before raising the invoice.");
+      return;
+    }
+    if (type === "final" || type === "standard") {
+      const previouslyInvoiced = liveInvoices
+        .filter((invoice) => !quote?.id || invoice.quote_id === quote.id)
+        .reduce((sum, invoice) => sum + Number(invoice.total ?? 0), 0);
+      const amount = type === "final" ? Math.max(0, invoiceablePayableTotal - previouslyInvoiced) : invoiceablePayableTotal;
+      const label = type === "final" ? "final balance" : "full invoice";
+      if (!window.confirm(`Create the ${label} for ${currency(amount)}? You can preview it before sending.`)) return;
+    }
     notify(null, null);
     setBusy(`create-${type}`);
     const response = await fetch(`/api/jobs/${jobId}/invoices`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, deposit_percentage: depositPercentage })
+      body: JSON.stringify({
+        type,
+        deposit_percentage: depositPercentage,
+        vat_treatment: vatTreatment,
+        customer_vat_number: customerVatNumber,
+        reverse_charge_confirmed: reverseChargeConfirmed
+      })
     });
     const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
     setBusy(null);
@@ -241,7 +265,17 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
     notify(null, null);
     setBusy("create-interim");
     const value = Number(interimValue);
-    const body: Record<string, unknown> = { type: "interim", description: interimDescription.trim() || undefined };
+    if (vatTreatment === "domestic_reverse_charge" && (!reverseChargeConfirmed || !customerVatNumber.trim())) {
+      notify(null, "Enter the customer's VAT number and confirm the reverse-charge checks before raising the invoice.");
+      return;
+    }
+    const body: Record<string, unknown> = {
+      type: "interim",
+      description: interimDescription.trim() || undefined,
+      vat_treatment: vatTreatment,
+      customer_vat_number: customerVatNumber,
+      reverse_charge_confirmed: reverseChargeConfirmed
+    };
     if (interimMode === "fixed") body.amount = value;
     else body.percentage = value;
     const response = await fetch(`/api/jobs/${jobId}/invoices`, {
@@ -313,9 +347,65 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
 
   const hasDeposit = liveInvoices.some((invoice) => invoice.invoice_type === "deposit");
   const hasFinal = liveInvoices.some((invoice) => invoice.invoice_type === "final");
+  const quoteAccepted = quote?.status === "Accepted" || ["Accepted", "Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked", "In Progress", "Completed"].includes(job.status);
+  const workflowContractTotal = vatTreatment === "domestic_reverse_charge" ? summary.contractNet : summary.contractTotal;
+  const contractFullyInvoiced = workflowContractTotal > 0 && summary.invoiced >= workflowContractTotal - 0.01;
+  const allPaid = contractFullyInvoiced && summary.outstanding <= 0.01 && summary.paid >= workflowContractTotal - 0.01;
+  const nextOutstandingInvoice = liveInvoices.find((invoice) => Number(invoice.balance_due ?? 0) > 0.01);
+
+  async function completeJob() {
+    if (!window.confirm("Mark this job complete? This records the completion date and prepares the guarantee certificate.")) return;
+    notify(null, null);
+    setBusy("complete-job");
+    const response = await fetch(`/api/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "Completed" })
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      notify(null, result?.error || "The job could not be completed.");
+      return;
+    }
+    notify(result.message || "Job completed.", null);
+    startTransition(() => router.refresh());
+  }
 
   return (
     <div className="stack">
+      <PageSection kicker="Quote to paid" title="What happens next" description="Follow the highlighted step to move this job from accepted quote through invoicing, payment and handover.">
+        <div className="grid gap-2 md:grid-cols-4">
+          <MoneyFlowStep complete={quoteAccepted} current={!quoteAccepted} label="1. Quote accepted" detail={quoteAccepted ? quote?.quote_ref ?? "Accepted" : "Approve, send and receive acceptance"} />
+          <MoneyFlowStep complete={contractFullyInvoiced} current={quoteAccepted && !contractFullyInvoiced} label="2. Fully invoiced" detail={contractFullyInvoiced ? currency(summary.invoiced) : `${currency(Math.max(0, workflowContractTotal - summary.invoiced))} left to invoice`} />
+          <MoneyFlowStep complete={allPaid} current={contractFullyInvoiced && !allPaid} label="3. Paid" detail={allPaid ? currency(summary.paid) : `${currency(summary.outstanding)} outstanding`} />
+          <MoneyFlowStep complete={job.status === "Completed"} current={allPaid && job.status !== "Completed"} label="4. Complete & hand over" detail={job.status === "Completed" ? "Certificate ready" : "Finish and send guarantee"} />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] p-4">
+          {!quote ? (
+            <Button asChild size="md" variant="primary"><Link href={`/jobs/${jobId}/quote` as Route}>Create quote</Link></Button>
+          ) : !quoteAccepted ? (
+            <Button asChild size="md" variant="primary"><Link href={`/jobs/${jobId}/quote` as Route}>Review and send quote</Link></Button>
+          ) : !contractFullyInvoiced ? (
+            <Button disabled={busy !== null} onClick={() => hasDeposit ? void createInvoice("final") : setShowDepositForm(true)} size="md" variant="primary">
+              {busy === "create-final" ? "Creating..." : hasDeposit ? "Raise remaining balance" : "Raise deposit invoice"}
+            </Button>
+          ) : !allPaid && nextOutstandingInvoice ? (
+            <Button disabled={busy !== null} onClick={() => setPaymentInvoice(nextOutstandingInvoice)} size="md" variant="primary">Record next payment</Button>
+          ) : job.status !== "Completed" ? (
+            <Button disabled={busy !== null} onClick={() => void completeJob()} size="md" variant="primary">{busy === "complete-job" ? "Completing..." : "Complete job"}</Button>
+          ) : (
+            <>
+              <Button asChild size="md" variant="primary"><Link href={`/jobs/${jobId}/completion/preview` as Route}>Open guarantee certificate</Link></Button>
+              <Button asChild size="md" variant="secondary"><Link href={`/comms?job=${jobId}&compose=1` as Route}>Write handover email</Link></Button>
+            </>
+          )}
+          <p className="text-sm text-[var(--text-muted)]">
+            {job.status === "Completed" ? "Payment is complete. Review the certificate, then send the customer handover message." : allPaid ? "Everything is paid. Complete the job to lock in the date and prepare the guarantee." : "Invoice totals and payments remain available below for review."}
+          </p>
+        </div>
+      </PageSection>
+
       <PageSection kicker="Job Money" title="Financial summary" description="Quote value, invoicing progress, and costs for this job.">
         {scaffoldLines.length > 0 ? (
           <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -369,6 +459,37 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
         title="Raise & track invoices"
         description="Deposit up front, progress payments as the job moves, final balance on completion — or one full invoice. Record payments as they land."
       >
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] p-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-end">
+            <div>
+              <p className="font-semibold text-[var(--text-primary)]">VAT treatment for this quote</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+                Reverse charge is normally for VAT-registered construction businesses within CIS that have not confirmed they are an end user. The customer accounts for the VAT to HMRC; it is shown but not added to the balance due.
+              </p>
+            </div>
+            <label>
+              <span className="label">Invoice VAT treatment</span>
+              <select className="field" disabled={liveInvoices.length > 0} onChange={(event) => setVatTreatment(event.target.value as InvoiceVatTreatment)} value={vatTreatment}>
+                <option value="standard">Standard VAT — customer pays VAT to us</option>
+                <option value="domestic_reverse_charge">Domestic reverse charge — customer accounts for VAT</option>
+              </select>
+            </label>
+          </div>
+          {vatTreatment === "domestic_reverse_charge" ? (
+            <div className="mt-3 rounded-lg border border-[var(--gold-border)] bg-[var(--gold-bg)] p-3 text-sm text-[var(--text-primary)]">
+              <p>Reverse-charge amount due from customer: <strong>{currency(quoteFinancials.net)}</strong>. Indicative VAT accounted for by customer: <strong>{currency(Math.max(0, summary.quoteTotal - quoteFinancials.net))}</strong>.</p>
+              <label className="mt-3 block max-w-sm">
+                <span className="label">Customer VAT number</span>
+                <input className="field" disabled={liveInvoices.length > 0} onChange={(event) => setCustomerVatNumber(event.target.value)} placeholder="GB123456789" value={customerVatNumber} />
+              </label>
+              <label className="mt-3 flex items-start gap-3 leading-6">
+                <input checked={reverseChargeConfirmed} disabled={liveInvoices.length > 0} onChange={(event) => setReverseChargeConfirmed(event.target.checked)} type="checkbox" />
+                <span>I have confirmed the customer is UK VAT registered, the work is within CIS, and they have not notified us that they are an end user or intermediary supplier.</span>
+              </label>
+            </div>
+          ) : null}
+          {liveInvoices.length > 0 ? <p className="mt-2 text-xs text-[var(--text-muted)]">VAT treatment is locked once the first live invoice is raised. Void existing invoices before changing it.</p> : null}
+        </div>
         {!quote ? (
           <p className="text-sm text-[#ffcf7d]">Create a quote first — invoices are raised from the approved quote.</p>
         ) : (
@@ -411,7 +532,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
                 value={depositPct}
               />
               <span className="text-sm text-[var(--text-muted)]">
-                = {currency((invoiceableQuoteTotal * (Number(depositPct) || 0)) / 100)}
+                = {currency((invoiceablePayableTotal * (Number(depositPct) || 0)) / 100)}
               </span>
             </div>
             <div className="mt-3 flex gap-2">
@@ -475,7 +596,7 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
               />
               {interimMode === "percentage" ? (
                 <span className="text-sm text-[var(--text-muted)]">
-                  = {currency((invoiceableQuoteTotal * (Number(interimValue) || 0)) / 100)}
+                  = {currency((invoiceablePayableTotal * (Number(interimValue) || 0)) / 100)}
                 </span>
               ) : null}
             </div>
@@ -509,10 +630,12 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
                     <Badge size="sm" variant={invoice.status === "Paid" ? "complete" : invoice.status === "Overdue" ? "alert" : invoice.status === "Part Paid" ? "active" : "pending"}>
                       {invoice.status}
                     </Badge>
+                    {invoice.vat_treatment === "domestic_reverse_charge" ? <Badge size="sm" variant="neutral">Reverse charge</Badge> : null}
                   </div>
                   <p className="mt-1 text-sm text-[var(--text-muted)]">
                     Due {formatDate(invoice.due_date)} · Paid {currency(invoice.amount_paid ?? 0)} · Balance {currency(invoice.balance_due ?? 0)}
                   </p>
+                  {invoice.vat_treatment === "domestic_reverse_charge" ? <p className="mt-1 text-xs text-[var(--text-muted)]">Customer accounts to HMRC for {currency(invoice.reverse_charge_vat_amount ?? 0)} VAT.</p> : null}
                 </div>
                 <p className="text-right font-display text-2xl text-[var(--gold-l)]">{currency(invoice.total ?? 0)}</p>
               </div>
@@ -595,6 +718,33 @@ export function JobMoneyTab({ jobId, jobTitle, quote, invoices, variations, expe
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function MoneyFlowStep({ label, detail, complete, current }: { label: string; detail: string; complete: boolean; current: boolean }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        complete
+          ? "border-[var(--stage-active-border)] bg-[var(--stage-active-bg)]"
+          : current
+            ? "border-[var(--gold)] bg-[var(--gold-bg)]"
+            : "border-[var(--border)] bg-[var(--surface-deep)]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+            complete ? "bg-[var(--stage-active)] text-white" : current ? "bg-[var(--gold)] text-[var(--gold-contrast)]" : "bg-[var(--raised)] text-[var(--text-muted)]"
+          }`}
+        >
+          {complete ? "✓" : "•"}
+        </span>
+        <p className="font-semibold text-[var(--text-primary)]">{label}</p>
+      </div>
+      <p className="mt-2 text-xs text-[var(--text-muted)]">{detail}</p>
     </div>
   );
 }

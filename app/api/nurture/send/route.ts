@@ -1,3 +1,4 @@
+import { EmailShell, EmailIntro, ContactPanel } from "@/lib/email/components";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { getNurtureTemplate, getAllNurtureTemplateDays } from "@/lib/email/nurture";
@@ -136,7 +137,7 @@ export async function POST(req: Request) {
         const emailResult = await sendEmail({
           to: customer.email,
           subject,
-          html: `<p>${body.replace(/\n/g, "<br>")}</p>`,
+          html: EmailShell("Your roofing proposal", subject, EmailIntro(body) + ContactPanel()),
           text: body,
           jobId: sequence.job_id,
           quoteId: sequence.quote_id,

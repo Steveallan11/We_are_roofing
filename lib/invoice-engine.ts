@@ -54,6 +54,7 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
   const logoUrl = resolveAssetUrl(bundle.business.logo_url || "/we-are-roofing-logo.png");
   const isDeposit = invoice.invoice_type === "deposit";
   const isVariation = Boolean(invoice.variation_id);
+  const isReverseCharge = invoice.vat_treatment === "domestic_reverse_charge";
   const introHtml = isDeposit
     ? `
         <h2>Booking Deposit</h2>
@@ -140,11 +141,13 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
         </table>
         <div class="totals">
           <div><span>Subtotal</span><span>${formatCurrency(invoice.subtotal)}</span></div>
-          <div><span>VAT</span><span>${formatCurrency(invoice.vat_amount)}</span></div>
+          <div><span>VAT charged</span><span>${formatCurrency(invoice.vat_amount)}</span></div>
+          ${isReverseCharge ? `<div><span>Reverse charge VAT (customer accounts to HMRC)</span><span>${formatCurrency(invoice.reverse_charge_vat_amount ?? 0)}</span></div>` : ""}
           <div><span>Total</span><span>${formatCurrency(invoice.total)}</span></div>
           <div><span>Paid</span><span>${formatCurrency(invoice.amount_paid)}</span></div>
           <div><span>Balance Due</span><span>${formatCurrency(invoice.balance_due)}</span></div>
         </div>
+        ${isReverseCharge ? `<h2>Domestic Reverse Charge</h2><div class="terms"><strong>Reverse charge: VAT Act 1994 Section 55A applies.</strong><br/>Customer VAT number: ${escapeHtml(invoice.customer_vat_number || "Not supplied")}<br/>Customer to account to HMRC for reverse charge output tax of ${formatCurrency(invoice.reverse_charge_vat_amount ?? 0)}. This VAT is not included in the amount due.</div>` : ""}
         <h2>Payment Terms</h2>
         <div class="terms">${escapeHtml(invoice.payment_terms || bundle.business.payment_terms || "Payment due on receipt.")}</div>
         ${invoice.notes ? `<h2>Notes</h2><div class="terms">${escapeHtml(invoice.notes)}</div>` : ""}
@@ -176,8 +179,20 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
   ({ page, y } = ensureInvoiceSpace(pdf, page, y, 150));
   y = drawInvoiceItems(page, invoice, y);
 
-  ({ page, y } = ensureInvoiceSpace(pdf, page, y, 210));
+  ({ page, y } = ensureInvoiceSpace(pdf, page, y, invoice.vat_treatment === "domestic_reverse_charge" ? 235 : 210));
   y = drawInvoiceTotals(page, invoice, y);
+
+  if (invoice.vat_treatment === "domestic_reverse_charge") {
+    ({ page, y } = ensureInvoiceSpace(pdf, page, y, 100));
+    y = drawSectionBlock(
+      page,
+      "Domestic Reverse Charge",
+      `Reverse charge: VAT Act 1994 Section 55A applies. Customer VAT number: ${invoice.customer_vat_number || "Not supplied"}. Customer to account to HMRC for reverse charge output tax of ${formatCurrency(invoice.reverse_charge_vat_amount ?? 0)}. This VAT is not included in the amount due.`,
+      46,
+      y,
+      503
+    );
+  }
 
   ({ page, y } = ensureInvoiceSpace(pdf, page, y, 150));
   y = drawPaymentDetails(page, bundle, invoice, y);
@@ -193,6 +208,41 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
 
   pdf.pages.forEach((item, index) => drawInvoiceFooter(item, index + 1, pdf.pages.length));
   return pdf.toBuffer();
+}
+
+export function buildProportionalInvoiceLineItemsFromQuote(
+  quote: QuoteRecord,
+  payableAmount: number,
+  vatRate: number,
+  descriptionPrefix: string,
+  reverseCharge = false
+) {
+  const firmLines = getFirmQuoteLines(quote.cost_breakdown).filter((line) => Number(line.cost ?? 0) > 0 && !line.billed_separately);
+  const quotePayable = firmLines.reduce(
+    (sum, line) => sum + Number(line.cost ?? 0) * (line.vat_applicable ? 1 + vatRate / 100 : 1),
+    0
+  );
+  const quoteNet = firmLines.reduce((sum, line) => sum + Number(line.cost ?? 0), 0);
+  const ratioBase = reverseCharge ? quoteNet : quotePayable;
+  const ratio = ratioBase > 0 ? Math.min(1, Math.max(0, payableAmount / ratioBase)) : 0;
+  const lineItems = firmLines.map((line) => {
+    const net = round2(Number(line.cost ?? 0) * ratio);
+    return {
+      description: `${descriptionPrefix} — ${line.item}`,
+      quantity: 1,
+      unit: "item",
+      unit_price: net,
+      vat_applicable: line.vat_applicable,
+      total: net
+    } satisfies InvoiceLineItem;
+  });
+  const subtotal = round2(lineItems.reduce((sum, line) => sum + line.total, 0));
+  const reverseChargeVatAmount = reverseCharge
+    ? round2(lineItems.filter((line) => line.vat_applicable).reduce((sum, line) => sum + line.total * (vatRate / 100), 0))
+    : 0;
+  const vatAmount = reverseCharge ? 0 : round2(payableAmount - subtotal);
+
+  return { lineItems, subtotal, vatAmount, reverseChargeVatAmount, total: round2(subtotal + vatAmount) };
 }
 
 type PdfPage = {
@@ -335,7 +385,10 @@ function drawInvoiceTotals(page: PdfPage, invoice: InvoiceRecord, y: number) {
   strokeRect(page, x, y - 118, w, 118, PDF.border, 0.8);
   y -= 20;
   y = drawTotalRow(page, x + 14, y, w - 28, "Subtotal", formatCurrency(invoice.subtotal));
-  y = drawTotalRow(page, x + 14, y, w - 28, "VAT", formatCurrency(invoice.vat_amount));
+  y = drawTotalRow(page, x + 14, y, w - 28, "VAT charged", formatCurrency(invoice.vat_amount));
+  if (invoice.vat_treatment === "domestic_reverse_charge") {
+    y = drawTotalRow(page, x + 14, y, w - 28, "Reverse charge VAT (customer accounts)", formatCurrency(invoice.reverse_charge_vat_amount ?? 0));
+  }
   y = drawTotalRow(page, x + 14, y, w - 28, "Total", formatCurrency(invoice.total), true);
   y = drawTotalRow(page, x + 14, y, w - 28, "Paid", formatCurrency(invoice.amount_paid));
   drawTotalRow(page, x + 14, y, w - 28, "Balance Due", formatCurrency(invoice.balance_due), true);

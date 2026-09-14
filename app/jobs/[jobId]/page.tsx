@@ -21,8 +21,8 @@ export default async function JobDetailPage({ params }: Props) {
 
   return (
     <AppShell
-      title={bundle.job.job_title}
-      subtitle="Full job file: customer details, survey notes, quote progress, paperwork, and the next step to keep things moving."
+      title={bundle.customer.full_name}
+      subtitle={`${bundle.job.job_ref ?? "Job"} · ${bundle.job.property_address}`}
       actions={
         <>
           <QuoteActions

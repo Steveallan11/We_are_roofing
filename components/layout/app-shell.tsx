@@ -3,7 +3,6 @@ import { GaugeFAB } from "@/components/layout/GaugeFAB";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OfflineIndicator } from "@/components/offline/OfflineIndicator";
-import { Starfield } from "@/components/ui/starfield";
 import { requireAdminSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -30,9 +29,8 @@ export async function AppShell({
   await requireAdminSession();
 
   return (
-    <div className="relative min-h-screen">
-      <Starfield />
-      <div className="relative z-10 flex min-h-screen">
+    <div className="min-h-screen bg-[var(--obsidian)]">
+      <div className="flex min-h-screen">
         <AdminSidebar />
         <main className="min-w-0 flex-1">
           <div className={cn("app-shell", wide && "!max-w-[1600px]")}>

@@ -3,12 +3,20 @@ import type { Route } from "next";
 import { AppShell } from "@/components/layout/app-shell";
 import { JobCard } from "@/components/jobs/job-card";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
-import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { TodayJobsGrid } from "@/components/today/TodayJobsGrid";
 import { Button, Card, PageSection } from "@/components/ui/primitives";
+import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { getBusiness, getJobs, getPricingRules, getUnreadCustomerReplies, getUpcomingDiaryTasks } from "@/lib/data";
 import { getAttentionReason, needsAttention } from "@/lib/jobs/nextAction";
 import { formatDate } from "@/lib/utils";
+
+type PriorityItem = {
+  id: string;
+  title: string;
+  detail: string;
+  href: Route;
+  kind: "task" | "message" | "job";
+};
 
 export default async function TodayPage() {
   const [business, jobs, pricingRules, unreadReplies, upcomingTasks] = await Promise.all([
@@ -18,12 +26,13 @@ export default async function TodayPage() {
     getUnreadCustomerReplies(),
     getUpcomingDiaryTasks()
   ]);
+
   const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-
   const attentionJobs = jobs.filter(needsAttention);
+  const openJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
   const surveysToday = jobs
     .filter((job) => job.survey_date)
     .filter((job) => {
@@ -34,8 +43,7 @@ export default async function TodayPage() {
   const nextSurvey = jobs
     .filter((job) => job.survey_date && new Date(job.survey_date).getTime() >= todayEnd.getTime())
     .sort((left, right) => new Date(left.survey_date ?? 0).getTime() - new Date(right.survey_date ?? 0).getTime())[0];
-  const recentJobs = [...jobs]
-    .filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status))
+  const recentJobs = [...openJobs]
     .sort(
       (left, right) =>
         new Date(right.updated_at ?? right.created_at ?? 0).getTime() -
@@ -43,132 +51,123 @@ export default async function TodayPage() {
     )
     .slice(0, 3);
 
-  const greeting = getGreeting(now);
-  const ownerName = business.business_name?.trim() || "there";
-  const diaryRoute = "/diary" as Route;
+  const priorities: PriorityItem[] = [
+    ...upcomingTasks.map((task) => ({
+      id: `task-${task.id}`,
+      title: task.title || "Task needs completing",
+      detail: task.body || "Due today or overdue",
+      href: (task.linked_job_id ? `/jobs/${task.linked_job_id}` : "/diary") as Route,
+      kind: "task" as const
+    })),
+    ...unreadReplies.map((reply) => ({
+      id: `message-${reply.conversation_id}`,
+      title: reply.customer_name ?? reply.subject ?? "Customer message",
+      detail: reply.preview || "A customer is waiting for a reply",
+      href: (reply.job_id ? `/jobs/${reply.job_id}` : "/comms") as Route,
+      kind: "message" as const
+    })),
+    ...attentionJobs.map((job) => ({
+      id: `job-${job.id}`,
+      title: `${job.job_ref ?? "Job"} · ${job.customer?.full_name ?? job.job_title}`,
+      detail: getAttentionReason(job),
+      href: `/jobs/${job.id}` as Route,
+      kind: "job" as const
+    }))
+  ];
+
+  const dateLabel = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  }).format(now);
+  const priorityCount = priorities.length;
 
   return (
     <AppShell
       title="Today"
-      subtitle={`${greeting}, ${ownerName}.`}
+      subtitle={dateLabel}
       actions={
-        <>
-          <Button variant="primary" size="md" asChild>
-            <Link href="/jobs/new">New Job</Link>
-          </Button>
-          <Button variant="ghost" size="md" asChild>
-            <Link href="/jobs">All Jobs</Link>
-          </Button>
-        </>
+        <Button asChild size="md" variant="primary">
+          <Link href="/jobs/new">+ New job</Link>
+        </Button>
       }
     >
       <div className="stack">
+        <section className="today-welcome">
+          <div className="min-w-0">
+            <p className="today-welcome__eyebrow">{business.business_name || "We Are Roofing"}</p>
+            <h2>{getGreeting(now)}</h2>
+            <p>
+              {priorityCount > 0
+                ? `${priorityCount} ${priorityCount === 1 ? "thing needs" : "things need"} your attention.`
+                : "Everything is up to date. You are ready for the day."}
+            </p>
+          </div>
+          <div className="today-quick-actions" aria-label="Quick actions">
+            <QuickAction href="/jobs/new" label="Add a new job" icon="+" />
+            <QuickAction href="/customers" label="Find a customer" icon="⌕" />
+            <QuickAction href="/comms" label="Open messages" icon="✉" />
+            <QuickAction href="/calendar" label="View calendar" icon="□" />
+          </div>
+        </section>
+
+        <div className="today-summary" aria-label="Today's summary">
+          <SummaryCard href="/jobs?filter=attention" label="Needs action" value={priorityCount} urgent={priorityCount > 0} />
+          <SummaryCard href="/calendar" label="Visits today" value={surveysToday.length} />
+          <SummaryCard href="/comms" label="Unread messages" value={unreadReplies.length} urgent={unreadReplies.length > 0} />
+          <SummaryCard href="/jobs" label="Open jobs" value={openJobs.length} />
+        </div>
+
         {!hasRateCard ? <RateCardNudge /> : null}
 
-        {upcomingTasks.length > 0 ? (
-          <PageSection
-            kicker="Tasks due"
-            title={`${upcomingTasks.length} ${upcomingTasks.length === 1 ? "task" : "tasks"} overdue or today`}
-            description="Complete or reschedule."
-            actions={
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={diaryRoute}>View Diary</Link>
+        <PageSection
+          kicker="Your next actions"
+          title={priorityCount > 0 ? "Start here" : "You are all caught up"}
+          description={priorityCount > 0 ? "Work through this list from the top." : "New customer replies and overdue work will appear here."}
+          actions={
+            priorityCount > 6 ? (
+              <Button asChild size="sm" variant="ghost">
+                <Link href="/jobs?filter=attention">See everything</Link>
               </Button>
-            }
-          >
-            <div className="grid gap-2">
-              {upcomingTasks.slice(0, 3).map((task) => (
-                <Link
-                  className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 p-3 text-sm transition-colors hover:border-[#f59e0b]"
-                  href={task.linked_job_id ? (`/jobs/${task.linked_job_id}` as Route) : diaryRoute}
-                  key={task.id}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-semibold text-[var(--text)]">{task.title || "Untitled task"}</span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{task.entry_type}</span>
-                  </div>
-                  {task.body ? <p className="mt-1 truncate text-xs text-[var(--text-muted)]">{task.body}</p> : null}
-                </Link>
-              ))}
-            </div>
-          </PageSection>
-        ) : null}
-
-        {unreadReplies.length > 0 ? (
-          <PageSection
-            kicker="Customer replies"
-            title={`${unreadReplies.length} unread ${unreadReplies.length === 1 ? "message" : "messages"}`}
-            description="Customers are waiting for a response."
-            actions={
-              <Button variant="primary" size="sm" asChild>
-                <Link href="/comms">Open Comms</Link>
-              </Button>
-            }
-          >
-            <div className="grid gap-2">
-              {unreadReplies.slice(0, 3).map((reply) => (
-                <Link
-                  className="rounded-lg border border-[#3b82f6]/40 bg-[#3b82f6]/10 p-3 text-sm transition-colors hover:border-[#3b82f6]"
-                  href={(reply.job_id ? `/jobs/${reply.job_id}` : "/comms") as Route}
-                  key={reply.conversation_id}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-semibold text-[var(--text)]">
-                      {reply.customer_name ?? reply.subject ?? "Customer"}
-                      {reply.job_ref ? <span className="ml-2 text-xs text-[var(--text-muted)]">{reply.job_ref}</span> : null}
-                    </span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{reply.channel}</span>
-                  </div>
-                  {reply.preview ? <p className="mt-1 truncate text-xs text-[var(--text-muted)]">{reply.preview}</p> : null}
-                </Link>
-              ))}
-            </div>
-          </PageSection>
-        ) : null}
-
-        {attentionJobs.length > 0 ? (
-          <PageSection
-            kicker="Needs Attention"
-            title={`${attentionJobs.length} ${attentionJobs.length === 1 ? "job needs" : "jobs need"} action`}
-            description="Overdue follow-ups, sent quotes going stale, surveys due today."
-            actions={
-              attentionJobs.length > 3 ? (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/jobs?filter=attention">See all</Link>
-                </Button>
-              ) : null
-            }
-          >
-            <div className="grid gap-2">
-              {attentionJobs.slice(0, 3).map((job) => (
-                <Link
-                  className="rounded-lg border border-[var(--stage-alert-border)] bg-[var(--stage-alert-bg)] p-3 text-sm transition-colors hover:border-[var(--stage-alert)]"
-                  href={`/jobs/${job.id}` as Route}
-                  key={job.id}
-                >
-                  <span className="font-semibold text-[var(--text)]">
-                    {job.job_ref ?? "WR-J-TBC"} · {job.customer?.full_name ?? job.job_title}
+            ) : null
+          }
+        >
+          {priorityCount > 0 ? (
+            <div className="priority-list">
+              {priorities.slice(0, 6).map((item) => (
+                <Link className="priority-row" href={item.href} key={item.id}>
+                  <span className={`priority-row__icon priority-row__icon--${item.kind}`} aria-hidden="true">
+                    {item.kind === "message" ? "✉" : item.kind === "task" ? "✓" : "!"}
                   </span>
-                  <span className="ml-2 text-[var(--stage-alert-text)]">{getAttentionReason(job)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="priority-row__title">{item.title}</span>
+                    <span className="priority-row__detail">{item.detail}</span>
+                  </span>
+                  <span className="priority-row__action">Open</span>
                 </Link>
               ))}
             </div>
-          </PageSection>
-        ) : null}
+          ) : (
+            <div className="today-empty">
+              <span aria-hidden="true">✓</span>
+              <p>No urgent actions right now.</p>
+            </div>
+          )}
+        </PageSection>
 
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <PageSection
-            kicker={surveysToday.length > 0 ? "Today" : "Coming Up"}
+            kicker={surveysToday.length > 0 ? "Today" : "Coming up"}
             title={
               surveysToday.length > 0
                 ? `${surveysToday.length} ${surveysToday.length === 1 ? "site visit" : "site visits"} today`
                 : nextSurvey
-                  ? "Next visit"
+                  ? "Your next visit"
                   : "No visits booked"
             }
             actions={
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/calendar">Calendar</Link>
+              <Button asChild size="sm" variant="ghost">
+                <Link href="/calendar">Open calendar</Link>
               </Button>
             }
           >
@@ -176,29 +175,22 @@ export default async function TodayPage() {
               <TodayJobsGrid jobs={surveysToday} />
             ) : nextSurvey ? (
               <div>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  {nextSurvey.customer?.full_name ?? nextSurvey.job_title}
-                </p>
+                <p className="text-sm font-semibold text-[var(--text)]">{nextSurvey.customer?.full_name ?? nextSurvey.job_title}</p>
                 <p className="mt-1 text-xs text-[var(--text-muted)]">{formatDate(nextSurvey.survey_date)}</p>
-                <Button variant="ghost" size="sm" asChild className="mt-3">
+                <Button asChild className="mt-3" size="sm" variant="ghost">
                   <Link href={`/jobs/${nextSurvey.id}` as Route}>Open job</Link>
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-[var(--text-muted)]">
-                No visit booked. Use the calendar to schedule site surveys.
-              </p>
+              <p className="text-sm text-[var(--text-muted)]">Use the calendar when you are ready to book a survey or site visit.</p>
             )}
           </PageSection>
 
-          <Card padding="md">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[0.62rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">Weather</p>
-                <p className="mt-1 text-xs text-[var(--text-muted)]">Plan surveys and site work.</p>
-              </div>
-            </div>
-            <div className="mt-3">
+          <Card padding="lg">
+            <p className="section-kicker">Weather</p>
+            <h2 className="mt-2 text-xl">Plan outdoor work</h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">Forecast for {business.weather_location ?? "Yateley"}.</p>
+            <div className="mt-4">
               <WeatherStrip location={business.weather_location ?? "Yateley"} />
             </div>
           </Card>
@@ -206,18 +198,16 @@ export default async function TodayPage() {
 
         {recentJobs.length > 0 ? (
           <PageSection
-            kicker="Recent Jobs"
-            title="Last updated"
+            kicker="Pick up where you left off"
+            title="Recently updated jobs"
             actions={
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/jobs">See all</Link>
+              <Button asChild size="sm" variant="ghost">
+                <Link href="/jobs">View all jobs</Link>
               </Button>
             }
           >
             <div className="grid gap-3">
-              {recentJobs.map((job) => (
-                <JobCard compact job={job} key={job.id} list />
-              ))}
+              {recentJobs.map((job) => <JobCard compact job={job} key={job.id} list />)}
             </div>
           </PageSection>
         ) : null}
@@ -226,17 +216,28 @@ export default async function TodayPage() {
   );
 }
 
+function SummaryCard({ href, label, value, urgent = false }: { href: Route; label: string; value: number; urgent?: boolean }) {
+  return (
+    <Link className={`summary-card ${urgent ? "summary-card--urgent" : ""}`} href={href}>
+      <span className="summary-card__value">{value}</span>
+      <span className="summary-card__label">{label}</span>
+      <span className="summary-card__arrow" aria-hidden="true">→</span>
+    </Link>
+  );
+}
+
+function QuickAction({ href, icon, label }: { href: Route; icon: string; label: string }) {
+  return (
+    <Link className="today-quick-action" href={href}>
+      <span aria-hidden="true">{icon}</span>
+      {label}
+    </Link>
+  );
+}
+
 function getGreeting(date: Date): string {
   const hour = date.getHours();
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
 }

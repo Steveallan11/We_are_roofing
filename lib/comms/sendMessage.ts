@@ -1,3 +1,4 @@
+import { EmailShell, EmailIntro, ContactPanel } from "@/lib/email/components";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { formatUkPhone, sendSMS } from "@/lib/sms/sendSMS";
@@ -40,7 +41,7 @@ export async function sendMessage({
       const result = await sendEmail({
         to: toEmail.trim(),
         subject: subject?.trim() || "Message from We Are Roofing",
-        html: htmlBody?.trim() || `<p>${escapeHtml(trimmedBody).replaceAll("\n", "<br />")}</p>`,
+        html: EmailShell("Your project", subject?.trim() || "A message from our team", (htmlBody?.trim() || EmailIntro(trimmedBody)) + ContactPanel()),
         text: trimmedBody,
         jobId: jobId ?? null,
         quoteId: quoteId ?? null,
@@ -95,13 +96,4 @@ export async function sendMessage({
   }
 
   return { status, providerId };
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }
