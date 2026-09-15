@@ -61,7 +61,7 @@ export async function buildJobCompletionPdf(bundle: JobBundle) {
   return Buffer.from(await pdf.save());
 }
 
-export async function buildWarrantyCertificatePdf(bundle: JobBundle) {
+export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: { warrantyYears?: number; completionDate?: Date }) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -69,17 +69,21 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle) {
   const page = pdf.addPage([595.276, 841.89]);
   const logo = await loadLogo(pdf);
   const invoice = latestInvoice(bundle.invoices);
-  const years = getGuaranteeYears(bundle.quote?.guarantee_text);
-  const completed = bundle.job.completed_at ? new Date(bundle.job.completed_at) : null;
-  const dateText = completed ? completed.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "To be confirmed";
+  const years = normaliseWarrantyYears(options?.warrantyYears ?? getGuaranteeYears(bundle.quote?.guarantee_text));
+  const completed = options?.completionDate ?? new Date();
+  const dateText = completed.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-  page.drawRectangle({ x: 12, y: 12, width: 571, height: 818, borderColor: GOLD, borderWidth: 1 });
+  page.drawRectangle({ x: 10, y: 10, width: 575, height: 822, borderColor: DARK, borderWidth: 2.4 });
+  page.drawRectangle({ x: 14, y: 14, width: 567, height: 814, borderColor: GOLD, borderWidth: 1 });
   page.drawRectangle({ x: 16, y: 736, width: 205, height: 90, color: DARK });
   page.drawText("ROOFING TODAY", { x: 28, y: 801, font: bold, size: 6.5, color: rgb(0.96, 0.86, 0.55) });
   page.drawText("FOR A STRONGER", { x: 28, y: 789, font: bold, size: 6.5, color: rgb(0.96, 0.86, 0.55) });
   page.drawText("TOMORROW", { x: 28, y: 777, font: bold, size: 6.5, color: rgb(0.96, 0.86, 0.55) });
   if (logo) page.drawImage(logo, { x: 218, y: 739, width: 160, height: 90 });
-  drawRight(page, completed ? "WORKMANSHIP WARRANTY" : "DRAFT - NOT FOR ISSUE", 566, 808, bold, 7, MUTED);
+  page.drawSvgPath("M 16 736 L 16 826 L 232 826 Z", { color: DARK });
+  page.drawSvgPath("M 120 736 L 228 826 L 250 826 L 139 736 Z", { color: GOLD, opacity: 0.75 });
+  page.drawSvgPath("M 144 736 L 245 826 L 256 826 L 155 736 Z", { color: rgb(0.96, 0.78, 0.32), opacity: 0.8 });
+  drawRight(page, "WORKMANSHIP WARRANTY", 566, 808, bold, 7, MUTED);
   drawRight(page, "QUALITY ROOFS", 566, 795, regular, 7, MUTED);
   drawRight(page, "STRONGER HOMES", 566, 783, regular, 7, MUTED);
   drawRight(page, "BRIGHTER TOMORROWS", 566, 771, regular, 7, MUTED);
@@ -100,6 +104,7 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle) {
   drawWrapped(page, "Any separate manufacturer cover depends on the installed products and the manufacturer's own terms. Product-specific cover should be verified against the invoice and product documentation.", 42, 324, 225, regular, 8, INK, 11, 8);
   page.drawText("COMPLETION DATE", { x: 28, y: 239, font: bold, size: 7, color: GOLD });
   page.drawText(dateText, { x: 28, y: 225, font: regular, size: 8.5, color: INK });
+  drawWarrantySeal(page, years, serif, bold);
 
   page.drawLine({ start: { x: 298, y: 475 }, end: { x: 298, y: 144 }, thickness: 0.5, color: rgb(0.82, 0.77, 0.62) });
   sectionTitle(page, "INSTALLED ROOFING SYSTEM", 312, 465, serif);
@@ -135,14 +140,16 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle) {
   page.drawText("FOR AND ON BEHALF OF", { x: 248, y: 116, font: regular, size: 6, color: MUTED });
   page.drawText("WE ARE ROOFING UK LTD", { x: 248, y: 104, font: bold, size: 7, color: INK });
   page.drawLine({ start: { x: 215, y: 72 }, end: { x: 393, y: 72 }, thickness: 0.7, color: GOLD });
+  page.drawSvgPath("M 224 77 C 245 105 260 70 278 94 C 294 116 312 70 329 91 C 345 109 360 78 378 89", { borderColor: INK, borderWidth: 1.2 });
   drawCentre(page, "AUTHORISED SIGNATORY", 304, 59, bold, 8, INK);
   page.drawRectangle({ x: 12, y: 12, width: 571, height: 35, color: DARK });
   drawCentre(page, "ROOFING TODAY FOR A STRONGER TOMORROW", 298, 27, regular, 6.5, rgb(0.96, 0.86, 0.55));
   return Buffer.from(await pdf.save());
 }
 
-export async function persistHandoverDocuments(supabase: AdminClient, bundle: JobBundle) {
-  const [completion, warranty] = await Promise.all([buildJobCompletionPdf(bundle), buildWarrantyCertificatePdf(bundle)]);
+export async function persistHandoverDocuments(supabase: AdminClient, bundle: JobBundle, options?: { warrantyYears?: number }) {
+  const createdAt = new Date();
+  const [completion, warranty] = await Promise.all([buildJobCompletionPdf(bundle), buildWarrantyCertificatePdf(bundle, { warrantyYears: options?.warrantyYears, completionDate: createdAt })]);
   const bucket = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   if (!bucket.ok) throw new Error(bucket.error);
   const timestamp = Date.now();
@@ -171,6 +178,16 @@ function latestInvoice(invoices: InvoiceRecord[]) {
 function getGuaranteeYears(value?: string | null) {
   const years = Number(value?.match(/\b(\d{1,2})\s*[- ]?years?\b/i)?.[1] ?? 15);
   return years > 0 && years <= 50 ? years : 15;
+}
+function normaliseWarrantyYears(value: number) { return [5, 10, 15, 20, 25].includes(value) ? value : 15; }
+function drawWarrantySeal(page: PDFPage, years: number, serif: PDFFont, bold: PDFFont) {
+  const x = 106; const y = 116;
+  page.drawCircle({ x, y, size: 47, color: DARK, borderColor: GOLD, borderWidth: 4 });
+  page.drawCircle({ x, y, size: 37, borderColor: rgb(0.95, 0.77, 0.3), borderWidth: 1.2 });
+  drawCentre(page, String(years), x, y + 2, serif, 27, rgb(0.95, 0.75, 0.25));
+  drawCentre(page, "YEARS", x, y - 15, bold, 7, WHITE);
+  drawCentre(page, "WORKMANSHIP", x, y + 31, bold, 5.5, rgb(0.95, 0.75, 0.25));
+  page.drawSvgPath(`M ${x - 38} ${y - 35} L ${x - 25} ${y - 61} L ${x} ${y - 45} L ${x + 25} ${y - 61} L ${x + 38} ${y - 35} Z`, { color: GOLD });
 }
 function getRoofingSystem(bundle: JobBundle) {
   return bundle.survey?.recommended_works?.split(/[.\n]/)[0]?.trim() || bundle.job.roof_type || bundle.job.job_title || "Completed roofing system";
