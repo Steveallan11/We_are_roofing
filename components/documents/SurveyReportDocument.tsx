@@ -1,6 +1,7 @@
 import { AddressBlock } from "@/components/documents/shared/AddressBlock";
 import { DocFooter } from "@/components/documents/shared/DocFooter";
 import { DocHeader } from "@/components/documents/shared/DocHeader";
+import { DocumentCallout, DocumentGuide, StructuredText } from "@/components/documents/shared/DocumentContent";
 import { DocumentBody, DocumentFrame, paragraphStyle } from "@/components/documents/shared/DocumentFrame";
 import { LineItemTable } from "@/components/documents/shared/LineItemTable";
 import { MetaStrip } from "@/components/documents/shared/MetaStrip";
@@ -37,8 +38,12 @@ export function SurveyReportDocument({ bundle }: { bundle: JobBundle }) {
           ]}
         />
         <AddressBlock label="Customer Contact" lines={[bundle.customer.full_name, bundle.customer.phone, bundle.customer.email, bundle.job.property_address]} />
+        <DocumentCallout eyebrow="Survey summary" title={bundle.job.job_title}>
+          This report records what we observed on site, the measurements taken and the work we recommend next.
+        </DocumentCallout>
+        <DocumentGuide items={["Property details", "Condition findings", "Measurements", "Recommended works", "Indicative budget"]} />
         <SectionHead>Introduction</SectionHead>
-        <p style={paragraphStyle}>{survey?.problem_observed || survey?.raw_notes || "Survey information has not been captured yet."}</p>
+        <StructuredText value={survey?.problem_observed || survey?.raw_notes} fallback="Survey information has not been captured yet." />
         <SectionHead>Condition Findings</SectionHead>
         <LineItemTable
           rows={findingRows.map((item) => ({
@@ -47,9 +52,9 @@ export function SurveyReportDocument({ bundle }: { bundle: JobBundle }) {
           }))}
         />
         <SectionHead>Measurements</SectionHead>
-        <p style={paragraphStyle}>{getSurveyMeasurementsSummary(survey)}</p>
+        <StructuredText value={getSurveyMeasurementsSummary(survey)} />
         <SectionHead>Recommended Works</SectionHead>
-        <p style={paragraphStyle}>{survey?.recommended_works || "Recommended works to be confirmed."}</p>
+        <StructuredText value={survey?.recommended_works} fallback="Recommended works to be confirmed." />
         {bundle.quote ? (
           <>
             <SectionHead>Indicative Budget</SectionHead>

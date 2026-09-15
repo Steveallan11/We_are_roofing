@@ -473,7 +473,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
         title="Raise & track invoices"
         description="Deposit up front, progress payments as the job moves, final balance on completion — or one full invoice. Record payments as they land."
       >
-        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] p-4">
+        <div className="mb-4 rounded-xl border-2 border-[var(--gold-border)] bg-[var(--gold-bg)] p-4">
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-end">
             <div>
               <p className="font-semibold text-[var(--text-primary)]">VAT treatment for this quote</p>
@@ -507,21 +507,25 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
         <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] p-4">
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-end">
             <div>
-              <p className="font-semibold text-[var(--text-primary)]">CIS deduction from labour</p>
-              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">CIS is deducted from the VAT-exclusive labour amount only. Materials and VAT remain outside the deduction.</p>
+              <p className="font-semibold text-[var(--text-primary)]">Will the customer deduct CIS from us?</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Choose 20% when the company paying this invoice will hold CIS back from our labour. Materials and VAT are never included in the deduction.</p>
             </div>
             <label>
-              <span className="label">CIS deduction rate</span>
+              <span className="label">Customer CIS deduction</span>
               <select className="field" disabled={liveInvoices.length > 0} onChange={(event) => setCisRate(Number(event.target.value))} value={cisRate}>
-                <option value={0}>No CIS deduction</option>
-                <option value={20}>20% — registered subcontractor</option>
-                <option value={30}>30% — unregistered subcontractor</option>
+                <option value={0}>No — customer pays the full amount</option>
+                <option value={20}>Yes — customer deducts 20% from labour</option>
+                <option value={30}>Yes — customer deducts 30% from labour</option>
               </select>
             </label>
           </div>
           {cisRate > 0 ? (
-            <div className="mt-3 rounded-lg border border-[var(--gold-border)] bg-[var(--gold-bg)] p-3 text-sm text-[var(--text-primary)]">
-              <p>Labour subject to CIS: <strong>{currency(quoteFinancials.labourNet)}</strong> · Estimated CIS withheld: <strong>{currency(quoteFinancials.labourNet * (cisRate / 100))}</strong> · Full-invoice amount due: <strong>{currency(estimateAmountDue(invoiceablePayableTotal))}</strong>.</p>
+            <div className="mt-3 rounded-lg border border-[var(--gold-border)] bg-[var(--surface)] p-3 text-sm text-[var(--text-primary)]">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div><span className="block text-xs text-[var(--text-muted)]">Labour CIS applies to</span><strong>{currency(quoteFinancials.labourNet)}</strong></div>
+                <div><span className="block text-xs text-[var(--text-muted)]">Customer holds back</span><strong className="text-[var(--gold)]">-{currency(quoteFinancials.labourNet * (cisRate / 100))}</strong></div>
+                <div><span className="block text-xs text-[var(--text-muted)]">Customer pays us</span><strong>{currency(estimateAmountDue(invoiceablePayableTotal))}</strong></div>
+              </div>
               {quoteFinancials.labourNet <= 0 ? <p className="mt-2 text-[#ffcf7d]">No labour split is recorded yet. Split the quote into materials and labour before raising a CIS invoice.</p> : null}
             </div>
           ) : null}

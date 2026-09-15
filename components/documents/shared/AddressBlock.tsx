@@ -8,7 +8,7 @@ type Props = {
 export function AddressBlock({ label, lines }: Props) {
   const visible = lines.filter(Boolean);
   return (
-    <div style={{ border: `1px solid ${DOC.lightRule}`, background: "#fffdf8", borderRadius: 14, padding: 16 }}>
+    <div style={{ border: `1px solid ${DOC.lightRule}`, background: "#faf8f1", minHeight: 118, padding: 16 }}>
       <div style={{ color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>
         {label}
       </div>

@@ -10,6 +10,7 @@ import { getDocumentFileHref, getQuotePdfHref } from "@/lib/documents";
 import { formatLineAmountForDisplay, getOptionTotal, getQuotePipelineValue, isQuoteFromOptionValue } from "@/lib/quotes/value";
 import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 function scoreHistoricalQuote(bundle: JobBundle, record: HistoricalQuoteRecord) {
   let score = 0;
@@ -88,7 +89,7 @@ export function buildQuoteDocumentHtml(bundle: JobBundle, quote: QuoteRecord) {
       (line) => `
         <tr>
           <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">
-            <strong>${escapeHtml(line.quote_section || line.item)}</strong>
+            <strong>${escapeHtml(customerFacingLabel(line.quote_section || line.item))}</strong>
             ${line.quote_section ? `<br/><span style="font-size:12px;color:#75663b;">${escapeHtml(line.item)}</span>` : ""}
           </td>
           <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;line-height:1.55;">
@@ -218,7 +219,7 @@ function renderOptionHtml(option: QuoteOption) {
 function renderCostLineRow(line: CostLineItem) {
   return `<tr>
     <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;">
-      <strong>${escapeHtml(line.quote_section || line.item)}</strong>
+      <strong>${escapeHtml(customerFacingLabel(line.quote_section || line.item))}</strong>
       ${line.quote_section ? `<br/><span style="font-size:12px;color:#75663b;">${escapeHtml(line.item)}</span>` : ""}
     </td>
     <td style="padding:12px;border-bottom:1px solid #d8c58a;color:#101010;line-height:1.55;">
@@ -229,83 +230,116 @@ function renderCostLineRow(line: CostLineItem) {
   </tr>`;
 }
 
-export function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
+export async function buildQuotePdfBuffer(bundle: JobBundle, quote: QuoteRecord) {
   const displayTotal = getQuotePipelineValue(quote) ?? 0;
-  const lines = [
-    bundle.business.business_name,
-    bundle.business.trading_address || "",
-    "",
-    `Quote Ref: ${quote.quote_ref}`,
-    `Customer: ${bundle.customer.full_name}`,
-    `Property: ${bundle.job.property_address}`,
-    "",
-    "Roof Report",
-    ...wrapText(quote.roof_report),
-    "",
-    "Scope of Works",
-    ...wrapText(quote.scope_of_works),
-    "",
-    "Cost Breakdown"
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const colours = { dark: rgb(0.07, 0.08, 0.09), gold: rgb(0.73, 0.55, 0.13), pale: rgb(0.98, 0.96, 0.89), rule: rgb(0.86, 0.82, 0.69), muted: rgb(0.38, 0.38, 0.36), white: rgb(1, 1, 1) };
+  const margin = 48;
+  let page = pdf.addPage([595, 842]);
+  let y = 790;
+
+  const addPage = () => {
+    page = pdf.addPage([595, 842]);
+    page.drawRectangle({ x: 0, y: 828, width: 595, height: 14, color: colours.gold });
+    page.drawText(bundle.business.business_name, { x: margin, y: 800, font: bold, size: 9, color: colours.dark });
+    page.drawText(quote.quote_ref, { x: 480, y: 800, font: bold, size: 9, color: colours.gold });
+    y = 770;
+  };
+  const ensure = (height: number) => { if (y - height < 58) addPage(); };
+  const text = (value: string, options: { size?: number; font?: PDFFont; color?: ReturnType<typeof rgb>; indent?: number; gap?: number } = {}) => {
+    const size = options.size ?? 10;
+    const font = options.font ?? regular;
+    const indent = options.indent ?? 0;
+    const maxWidth = 595 - margin * 2 - indent;
+    const lines = wrapPdfText(value || "To be confirmed.", font, size, maxWidth);
+    ensure(lines.length * (size + 4) + (options.gap ?? 6));
+    for (const line of lines) {
+      page.drawText(line, { x: margin + indent, y, font, size, color: options.color ?? colours.dark });
+      y -= size + 4;
+    }
+    y -= options.gap ?? 6;
+  };
+  const heading = (label: string) => {
+    ensure(42);
+    y -= 8;
+    page.drawRectangle({ x: margin, y: y - 4, width: 5, height: 22, color: colours.gold });
+    page.drawText(label.toUpperCase(), { x: margin + 14, y, font: bold, size: 15, color: colours.dark });
+    y -= 30;
+  };
+
+  page.drawRectangle({ x: 0, y: 828, width: 595, height: 14, color: colours.gold });
+  page.drawText(bundle.business.business_name.toUpperCase(), { x: margin, y, font: bold, size: 12, color: colours.dark });
+  y -= 72;
+  page.drawText("QUOTATION", { x: margin, y, font: bold, size: 34, color: colours.dark });
+  y -= 32;
+  text(bundle.job.job_title || "Proposed roofing works", { size: 17, font: bold, color: colours.gold, gap: 24 });
+  page.drawRectangle({ x: margin, y: y - 105, width: 499, height: 112, color: colours.pale, borderColor: colours.rule, borderWidth: 1 });
+  const coverRows = [
+    ["QUOTE REFERENCE", quote.quote_ref],
+    ["CUSTOMER", bundle.customer.full_name],
+    ["SITE ADDRESS", [bundle.job.property_address, bundle.job.postcode].filter(Boolean).join(", ")],
+    ["ISSUED", new Date(quote.created_at ?? new Date().toISOString()).toLocaleDateString("en-GB")]
   ];
+  let coverY = y - 20;
+  for (const [label, value] of coverRows) {
+    page.drawText(label, { x: margin + 16, y: coverY, font: bold, size: 8, color: colours.gold });
+    page.drawText(String(value || "—").slice(0, 72), { x: margin + 142, y: coverY, font: regular, size: 10, color: colours.dark });
+    coverY -= 25;
+  }
+  y -= 140;
+  heading("How to read this quote");
+  text("1  Roof condition and our recommendation     2  Scope of works     3  Options and pricing     4  Guarantee, exclusions and terms", { size: 10, gap: 18 });
+  text(`Prepared by ${bundle.business.business_name}. ${bundle.business.trading_address || ""}`, { size: 9, color: colours.muted });
 
-  for (const item of quote.cost_breakdown.filter((line) => Number(line.cost ?? 0) > 0)) {
-    lines.push(`${item.quote_section || item.item} - ${item.measurement_label ? `${item.measurement_label} - ` : ""}${formatLineAmountForDisplay(item)}`);
-    if (item.quote_section) {
-      lines.push(...wrapText(`  ${item.item}`));
+  addPage();
+  heading("Roof condition report");
+  text(quote.roof_report);
+  heading("Our recommendation");
+  text(bundle.survey?.recommended_works || quote.scope_of_works);
+  heading("Scope of works");
+  text(quote.scope_of_works);
+
+  const options = ((quote.options ?? []) as QuoteOption[]).filter((option) => Number(option.total ?? 0) > 0 || option.cost_breakdown?.length);
+  heading(options.length ? "Options and pricing" : "Price summary");
+  const pricedGroups = options.length ? options : [{ id: "quote", label: "Proposed works", description: "", recommended: true, cost_breakdown: quote.cost_breakdown, subtotal: quote.subtotal, vat_amount: quote.vat_amount, total: displayTotal }];
+  for (const option of pricedGroups) {
+    ensure(65);
+    page.drawRectangle({ x: margin, y: y - 4, width: 499, height: 25, color: option.recommended ? colours.pale : colours.white, borderColor: option.recommended ? colours.gold : colours.rule, borderWidth: 1 });
+    page.drawText(`${option.recommended ? "RECOMMENDED · " : ""}${option.label}`, { x: margin + 10, y: y + 4, font: bold, size: 12, color: option.recommended ? colours.gold : colours.dark });
+    y -= 34;
+    if (option.description) text(option.description, { size: 9 });
+    for (const item of (option.cost_breakdown ?? []).filter((line) => Number(line.cost ?? 0) > 0)) {
+      ensure(30);
+      const label = customerFacingLabel(item.quote_section || item.item);
+      page.drawText(label.slice(0, 58), { x: margin + 8, y, font: bold, size: 9, color: colours.dark });
+      page.drawText(formatLineAmountForDisplay(item), { x: 475, y, font: bold, size: 9, color: colours.gold });
+      y -= 13;
+      if (item.quote_section) text(item.item, { size: 8, color: colours.muted, indent: 8, gap: 2 });
+      page.drawLine({ start: { x: margin + 8, y }, end: { x: 547, y }, thickness: 0.5, color: colours.rule });
+      y -= 9;
     }
-    if (item.billed_separately) {
-      lines.push(...wrapText(`  ${item.billed_separately_note?.trim() || "Paid directly to the supplier — not included in this total."}`));
-    }
-    if (item.notes) {
-      lines.push(...wrapText(`  ${item.notes}`));
-    }
+    const optionTotal = "total" in option ? Number(option.total ?? 0) : displayTotal;
+    ensure(58);
+    text(`Subtotal  ${formatCurrency(Number(option.subtotal ?? 0))}     VAT  ${formatCurrency(Number(option.vat_amount ?? 0))}`, { size: 9, font: bold, gap: 2 });
+    text(`TOTAL  ${formatCurrency(optionTotal)}`, { size: 15, font: bold, color: colours.gold, gap: 18 });
   }
 
-  lines.push(
-    "",
-    `Subtotal: ${formatCurrency(quote.subtotal)}`,
-    `VAT: ${formatCurrency(quote.vat_amount)}`,
-    `${isQuoteFromOptionValue(quote) ? "From" : "Total"}: ${formatCurrency(displayTotal)}`,
-    "",
-    "Guarantee",
-    ...wrapText(quote.guarantee_text || ""),
-    "",
-    "Exclusions",
-    ...wrapText(quote.exclusions || ""),
-    "",
-    "Terms",
-    ...wrapText(quote.terms || "")
-  );
+  heading("Guarantee and acceptance");
+  text(quote.guarantee_text || "Guarantee details will be confirmed in the accepted quotation.");
+  ensure(74);
+  page.drawRectangle({ x: margin, y: y - 48, width: 499, height: 60, color: colours.dark });
+  page.drawText("READY TO PROCEED?", { x: margin + 16, y: y - 7, font: bold, size: 10, color: colours.gold });
+  page.drawText("Accept using the secure email link or reply confirming approval.", { x: margin + 16, y: y - 29, font: regular, size: 10, color: colours.white });
+  y -= 76;
+  if (quote.exclusions) { heading("Exclusions"); text(quote.exclusions); }
+  heading("Terms");
+  text(quote.terms || "Terms to be confirmed.");
 
-  const commands: string[] = ["BT", "/F1 11 Tf", "50 790 Td", "14 TL"];
-  for (const line of lines) {
-    commands.push(`(${escapePdf(line)}) Tj`, "T*");
-  }
-  commands.push("ET");
-  const stream = commands.join("\n");
-
-  const objects = [
-    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
-    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj",
-    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
-    `5 0 obj << /Length ${Buffer.byteLength(stream, "utf8")} >> stream\n${stream}\nendstream endobj`
-  ];
-
-  let pdf = "%PDF-1.4\n";
-  const offsets: number[] = [0];
-  for (const object of objects) {
-    offsets.push(Buffer.byteLength(pdf, "utf8"));
-    pdf += `${object}\n`;
-  }
-  const xrefPosition = Buffer.byteLength(pdf, "utf8");
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let index = 1; index <= objects.length; index += 1) {
-    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
-  }
-  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPosition}\n%%EOF`;
-
-  return Buffer.from(pdf, "utf8");
+  const pages = pdf.getPages();
+  pages.forEach((pdfPage, index) => drawQuoteFooter(pdfPage, bold, regular, bundle.business.business_name, quote.quote_ref, index + 1, pages.length));
+  return Buffer.from(await pdf.save());
 }
 
 export async function persistQuoteArtifacts(
@@ -318,7 +352,7 @@ export async function persistQuoteArtifacts(
   const htmlPath = `${basePath}/${quote.quote_ref.toLowerCase()}-${timestamp}.html`;
   const pdfPath = `${basePath}/${quote.quote_ref.toLowerCase()}-${timestamp}.pdf`;
   const html = buildQuoteDocumentHtml(bundle, quote);
-  const pdf = buildQuotePdfBuffer(bundle, quote);
+  const pdf = await buildQuotePdfBuffer(bundle, quote);
 
   let htmlStored = false;
   let pdfStored = false;
@@ -423,9 +457,14 @@ export async function persistQuoteArtifacts(
   return { htmlUrl, pdfUrl, html, pdf, bucketError, htmlError, pdfError };
 }
 
-function wrapText(text: string, maxLength = 92) {
-  if (!text) return [""];
-  const words = text.replace(/\s+/g, " ").trim().split(" ");
+function wrapPdfText(text: string, font: PDFFont, size: number, maxWidth: number) {
+  const safeText = text
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, "-")
+    .replace(/[•·]/g, "-")
+    .replace(/[^\x20-\x7E£]/g, " ");
+  const words = safeText.replace(/\s+/g, " ").trim().split(" ");
   const lines: string[] = [];
   let current = "";
   for (const word of words) {
@@ -433,7 +472,7 @@ function wrapText(text: string, maxLength = 92) {
       current = word;
       continue;
     }
-    if (`${current} ${word}`.length > maxLength) {
+    if (font.widthOfTextAtSize(`${current} ${word}`, size) > maxWidth) {
       lines.push(current);
       current = word;
       continue;
@@ -444,6 +483,23 @@ function wrapText(text: string, maxLength = 92) {
     lines.push(current);
   }
   return lines;
+}
+
+function customerFacingLabel(value: string) {
+  const labels: Record<string, string> = {
+    access: "Access and scaffolding",
+    labour: "Labour",
+    materials: "Materials",
+    roof_works: "Roofing works"
+  };
+  const key = value.trim().toLowerCase();
+  return labels[key] || value.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function drawQuoteFooter(page: PDFPage, bold: PDFFont, regular: PDFFont, businessName: string, quoteRef: string, pageNumber: number, pageCount: number) {
+  page.drawLine({ start: { x: 48, y: 39 }, end: { x: 547, y: 39 }, thickness: 0.6, color: rgb(0.86, 0.82, 0.69) });
+  page.drawText(businessName.slice(0, 54), { x: 48, y: 23, font: bold, size: 7, color: rgb(0.38, 0.38, 0.36) });
+  page.drawText(`${quoteRef}  |  Page ${pageNumber} of ${pageCount}`, { x: 447, y: 23, font: regular, size: 7, color: rgb(0.38, 0.38, 0.36) });
 }
 
 function renderReadableHtml(value: string) {
@@ -491,21 +547,6 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
-}
-
-function escapePdf(value: string) {
-  return Array.from(value)
-    .map((char) => {
-      if (char === "\\") return "\\\\";
-      if (char === "(") return "\\(";
-      if (char === ")") return "\\)";
-      if (char === "£") return "\\243";
-      if (char === "‘" || char === "’") return "'";
-      if (char === "“" || char === "”") return '"';
-      if (char === "–" || char === "—" || char === "•" || char === "·") return "-";
-      return char.charCodeAt(0) > 255 ? "-" : char;
-    })
-    .join("");
 }
 
 function formatCurrency(value: number) {

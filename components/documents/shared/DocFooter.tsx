@@ -3,9 +3,9 @@ import type { Business } from "@/lib/types";
 
 export function DocFooter({ business }: { business: Business }) {
   return (
-    <footer style={{ background: DOC.dark, color: "#d8d1bd", padding: "22px 38px", display: "flex", justifyContent: "space-between", gap: 24, fontFamily: DOC.fontSans, fontSize: 11 }}>
+    <footer style={{ alignItems: "center", background: DOC.white, borderTop: `1px solid ${DOC.lightRule}`, color: DOC.muted, padding: "18px 42px", display: "flex", justifyContent: "space-between", gap: 20, fontFamily: DOC.fontSans, fontSize: 10 }}>
       <span>{business.trading_address}</span>
-      <span>{business.phone} · {business.email}</span>
+      <span>{business.phone} | {business.email}</span>
       <span>{business.website}</span>
     </footer>
   );

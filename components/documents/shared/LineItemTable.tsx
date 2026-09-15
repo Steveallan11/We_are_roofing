@@ -11,7 +11,7 @@ export type DocumentLineItem = {
 export function LineItemTable({ rows, totals }: { rows: DocumentLineItem[]; totals?: Array<{ label: string; value: string; strong?: boolean }> }) {
   return (
     <>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12, fontFamily: DOC.fontSans }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", border: `1px solid ${DOC.lightRule}`, marginTop: 12, fontFamily: DOC.fontSans }}>
         <thead>
           <tr style={{ background: DOC.dark }}>
             <th style={th}>Description</th>
@@ -32,7 +32,7 @@ export function LineItemTable({ rows, totals }: { rows: DocumentLineItem[]; tota
         </tbody>
       </table>
       {totals?.length ? (
-        <div style={{ width: "min(340px, 100%)", marginLeft: "auto", marginTop: 18, fontFamily: DOC.fontSans }}>
+        <div style={{ background: "#faf8f1", border: `1px solid ${DOC.lightRule}`, width: "min(360px, 100%)", marginLeft: "auto", marginTop: 16, padding: "6px 16px", fontFamily: DOC.fontSans }}>
           {totals.map((total) => (
             <div key={total.label} style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "8px 0", borderBottom: `1px solid ${DOC.lightRule}`, color: total.strong ? DOC.gold : DOC.body, fontWeight: total.strong ? 800 : 600, fontSize: total.strong ? 18 : 13 }}>
               <span>{total.label}</span>
