@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: Props) {
     email_customer_name?: string;
     due_date?: string;
     test?: boolean;
+    attachment_document_ids?: string[];
   };
   const isTestSend = body.test === true;
 
@@ -79,6 +80,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const artifacts = await persistInvoiceArtifacts(supabase, bundle, invoice);
+  const extraAttachments = await loadJobDocumentAttachments(supabase, bundle.job.id, body.attachment_document_ids ?? []);
   const appUrl = getAppUrl();
   const rawInvoiceUrl = toAbsoluteUrl(artifacts.pdfUrl ?? getInvoicePdfHref(invoiceId), appUrl);
   const invoiceUrl = appendInvoiceFileToken(rawInvoiceUrl, invoiceId);
@@ -108,6 +110,7 @@ export async function POST(request: Request, { params }: Props) {
         businessEmail: bundle.business.email
       }),
       text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Payment is due by ${dueDate}. Open it here: ${invoiceUrl}`,
+      attachments: extraAttachments,
       jobId: bundle.job.id,
       templateType: isTestSend ? "invoice_test" : "invoice_sent",
       log: !isTestSend
@@ -150,6 +153,21 @@ export async function POST(request: Request, { params }: Props) {
     pdf_url: artifacts.pdfUrl,
     message: `Invoice email accepted by ${emailResult.provider === "gmail" ? "Gmail" : "Resend"} and saved.`
   });
+}
+
+async function loadJobDocumentAttachments(supabase: ReturnType<typeof createSupabaseAdminClient>, jobId: string, documentIds: string[]) {
+  const uniqueIds = [...new Set(documentIds)].slice(0, 5);
+  if (!uniqueIds.length) return [];
+  const { data, error } = await supabase.from("job_documents").select("id,display_name,storage_bucket,storage_path,mime_type").eq("job_id", jobId).in("id", uniqueIds);
+  if (error) throw new Error(error.message);
+  const attachments: Array<{ filename: string; content: string; contentType?: string }> = [];
+  for (const document of data ?? []) {
+    if (!document.storage_bucket || !document.storage_path) continue;
+    const download = await supabase.storage.from(document.storage_bucket).download(document.storage_path);
+    if (download.error || !download.data) throw new Error(download.error?.message ?? `Could not attach ${document.display_name}.`);
+    attachments.push({ filename: document.display_name, content: Buffer.from(await download.data.arrayBuffer()).toString("base64"), contentType: document.mime_type || "application/pdf" });
+  }
+  return attachments;
 }
 
 function getAppUrl() {

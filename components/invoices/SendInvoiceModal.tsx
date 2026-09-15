@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { currency } from "@/lib/utils";
+import type { JobDocumentRecord } from "@/lib/types";
 
 type Props = {
   invoiceId: string;
@@ -13,15 +14,17 @@ type Props = {
   customerEmail: string | null | undefined;
   onClose: () => void;
   onSent: (message: string) => void;
+  documents?: JobDocumentRecord[];
 };
 
-export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDate, customerName, customerEmail, onClose, onSent }: Props) {
+export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDate, customerName, customerEmail, onClose, onSent, documents = [] }: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
   const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
   const [paymentDueDate, setPaymentDueDate] = useState(dueDate);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingMode, setSendingMode] = useState<"test" | "customer" | null>(null);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(() => documents.map((document) => document.id));
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -55,6 +58,7 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDa
         email_customer_name: emailGreetingName.trim(),
         due_date: paymentDueDate,
         test: mode === "test"
+        ,attachment_document_ids: selectedDocumentIds
       })
     });
 
@@ -166,6 +170,23 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDa
             <li>- Send test email lets you check it first without marking the invoice as sent</li>
             <li>- Send to customer updates the invoice status to Sent in the job file</li>
           </ul>
+          {documents.length > 0 ? (
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <p className="label">Attach job handover PDFs</p>
+              <div className="mt-2 space-y-2">
+                {documents.map((document) => (
+                  <label className="flex items-center gap-3 text-sm text-[var(--text)]" key={document.id}>
+                    <input
+                      checked={selectedDocumentIds.includes(document.id)}
+                      onChange={(event) => setSelectedDocumentIds((current) => event.target.checked ? [...current, document.id] : current.filter((id) => id !== document.id))}
+                      type="checkbox"
+                    />
+                    <span>{document.display_name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {error ? <p className="mt-4 text-sm text-[#ff9a91]">{error}</p> : null}

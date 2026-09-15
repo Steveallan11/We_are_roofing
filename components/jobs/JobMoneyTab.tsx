@@ -23,6 +23,7 @@ type Props = {
   variations: JobVariationRecord[];
   expenses: JobExpense[];
   materials: MaterialRecord[];
+  documents: JobDocumentRecord[];
   customerName: string;
   customerEmail: string | null | undefined;
 };
@@ -96,7 +97,7 @@ function formatReceiptFileSize(size: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations, expenses: initialExpenses, materials, customerName, customerEmail }: Props) {
+export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations, expenses: initialExpenses, materials, documents, customerName, customerEmail }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [expenses, setExpenses] = useState<JobExpense[]>(initialExpenses);
@@ -840,6 +841,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
             startTransition(() => router.refresh());
           }}
           total={Number(sendInvoice.balance_due ?? sendInvoice.total ?? 0)}
+          documents={documents.filter((document) => ["job_completion_pdf", "workmanship_warranty_pdf"].includes(document.document_type))}
         />
       ) : null}
 

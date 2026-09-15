@@ -7,6 +7,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
 import { CustomerContactEditor } from "@/components/customers/customer-contact-editor";
 import { JobDocumentsSection } from "@/components/documents/JobDocumentsSection";
+import { GenerateHandoverDocumentsButton } from "@/components/documents/GenerateHandoverDocumentsButton";
 import { DocumentUploadButton } from "@/components/forms/document-upload";
 import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { AcceptQuoteButton } from "@/components/jobs/AcceptQuoteButton";
@@ -185,6 +186,7 @@ export function JobDetailView(props: JobDetailViewProps) {
               variations={variations}
               expenses={expenses ?? []}
               materials={materials}
+              documents={documents}
               customerName={customer.full_name}
               customerEmail={customer.email}
             />
@@ -679,7 +681,7 @@ function DocumentsTab({
         kicker="Files and paperwork"
         title={`${documents.length} ${documents.length === 1 ? "file" : "files"} on job`}
         description="Quotes, invoices, reports, photos and uploaded paperwork in one place."
-        actions={<DocumentUploadButton jobId={job.id} />}
+        actions={<div className="flex flex-wrap gap-2"><GenerateHandoverDocumentsButton jobId={job.id} /><DocumentUploadButton jobId={job.id} /></div>}
       >
         <div className="grid gap-3 sm:grid-cols-3">
           <Stat label="All files" value={String(documents.length)} hint="Everything filed" />
