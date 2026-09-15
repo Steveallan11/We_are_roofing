@@ -141,6 +141,7 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
           <div class="meta-card"><div class="meta-label">Property</div><div>${escapeHtml(bundle.job.property_address)}</div></div>
           <div class="meta-card"><div class="meta-label">Due Date</div><div>${formatDate(invoice.due_date)}</div></div>
         </div>
+        ${isReverseCharge || Number(invoice.cis_deduction_amount ?? 0) > 0 ? `<div style="background:#101417;border-left:6px solid #d4af37;color:#fff;margin:18px 0;padding:16px 18px;"><div style="color:#d4af37;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;">Invoice tax treatment</div>${isReverseCharge ? `<strong style="display:block;margin-bottom:5px;">DOMESTIC REVERSE CHARGE — CUSTOMER ACCOUNTS FOR VAT</strong>` : ""}${Number(invoice.cis_deduction_amount ?? 0) > 0 ? `<strong style="display:block;">CIS: CUSTOMER DEDUCTS ${formatCurrency(Number(invoice.cis_deduction_amount ?? 0))} FROM OUR LABOUR</strong>` : ""}</div>` : ""}
         ${introHtml}
         <table>
           <thead>
@@ -183,6 +184,9 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
 
   y = drawInvoiceMeta(page, bundle, invoice, y);
   y -= 18;
+  if (invoice.vat_treatment === "domestic_reverse_charge" || Number(invoice.cis_deduction_amount ?? 0) > 0) {
+    y = drawInvoiceTaxBanner(page, invoice, y);
+  }
 
   const introTitle = isDeposit ? "Booking Deposit" : isVariation ? "Approved Additional Work" : "Works Completed";
   const introBody = isDeposit
@@ -363,6 +367,24 @@ function drawInvoiceMeta(page: PdfPage, bundle: JobBundle, invoice: InvoiceRecor
   drawMetaCard(page, 46, y - 64, cardW, cardH, "Property", bundle.job.property_address);
   drawMetaCard(page, 305, y - 64, cardW, cardH, "Job", bundle.job.job_ref || bundle.job.job_title);
   return y - 132;
+}
+
+function drawInvoiceTaxBanner(page: PdfPage, invoice: InvoiceRecord, y: number) {
+  const reverseCharge = invoice.vat_treatment === "domestic_reverse_charge";
+  const cisDeduction = Number(invoice.cis_deduction_amount ?? 0);
+  const height = reverseCharge && cisDeduction > 0 ? 67 : 51;
+  rect(page, 46, y - height, 503, height, PDF.black);
+  rect(page, 46, y - height, 6, height, PDF.gold);
+  text(page, "INVOICE TAX TREATMENT", 64, y - 18, { size: 8, font: "bold", colour: PDF.gold, tracking: 1.2 });
+  let lineY = y - 37;
+  if (reverseCharge) {
+    text(page, "DOMESTIC REVERSE CHARGE - CUSTOMER ACCOUNTS FOR VAT", 64, lineY, { size: 9.5, font: "bold", colour: PDF.white });
+    lineY -= 16;
+  }
+  if (cisDeduction > 0) {
+    text(page, `CIS: CUSTOMER DEDUCTS ${formatCurrency(cisDeduction)} FROM OUR LABOUR`, 64, lineY, { size: 9.5, font: "bold", colour: PDF.white });
+  }
+  return y - height - 18;
 }
 
 function drawMetaCard(page: PdfPage, x: number, y: number, w: number, h: number, label: string, value: string) {

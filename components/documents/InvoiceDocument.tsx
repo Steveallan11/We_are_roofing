@@ -11,6 +11,8 @@ import type { InvoiceRecord, JobBundle } from "@/lib/types";
 
 export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoice: InvoiceRecord }) {
   const isDeposit = invoice.invoice_type === "deposit";
+  const isReverseCharge = invoice.vat_treatment === "domestic_reverse_charge";
+  const cisDeduction = Number(invoice.cis_deduction_amount ?? 0);
   return (
     <DocumentFrame>
       <DocHeader title="Invoice" reference={invoice.invoice_ref} subtitle={bundle.business.trading_address} meta={`Due ${formatDate(invoice.due_date)}`} />
@@ -23,6 +25,13 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
             { label: "Status", value: invoice.status }
           ]}
         />
+        {isReverseCharge || cisDeduction > 0 ? (
+          <div style={{ background: DOC.dark, borderLeft: `6px solid ${DOC.gold}`, color: DOC.white, margin: "18px 0", padding: "16px 18px" }}>
+            <p style={{ color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", margin: "0 0 8px", textTransform: "uppercase" }}>Invoice tax treatment</p>
+            {isReverseCharge ? <p style={{ fontFamily: DOC.fontSans, fontSize: 14, fontWeight: 800, margin: "0 0 5px" }}>DOMESTIC REVERSE CHARGE — CUSTOMER ACCOUNTS FOR VAT</p> : null}
+            {cisDeduction > 0 ? <p style={{ fontFamily: DOC.fontSans, fontSize: 14, fontWeight: 800, margin: 0 }}>CIS: CUSTOMER DEDUCTS {currency(cisDeduction)} FROM OUR LABOUR</p> : null}
+          </div>
+        ) : null}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <AddressBlock label="Customer" lines={[bundle.customer.full_name, bundle.job.property_address, bundle.job.postcode]} />
           <AddressBlock label="Bank Details" lines={[bundle.business.bank_account_name, bundle.business.bank_name, bundle.business.bank_sort_code ? `Sort Code: ${bundle.business.bank_sort_code}` : null, bundle.business.bank_account ? `Account: ${bundle.business.bank_account}` : null]} />
@@ -52,7 +61,10 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
           }))}
           totals={[
             { label: "Subtotal", value: currency(invoice.subtotal) },
-            { label: "VAT", value: currency(invoice.vat_amount) },
+            { label: isReverseCharge ? "VAT payable to us" : "VAT", value: currency(invoice.vat_amount) },
+            ...(isReverseCharge
+              ? [{ label: "Reverse charge VAT — customer accounts to HMRC", value: currency(Number(invoice.reverse_charge_vat_amount ?? 0)) }]
+              : []),
             { label: "Invoice Total", value: currency(invoice.total), strong: true },
             ...(Number(invoice.cis_deduction_amount ?? 0) > 0
               ? [
@@ -69,6 +81,14 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
             <p style={{ ...paragraphStyle, fontWeight: 700 }}>Construction Industry Scheme (CIS)</p>
             <p style={{ ...paragraphStyle, marginTop: 6 }}>
               CIS is calculated at {Number(invoice.cis_deduction_rate ?? 0)}% on the VAT-exclusive labour amount of {currency(Number(invoice.cis_labour_amount ?? 0))}. Materials and VAT are excluded. CIS withheld: {currency(Number(invoice.cis_deduction_amount ?? 0))}.
+            </p>
+          </div>
+        ) : null}
+        {isReverseCharge ? (
+          <div style={{ marginTop: 22, borderLeft: `4px solid ${DOC.gold}`, background: "#f2eddf", borderRadius: 12, padding: 16 }}>
+            <p style={{ ...paragraphStyle, fontWeight: 700 }}>Domestic Reverse Charge</p>
+            <p style={{ ...paragraphStyle, marginTop: 6 }}>
+              Reverse charge: VAT Act 1994 Section 55A applies. The customer must account to HMRC for VAT of {currency(Number(invoice.reverse_charge_vat_amount ?? 0))}; this VAT is not payable to us. Customer VAT number: {invoice.customer_vat_number || "Not supplied"}.
             </p>
           </div>
         ) : null}
