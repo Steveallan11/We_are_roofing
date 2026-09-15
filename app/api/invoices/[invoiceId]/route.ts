@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { calculateCisDeduction, persistInvoiceArtifacts, round2 } from "@/lib/invoice-engine";
+import { getJobBundle } from "@/lib/data";
+import { getQuoteLineItemCategory } from "@/lib/quotes/value";
 import type { ActivityType } from "@/lib/activity/types";
-import type { InvoiceStatus } from "@/lib/types";
+import type { InvoiceLineItem, InvoiceRecord, InvoiceStatus, InvoiceVatTreatment } from "@/lib/types";
 import { updateVariationInvoiceStatus } from "@/lib/variations/invoicing";
 import { canPersistToSupabase } from "@/lib/workflows";
 
@@ -20,9 +23,14 @@ export async function PATCH(request: Request, { params }: Props) {
     amount_paid?: number;
     payment_method?: string;
     payment_reference?: string;
+    vat_treatment?: InvoiceVatTreatment;
+    customer_vat_number?: string;
+    reverse_charge_confirmed?: boolean;
+    cis_deduction_rate?: number;
   };
 
-  if (!body.status || !allowedStatuses.includes(body.status)) {
+  const isTaxTreatmentUpdate = body.vat_treatment != null || body.cis_deduction_rate != null;
+  if (!isTaxTreatmentUpdate && (!body.status || !allowedStatuses.includes(body.status))) {
     return NextResponse.json({ ok: false, error: "Valid invoice status is required." }, { status: 400 });
   }
 
@@ -39,13 +47,72 @@ export async function PATCH(request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Invoice not found." }, { status: 404 });
   }
 
+  if (isTaxTreatmentUpdate) {
+    if (invoice.status !== "Draft") {
+      return NextResponse.json({ ok: false, error: "Tax treatment can only be edited while the invoice is still a draft." }, { status: 400 });
+    }
+    if (Number(invoice.amount_paid ?? 0) > 0) {
+      return NextResponse.json({ ok: false, error: "Remove recorded payments before editing the invoice tax treatment." }, { status: 400 });
+    }
+    const vatTreatment: InvoiceVatTreatment = body.vat_treatment === "domestic_reverse_charge" ? "domestic_reverse_charge" : "standard";
+    const cisRate = Number(body.cis_deduction_rate ?? 0);
+    if (![0, 20, 30].includes(cisRate)) {
+      return NextResponse.json({ ok: false, error: "CIS deduction rate must be 0%, 20% or 30%." }, { status: 400 });
+    }
+    const customerVatNumber = body.customer_vat_number?.trim().toUpperCase() || null;
+    if (vatTreatment === "domestic_reverse_charge" && (!body.reverse_charge_confirmed || !customerVatNumber)) {
+      return NextResponse.json({ ok: false, error: "Enter the customer's VAT number and confirm the reverse-charge conditions." }, { status: 400 });
+    }
+
+    const bundle = await getJobBundle(String(invoice.job_id));
+    if (!bundle) return NextResponse.json({ ok: false, error: "Related job could not be loaded." }, { status: 404 });
+    const sourceLines = Array.isArray(invoice.line_items) ? (invoice.line_items as InvoiceLineItem[]) : [];
+    const lineItems = sourceLines.map((line) => {
+      if (line.category || !bundle.quote) return line;
+      const description = line.description.toLowerCase();
+      const quoteLine = bundle.quote.cost_breakdown.find((candidate) => description.includes(candidate.item.toLowerCase()));
+      return quoteLine ? { ...line, category: getQuoteLineItemCategory(quoteLine) } : line;
+    });
+    const cis = calculateCisDeduction(lineItems, cisRate);
+    if (cisRate > 0 && cis.labourAmount <= 0) {
+      return NextResponse.json({ ok: false, error: "No labour amount was found on this invoice. Split the quote into materials and labour first." }, { status: 400 });
+    }
+    const subtotal = round2(lineItems.reduce((sum, line) => sum + Number(line.total ?? 0), 0));
+    const calculatedVat = round2(lineItems.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.total ?? 0) * (Number(bundle.business.vat_rate ?? 0) / 100), 0));
+    const vatAmount = vatTreatment === "standard" ? calculatedVat : 0;
+    const reverseChargeVatAmount = vatTreatment === "domestic_reverse_charge" ? calculatedVat : 0;
+    const total = round2(subtotal + vatAmount);
+    const balanceDue = round2(Math.max(0, total - cis.deductionAmount));
+    const taxUpdate = await supabase.from("invoices").update({
+      line_items: lineItems,
+      subtotal,
+      vat_amount: vatAmount,
+      vat_treatment: vatTreatment,
+      reverse_charge_vat_amount: reverseChargeVatAmount,
+      customer_vat_number: vatTreatment === "domestic_reverse_charge" ? customerVatNumber : null,
+      reverse_charge_confirmed_at: vatTreatment === "domestic_reverse_charge" ? new Date().toISOString() : null,
+      cis_deduction_rate: cis.rate,
+      cis_labour_amount: cis.labourAmount,
+      cis_deduction_amount: cis.deductionAmount,
+      total,
+      balance_due: balanceDue,
+      updated_at: new Date().toISOString()
+    }).eq("id", invoiceId).select("*").single();
+    if (taxUpdate.error || !taxUpdate.data) {
+      return NextResponse.json({ ok: false, error: taxUpdate.error?.message ?? "Unable to update invoice tax treatment." }, { status: 500 });
+    }
+    const updatedInvoice = taxUpdate.data as InvoiceRecord;
+    const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [updatedInvoice, ...bundle.invoices.filter((item) => item.id !== invoiceId)] }, updatedInvoice);
+    return NextResponse.json({ ok: true, message: artifacts.pdfUrl ? "Invoice updated and PDF regenerated." : "Invoice updated. PDF filing needs attention.", invoice: updatedInvoice, warning: artifacts.error || null });
+  }
+
   const invoiceTotal = Number(invoice.total ?? 0);
   const payableTotal = Math.max(0, invoiceTotal - Number(invoice.cis_deduction_amount ?? 0));
   const paidAmount =
     body.status === "Paid" ? Math.min(payableTotal, Number(body.amount_paid ?? payableTotal)) : Number(invoice.amount_paid ?? 0);
   const balanceDue = Math.max(0, payableTotal - paidAmount);
   const payload = {
-    status: body.status,
+    status: body.status!,
     amount_paid: paidAmount,
     balance_due: balanceDue,
     sent_at: body.status === "Sent" ? new Date().toISOString() : invoice.sent_at,

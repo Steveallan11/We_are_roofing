@@ -111,6 +111,11 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
   const [interimDescription, setInterimDescription] = useState("");
   const [sendInvoice, setSendInvoice] = useState<InvoiceRecord | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceRecord | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
+  const [editVatTreatment, setEditVatTreatment] = useState<InvoiceVatTreatment>("standard");
+  const [editCustomerVatNumber, setEditCustomerVatNumber] = useState("");
+  const [editReverseChargeConfirmed, setEditReverseChargeConfirmed] = useState(false);
+  const [editCisRate, setEditCisRate] = useState(0);
   const [vatTreatment, setVatTreatment] = useState<InvoiceVatTreatment>(() => invoices.find((invoice) => invoice.status !== "Void")?.vat_treatment ?? "standard");
   const [customerVatNumber, setCustomerVatNumber] = useState(() => invoices.find((invoice) => invoice.status !== "Void")?.customer_vat_number ?? "");
   const [reverseChargeConfirmed, setReverseChargeConfirmed] = useState(() => Boolean(invoices.find((invoice) => invoice.status !== "Void")?.reverse_charge_confirmed_at));
@@ -383,6 +388,43 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
       return;
     }
     notify(result.message || "Job completed.", null);
+    startTransition(() => router.refresh());
+  }
+
+  function startEditingInvoice(invoice: InvoiceRecord) {
+    setEditingInvoice(invoice);
+    setEditVatTreatment(invoice.vat_treatment ?? "standard");
+    setEditCustomerVatNumber(invoice.customer_vat_number ?? "");
+    setEditReverseChargeConfirmed(Boolean(invoice.reverse_charge_confirmed_at));
+    setEditCisRate(Number(invoice.cis_deduction_rate ?? 0));
+    notify(null, null);
+  }
+
+  async function saveInvoiceTaxTreatment() {
+    if (!editingInvoice) return;
+    if (editVatTreatment === "domestic_reverse_charge" && (!editCustomerVatNumber.trim() || !editReverseChargeConfirmed)) {
+      notify(null, "Enter the customer's VAT number and confirm the reverse-charge conditions.");
+      return;
+    }
+    setBusy(`edit-${editingInvoice.id}`);
+    const response = await fetch(`/api/invoices/${editingInvoice.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vat_treatment: editVatTreatment,
+        customer_vat_number: editCustomerVatNumber,
+        reverse_charge_confirmed: editReverseChargeConfirmed,
+        cis_deduction_rate: editCisRate
+      })
+    });
+    const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
+    setBusy(null);
+    if (!response.ok || !result?.ok) {
+      notify(null, result?.error || "Invoice tax treatment could not be updated.");
+      return;
+    }
+    setEditingInvoice(null);
+    notify([result.message, result.warning].filter(Boolean).join(" "), null);
     startTransition(() => router.refresh());
   }
 
@@ -698,6 +740,11 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
                     {busy === invoice.id ? "..." : "Regenerate PDF"}
                   </Button>
                 ) : null}
+                {invoice.status === "Draft" ? (
+                  <Button variant="secondary" size="sm" onClick={() => startEditingInvoice(invoice)} disabled={busy !== null}>
+                    Edit invoice
+                  </Button>
+                ) : null}
                 {invoice.status !== "Paid" && invoice.status !== "Void" ? (
                   <>
                     <Button variant="secondary" size="sm" onClick={() => setSendInvoice(invoice)} disabled={busy !== null}>
@@ -717,6 +764,52 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
                   </Button>
                 ) : null}
               </div>
+              {editingInvoice?.id === invoice.id ? (
+                <div className="mt-4 rounded-xl border-2 border-[var(--gold-border)] bg-[var(--gold-bg)] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[var(--text-primary)]">Edit invoice before sending</p>
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">Change reverse charge or remove CIS. Totals and the filed PDF will be recalculated automatically.</p>
+                    </div>
+                    <button className="text-sm text-[var(--text-muted)]" onClick={() => setEditingInvoice(null)} type="button">Close</button>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <label>
+                      <span className="label">VAT treatment</span>
+                      <select className="field" onChange={(event) => setEditVatTreatment(event.target.value as InvoiceVatTreatment)} value={editVatTreatment}>
+                        <option value="standard">Standard VAT — customer pays VAT to us</option>
+                        <option value="domestic_reverse_charge">Domestic reverse charge — customer accounts for VAT</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span className="label">CIS deducted by customer</span>
+                      <select className="field" onChange={(event) => setEditCisRate(Number(event.target.value))} value={editCisRate}>
+                        <option value={0}>No CIS deduction</option>
+                        <option value={20}>20% from labour</option>
+                        <option value={30}>30% from labour</option>
+                      </select>
+                    </label>
+                  </div>
+                  {editVatTreatment === "domestic_reverse_charge" ? (
+                    <div className="mt-4 rounded-lg border border-[var(--gold-border)] bg-[var(--surface)] p-3">
+                      <label className="block max-w-sm">
+                        <span className="label">Customer VAT number</span>
+                        <input className="field" onChange={(event) => setEditCustomerVatNumber(event.target.value)} placeholder="GB123456789" value={editCustomerVatNumber} />
+                      </label>
+                      <label className="mt-3 flex items-start gap-3 text-sm leading-6">
+                        <input checked={editReverseChargeConfirmed} onChange={(event) => setEditReverseChargeConfirmed(event.target.checked)} type="checkbox" />
+                        <span>I have confirmed this work qualifies for domestic reverse charge and the customer has not declared end-user status.</span>
+                      </label>
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button variant="primary" size="sm" onClick={saveInvoiceTaxTreatment} disabled={busy !== null}>
+                      {busy === `edit-${invoice.id}` ? "Saving..." : "Save changes & regenerate PDF"}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEditingInvoice(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -746,7 +839,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
             notify(nextMessage, null);
             startTransition(() => router.refresh());
           }}
-          total={Number(sendInvoice.total ?? 0)}
+          total={Number(sendInvoice.balance_due ?? sendInvoice.total ?? 0)}
         />
       ) : null}
 
@@ -1446,8 +1539,8 @@ function ExpensesSection({
             >
               Cancel
             </Button>
-          </div>
-        </div>
+              </div>
+            </div>
       ) : null}
 
       <div className="mt-4 space-y-2">
