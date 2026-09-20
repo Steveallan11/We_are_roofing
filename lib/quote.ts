@@ -8,6 +8,7 @@ import type {
   PricingRuleRecord
 } from "@/lib/types";
 import { cleanCustomerEmailBody } from "@/lib/quotes/email";
+import { applySurveyConfidenceToQuote } from "@/lib/quotes/surveyConfidence";
 import { getComparableHistoricalQuotes } from "@/lib/quote-engine";
 import { calculateOptionNet, calculateOptionVat, normaliseQuoteCostLine } from "@/lib/quotes/value";
 
@@ -274,7 +275,7 @@ function buildFallbackQuote(bundle: JobBundle): GeneratedQuote & { model_name: s
   const vatAmount = Math.round(subtotal * (bundle.business.vat_rate / 100) * 100) / 100;
   const total = subtotal + vatAmount;
 
-  return {
+  const base: GeneratedQuote = {
     roof_report:
       "Having been out to look at the roof of the above property we offer you the following information with costs for your perusal. The survey points to weathered roofing elements and the need for a practical long-term remedy rather than a short patch repair.",
     scope_of_works:
@@ -298,7 +299,13 @@ function buildFallbackQuote(bundle: JobBundle): GeneratedQuote & { model_name: s
     missing_info: bundle.photos.length === 0 ? ["No site photos uploaded yet"] : [],
     pricing_notes: ["Fallback quote generated because OPENAI_API_KEY is not configured in this environment."],
     confidence: bundle.photos.length === 0 ? "Low" : "Medium",
-    materials: buildFallbackMaterials(bundle),
+    materials: buildFallbackMaterials(bundle)
+  };
+
+  const withSurveyConfidence = applySurveyConfidenceToQuote(base, bundle.survey);
+
+  return {
+    ...withSurveyConfidence,
     model_name: "fallback-template",
     prompt_version: PROMPT_VERSION
   };
@@ -312,14 +319,20 @@ function normalizeQuote(
   const subtotal = calculateOptionNet({ cost_breakdown: costBreakdown });
   const vatAmount = calculateOptionVat({ cost_breakdown: costBreakdown }, bundle.business.vat_rate / 100);
 
-  return {
+  const normalised: GeneratedQuote = {
     ...quote,
     customer_email_body: cleanCustomerEmailBody(quote.customer_email_body),
     cost_breakdown: costBreakdown,
     subtotal,
     vat_amount: vatAmount,
     total: subtotal + vatAmount,
-    materials: quote.materials.length > 0 ? quote.materials : buildFallbackMaterials(bundle),
+    materials: quote.materials.length > 0 ? quote.materials : buildFallbackMaterials(bundle)
+  };
+
+  const withSurveyConfidence = applySurveyConfidenceToQuote(normalised, bundle.survey);
+
+  return {
+    ...withSurveyConfidence,
     model_name: "gpt-4.1",
     prompt_version: PROMPT_VERSION
   };
