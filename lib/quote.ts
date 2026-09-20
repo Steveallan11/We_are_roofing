@@ -1,1 +1,337 @@
-PLACEHOLDER_QUOTE
+import OpenAI from "openai";
+import type {
+  GeneratedQuote,
+  HistoricalQuoteRecord,
+  JobBundle,
+  KnowledgeBaseRecord,
+  MaterialLineItem,
+  PricingRuleRecord
+} from "@/lib/types";
+import { cleanCustomerEmailBody } from "@/lib/quotes/email";
+import { getComparableHistoricalQuotes } from "@/lib/quote-engine";
+import { calculateOptionNet, calculateOptionVat, normaliseQuoteCostLine } from "@/lib/quotes/value";
+import { applySurveyConfidenceToQuote } from "@/lib/survey/surveyConfidenceForQuote";
+
+const PROMPT_VERSION = "weareroofing-v1";
+const STYLE_CATEGORIES = new Set(["Roof Report Style", "Scope Of Works", "Quote Template", "Email Style", "Historical Quote"]);
+
+function buildFallbackMaterials(bundle: JobBundle): MaterialLineItem[] {
+  const roofType = bundle.job.roof_type ?? "Other";
+  if (roofType === "Flat") {
+    return [
+      {
+        item_name: "Danosa Option 3 system",
+        category: "Flat Roof",
+        quantity: 20,
+        unit: "m2",
+        required_status: "Definitely Needed",
+        notes: "Allow for torch-on underlay and cap sheet"
+      },
+      {
+        item_name: "18mm OSB deck allowance",
+        category: "Decking",
+        quantity: 4,
+        unit: "sheets",
+        required_status: "May Be Needed",
+        notes: "Only if soft decking confirmed on strip"
+      }
+    ];
+  }
+
+  return [
+    {
+      item_name: "Roofing sundries",
+      category: "General",
+      quantity: 1,
+      unit: "lot",
+      required_status: "Check On Site",
+      notes: "Finalise after approval"
+    }
+  ];
+}
+
+function getRelevantKnowledgeBase(bundle: JobBundle, knowledgeBase: KnowledgeBaseRecord[], limit = 16) {
+  const jobTerms = [
+    bundle.job.roof_type,
+    bundle.job.job_type,
+    bundle.job.job_title,
+    bundle.survey?.survey_type,
+    bundle.survey?.roof_type,
+    bundle.survey?.problem_observed,
+    bundle.survey?.recommended_works
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 2);
+  const uniqueJobTerms = Array.from(new Set(jobTerms));
+
+  return knowledgeBase
+    .map((record) => {
+      const haystack = [record.title, record.category, record.content, ...(record.tags ?? [])].join(" ").toLowerCase();
+      let score = 0;
+      if (STYLE_CATEGORIES.has(record.category)) score += 4;
+      if ((record.tags ?? []).some((tag) => ["andrew-style", "quote-wording", "roof-report-style"].includes(tag.toLowerCase()))) score += 8;
+      for (const term of uniqueJobTerms) {
+        if (haystack.includes(term)) score += 1;
+      }
+      if (bundle.job.roof_type && haystack.includes(bundle.job.roof_type.toLowerCase())) score += 3;
+      if (bundle.job.job_type && haystack.includes(bundle.job.job_type.toLowerCase())) score += 2;
+      return { record, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit)
+    .map((item) => item.record);
+}
+
+export async function generateQuoteFromBundle(
+  bundle: JobBundle,
+  knowledgeBase: KnowledgeBaseRecord[],
+  historicalQuotes: HistoricalQuoteRecord[] = [],
+  pricingRules: PricingRuleRecord[] = []
+): Promise<GeneratedQuote & { model_name: string; prompt_version: string }> {
+  if (!process.env.OPENAI_API_KEY) {
+    return buildFallbackQuote(bundle);
+  }
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const comparables = getComparableHistoricalQuotes(bundle, historicalQuotes, pricingRules);
+  const relevantKnowledge = getRelevantKnowledgeBase(bundle, knowledgeBase);
+  const knowledge = relevantKnowledge
+    .map((record) => `${record.category}: ${record.title}\n${record.content}`)
+    .join("\n\n");
+  const comparableQuoteContext = comparables
+    .map(
+      (record) =>
+        `Title: ${record.title}
+Year: ${record.source_year ?? "Unknown"}
+Roof Type: ${record.roof_type ?? "Unknown"}
+Job Type: ${record.job_type ?? "Unknown"}
+Original Total: ${record.original_total ?? "Unknown"}
+Uplifted Total: ${record.uplifted_reference_total ?? "Unknown"}
+Tags: ${(record.tags ?? []).join(", ")}
+Imported Text:
+${record.imported_text}`
+    )
+    .join("\n\n---\n\n");
+  const pricingRuleContext = pricingRules
+    .map(
+      (rule) =>
+        `${rule.title}: years ${rule.year_from ?? "any"}-${rule.year_to ?? "any"}, roof ${rule.roof_type ?? "any"}, job ${
+          rule.job_type ?? "any"
+        }, multiplier ${rule.uplift_multiplier}. ${rule.notes ?? ""}`
+    )
+    .join("\n");
+
+  const analyzedDocuments = bundle.documents.filter((doc) => doc.analysis_status === "completed" && doc.analysis_data);
+  const documentAnalysisContext =
+    analyzedDocuments.length > 0
+      ? analyzedDocuments
+          .map(
+            (doc) => `
+Document: ${doc.display_name}
+Type: ${(doc.analysis_data as any)?.document_type_inferred ?? "Unknown"}
+Summary: ${(doc.analysis_data as any)?.summary ?? "No summary available"}
+Key Observations:
+${(doc.analysis_data as any)?.key_observations?.map((obs: string) => `- ${obs}`).join("\n") ?? "- No observations"}
+Recommended Actions:
+${(doc.analysis_data as any)?.recommended_actions?.map((action: string) => `- ${action}`).join("\n") ?? "- No actions"}
+Confidence: ${(doc.analysis_data as any)?.confidence_level ?? "Unknown"}
+`
+          )
+          .join("\n---\n")
+      : "No analyzed documents available.";
+
+  const prompt = `
+You are the We Are Roofing Expert Quote Builder.
+Use the survey and knowledge base below to produce a professional quote in Andrew's We Are Roofing style, wording, and tone.
+The quote should sound like Andrew: practical, direct, customer-facing, diagnostic, and written as a real roofer explaining what he has seen and what he recommends.
+Prioritise knowledge entries tagged andrew-style, quote-wording, and roof-report-style for phrasing and structure.
+Use the historical quotes as style and comparable-price anchors only. Do not blindly copy old totals; instead apply the uplifted totals and current survey facts.
+Never copy an old customer's address, name, or job-specific details into the new quote. Reuse style and structure, not irrelevant facts.
+In the customer email, mention only work and roof features explicitly included in this quote's priced scope. Do not mention chimneys, dormers, skylights, or other features unless they are specifically being worked on.
+Return JSON only.
+
+Business:
+${JSON.stringify(bundle.business, null, 2)}
+
+Customer:
+${JSON.stringify(bundle.customer, null, 2)}
+
+Job:
+${JSON.stringify(bundle.job, null, 2)}
+
+Survey:
+${JSON.stringify(bundle.survey, null, 2)}
+
+Photo metadata:
+${JSON.stringify(bundle.photos, null, 2)}
+
+Technical Documents Analysis:
+${documentAnalysisContext}
+
+Knowledge base:
+${knowledge || "No relevant knowledge base entries available."}
+
+Historical quote comparables:
+${comparableQuoteContext || "No historical quote comparables available."}
+
+Pricing rules:
+${pricingRuleContext || "No pricing rules configured."}
+`;
+
+  const response = await client.responses.create({
+    model: "gpt-4.1",
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "generated_quote",
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            roof_report: { type: "string" },
+            scope_of_works: { type: "string" },
+            cost_breakdown: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  item: { type: "string" },
+                  cost: { type: "number" },
+                  vat_applicable: { type: "boolean" },
+                  notes: { type: "string" }
+                },
+                required: ["item", "cost", "vat_applicable", "notes"]
+              }
+            },
+            subtotal: { type: "number" },
+            vat_amount: { type: "number" },
+            total: { type: "number" },
+            guarantee_text: { type: "string" },
+            exclusions: { type: "string" },
+            terms: { type: "string" },
+            customer_email_subject: { type: "string" },
+            customer_email_body: { type: "string" },
+            missing_info: { type: "array", items: { type: "string" } },
+            pricing_notes: { type: "array", items: { type: "string" } },
+            confidence: { type: "string", enum: ["Low", "Medium", "High"] },
+            materials: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  item_name: { type: "string" },
+                  category: { type: "string" },
+                  quantity: { type: "number" },
+                  unit: { type: "string" },
+                  required_status: {
+                    type: "string",
+                    enum: ["Definitely Needed", "May Be Needed", "Optional", "Check On Site"]
+                  },
+                  notes: { type: "string" },
+                  supplier: { type: ["string", "null"] },
+                  estimated_price: { type: ["number", "null"] },
+                  link: { type: ["string", "null"] }
+                },
+                required: ["item_name", "category", "quantity", "unit", "required_status", "notes", "supplier", "estimated_price", "link"]
+              }
+            }
+          },
+          required: [
+            "roof_report",
+            "scope_of_works",
+            "cost_breakdown",
+            "subtotal",
+            "vat_amount",
+            "total",
+            "guarantee_text",
+            "exclusions",
+            "terms",
+            "customer_email_subject",
+            "customer_email_body",
+            "missing_info",
+            "pricing_notes",
+            "confidence",
+            "materials"
+          ]
+        }
+      }
+    }
+  });
+
+  const raw = response.output_text;
+  const parsed = JSON.parse(raw) as GeneratedQuote;
+  return normalizeQuote(parsed, bundle);
+}
+
+function buildFallbackQuote(bundle: JobBundle): GeneratedQuote & { model_name: string; prompt_version: string } {
+  const subtotal = bundle.job.estimated_value ?? 3200;
+  const vatAmount = Math.round(subtotal * (bundle.business.vat_rate / 100) * 100) / 100;
+  const total = subtotal + vatAmount;
+
+  const base: GeneratedQuote = {
+    roof_report:
+      "Having been out to look at the roof of the above property we offer you the following information with costs for your perusal. The survey points to weathered roofing elements and the need for a practical long-term remedy rather than a short patch repair.",
+    scope_of_works:
+      "Based on all of the above we propose the following works: provide safe access, strip back the affected area, renew the failed roofing detail with suitable materials, check the surrounding substrate, and leave the roof watertight and tidy.",
+    cost_breakdown: [
+      {
+        item: "Main works",
+        cost: subtotal,
+        vat_applicable: true,
+        notes: "Final scope to be confirmed on approval"
+      }
+    ],
+    subtotal,
+    vat_amount: vatAmount,
+    total,
+    guarantee_text: "Guarantee wording to be confirmed once the final system is agreed.",
+    exclusions: "Any hidden defects uncovered once opened up are excluded until confirmed on site.",
+    terms: bundle.business.payment_terms,
+    customer_email_subject: `Your quotation from ${bundle.business.business_name}`,
+    customer_email_body: "Please find our draft quotation attached for review. If you have any questions, please let us know.",
+    missing_info: bundle.photos.length === 0 ? ["No site photos uploaded yet"] : [],
+    pricing_notes: ["Fallback quote generated because OPENAI_API_KEY is not configured in this environment."],
+    confidence: bundle.photos.length === 0 ? "Low" : "Medium",
+    materials: buildFallbackMaterials(bundle)
+  };
+
+  return {
+    ...applySurveyConfidenceToQuote(base, bundle.survey),
+    model_name: "fallback-template",
+    prompt_version: PROMPT_VERSION
+  };
+}
+
+function normalizeQuote(
+  quote: GeneratedQuote,
+  bundle: JobBundle
+): GeneratedQuote & { model_name: string; prompt_version: string } {
+  const costBreakdown = quote.cost_breakdown.map(normaliseQuoteCostLine);
+  const subtotal = calculateOptionNet({ cost_breakdown: costBreakdown });
+  const vatAmount = calculateOptionVat({ cost_breakdown: costBreakdown }, bundle.business.vat_rate / 100);
+
+  const normalized: GeneratedQuote & { model_name: string; prompt_version: string } = {
+    ...quote,
+    customer_email_body: cleanCustomerEmailBody(quote.customer_email_body),
+    cost_breakdown: costBreakdown,
+    subtotal,
+    vat_amount: vatAmount,
+    total: subtotal + vatAmount,
+    materials: quote.materials.length > 0 ? quote.materials : buildFallbackMaterials(bundle),
+    model_name: "gpt-4.1",
+    prompt_version: PROMPT_VERSION
+  };
+
+  return {
+    ...applySurveyConfidenceToQuote(normalized, bundle.survey),
+    model_name: normalized.model_name,
+    prompt_version: normalized.prompt_version
+  };
+}
