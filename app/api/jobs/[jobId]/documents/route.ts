@@ -20,6 +20,26 @@ const DIRECT_UPLOAD_DOCUMENT_TYPES = new Set([
   "quote_attachment"
 ]);
 
+export async function GET(_request: Request, { params }: Props) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+  const { jobId } = await params;
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("job_documents")
+    .select("id,job_id,quote_id,invoice_id,document_type,display_name,source_type,mime_type,file_size,storage_bucket,storage_path,content_html,created_at")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  return NextResponse.json({
+    ok: true,
+    documents: (data ?? []).map((document) => ({
+      ...document,
+      attachable: Boolean((document.storage_bucket && document.storage_path) || document.content_html)
+    }))
+  });
+}
+
 export async function POST(request: Request, { params }: Props) {
   const { jobId } = await params;
 

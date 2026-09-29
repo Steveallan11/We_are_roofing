@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { JobStatusMenu } from "@/components/jobs/JobStatusMenu";
 import { getInvoicePdfHref, getJobDocumentHref, getQuotePdfHref } from "@/lib/documents";
 import { getContextDateLabel, getNextAction, getSecondaryAction, needsAttention } from "@/lib/jobs/nextAction";
 import { getStatusColor } from "@/lib/jobs/statusColors";
@@ -18,9 +19,10 @@ type Props = {
   };
   compact?: boolean;
   list?: boolean;
+  onStatusChange?: (jobId: string, status: Job["status"]) => void;
 };
 
-export function JobCard({ job, compact = false, list = false }: Props) {
+export function JobCard({ job, compact = false, list = false, onStatusChange }: Props) {
   const primaryAction = getNextAction(job);
   const secondaryAction = getSecondaryAction(job);
   const attention = needsAttention(job);
@@ -37,14 +39,51 @@ export function JobCard({ job, compact = false, list = false }: Props) {
   const pipelineValue = getJobPipelineValue(job);
   const valueLabel = pipelineValue ? `${isFromOptionValue(job) ? "From " : ""}${currency(pipelineValue)}` : "TBC";
 
+  if (list) {
+    return (
+      <article className="card overflow-hidden border-l-4 p-4" style={{ borderLeftColor: attention ? "var(--emergency)" : statusColor.dot }}>
+        <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(150px,.7fr)_minmax(120px,.55fr)_auto]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={job.status} />
+              {attention ? <span className="text-xs font-semibold text-[var(--emergency-text)]">Needs attention</span> : null}
+            </div>
+            <Link className="mt-2 block truncate text-lg font-semibold text-[var(--text-primary)] hover:text-[var(--gold-l)]" href={`/jobs/${job.id}` as Route}>
+              {job.job_title}
+            </Link>
+            <p className="mt-1 truncate text-sm text-[var(--muted)]">{job.job_ref ?? "WR-J-TBC"} · {job.customer?.full_name ?? "Customer missing"} · {job.property_address || town}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--dim)]">Next step</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{primaryAction.label}</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">{getContextDateLabel(job)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--dim)]">Value</p>
+            <p className="mt-1 font-display text-2xl text-[var(--gold-l)]">{valueLabel}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <ActionLink className="button-primary min-h-11 !rounded-xl !px-4 !py-2 text-sm" href={`/jobs/${job.id}`}>
+              Open job
+            </ActionLink>
+            {onStatusChange ? (
+              <JobStatusMenu compact jobId={job.id} status={job.status} onUpdated={(status) => onStatusChange(job.id, status)} />
+            ) : (
+              <JobStatusMenu compact jobId={job.id} status={job.status} />
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
       className="card relative overflow-hidden border-l-4 transition hover:-translate-y-0.5"
       style={{ borderLeftColor: attention ? "var(--emergency)" : statusColor.dot }}
     >
-      <Link aria-label={`Open job file for ${job.job_title}`} className="absolute inset-0 z-0" href={`/jobs/${job.id}` as Route} />
       <div className={compact ? "p-3" : "p-4"}>
-        <div className="relative z-10 flex items-start gap-3 pointer-events-none">
+        <div className="relative z-10 flex items-start gap-3">
           <div
             className={`relative flex shrink-0 items-center justify-center border border-[var(--border)] bg-[var(--surface-deep)] font-bold text-[var(--gold-l)] ${
               compact ? "h-9 w-9 rounded-xl text-xs" : "h-12 w-12 rounded-2xl text-sm"
@@ -61,7 +100,9 @@ export function JobCard({ job, compact = false, list = false }: Props) {
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className={`${compact ? "text-sm" : "text-lg"} line-clamp-2 font-semibold text-[var(--text-primary)]`}>{job.job_title}</h3>
+                <h3 className={`${compact ? "text-sm" : "text-lg"} line-clamp-2 font-semibold text-[var(--text-primary)]`}>
+                  <Link className="hover:text-[var(--gold-l)]" href={`/jobs/${job.id}` as Route}>{job.job_title}</Link>
+                </h3>
                 <p className="mt-1 truncate text-xs text-[var(--muted)]">
                   {job.job_ref ?? "WR-J-TBC"} | {job.customer?.full_name ?? "Customer missing"} | {town}
                 </p>
@@ -76,7 +117,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
           {attention ? <span className="mt-1 h-3 w-3 rounded-full bg-[color:var(--emergency)] shadow-[0_0_18px_rgba(239,68,68,0.75)]" /> : null}
         </div>
 
-        <div className={`${compact ? "mt-3" : "mt-4"} pointer-events-none relative z-10 grid gap-2 text-sm text-[var(--muted)]`}>
+        <div className={`${compact ? "mt-3" : "mt-4"} relative z-10 grid gap-2 text-sm text-[var(--muted)]`}>
           <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-deep)] px-3 py-2">
             <span>
               {roofLabel(job.roof_type)} {job.roof_type ? "" : "TBC"}
@@ -89,7 +130,7 @@ export function JobCard({ job, compact = false, list = false }: Props) {
           ) : null}
         </div>
 
-        <div className={`${compact ? "mt-3" : "mt-4"} relative z-20 flex items-center gap-3`}>
+        <div className={`${compact ? "mt-3" : "mt-4"} relative z-20 flex flex-wrap items-center gap-2`}>
           <ActionLink className="button-primary min-h-11 flex-1 !rounded-xl !px-3 !py-2 text-sm" href={primaryAction.href}>
             {primaryAction.label}
           </ActionLink>
@@ -98,6 +139,11 @@ export function JobCard({ job, compact = false, list = false }: Props) {
               {secondaryAction.label}
             </ActionLink>
           ) : null}
+          {onStatusChange ? (
+            <JobStatusMenu compact jobId={job.id} status={job.status} onUpdated={(status) => onStatusChange(job.id, status)} />
+          ) : (
+            <JobStatusMenu compact jobId={job.id} status={job.status} />
+          )}
         </div>
       </div>
 

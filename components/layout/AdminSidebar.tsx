@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { NewActionMenu } from "@/components/layout/NewActionMenu";
 
 function NavIcon({ path, size = 16, color = "currentColor" }: { path: string; size?: number; color?: string }) {
   return (
@@ -64,28 +65,28 @@ const NAV: NavGroup[] = [
         icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
       },
       {
-        id: "comms",
-        label: "Messages",
-        href: "/comms",
-        icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
-        badgeColor: "#ef4444"
-      }
-    ]
-  },
-  {
-    section: "Planning and setup",
-    items: [
-      {
         id: "calendar",
         label: "Calendar",
         href: "/calendar",
         icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
       },
       {
-        id: "insights",
-        label: "Reports",
-        href: "/insights",
-        icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+        id: "documents",
+        label: "Documents",
+        href: "/documents",
+        icon: "M7 3h7l5 5v13H7z M14 3v6h5 M10 13h6 M10 17h6"
+      }
+    ]
+  },
+  {
+    section: "More",
+    items: [
+      {
+        id: "comms",
+        label: "Messages",
+        href: "/comms",
+        icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
+        badgeColor: "#ef4444"
       },
       {
         id: "settings",
@@ -99,6 +100,7 @@ const NAV: NavGroup[] = [
           { label: "Suppliers", href: "/settings/suppliers" },
           { label: "Quote templates", href: "/settings/templates" },
           { label: "Follow-up messages", href: "/settings/nurture" },
+          { label: "Customer literature", href: "/settings/literature" },
           { label: "AI knowledge", href: "/knowledge" }
         ]
       }
@@ -121,10 +123,18 @@ export function AdminSidebar() {
     let active = true;
 
     async function loadUnreadCount() {
-      const response = await fetch("/api/comms/conversations?summary=1", { cache: "no-store" });
-      const result = (await response.json().catch(() => null)) as { unreadCount?: number } | null;
-      if (active) {
-        setUnreadCount(Number(result?.unreadCount ?? 0));
+      try {
+        const response = await fetch("/api/comms/conversations?summary=1", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(8_000)
+        });
+        const result = (await response.json().catch(() => null)) as { unreadCount?: number } | null;
+        if (active && response.ok) {
+          setUnreadCount(Number(result?.unreadCount ?? 0));
+        }
+      } catch {
+        // Keep the last known count. Navigation must never hang because the
+        // communications summary is temporarily unavailable.
       }
     }
 
@@ -203,6 +213,8 @@ export function AdminSidebar() {
           <NavIcon path={collapsed ? "M13 5l7 7-7 7M5 5l7 7-7 7" : "M11 19l-7-7 7-7M19 19l-7-7 7-7"} size={14} />
         </button>
       </div>
+
+      <NewActionMenu collapsed={collapsed} />
 
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "8px 0" }}>
         {NAV.map((group, groupIndex) => (

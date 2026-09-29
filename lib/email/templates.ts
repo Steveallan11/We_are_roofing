@@ -9,14 +9,16 @@ const intro = (p: Customer, fallback: string) => greeting(p.customerName, p.cust
 const dateLabel = (v?: string | null) => v && Number.isFinite(Date.parse(v)) ? new Date(v).toLocaleDateString("en-GB", {day:"numeric",month:"long",year:"numeric"}) : undefined;
 export function quoteSentEmail(p: QuoteProps): string {
   if (p.revised) return revisedQuoteEmail(p);
-  const multiple = (p.quote.options?.length ?? 0) > 1;
+  const pricingMode = p.quote.customer_pricing_mode ?? ((p.quote.options?.length ?? 0) > 1 ? "options" : "single");
+  const multiple = pricingMode === "options";
+  const selectable = pricingMode === "selectable_items";
   const custom = p.messageBody?.trim() && p.messageBody.trim() !== DEFAULT_QUOTE_EMAIL_MESSAGE ? p.messageBody : null;
   return EmailShell("Your roofing proposal","Your quotation is ready",
     greeting(p.customerName,p.customerGreeting) + EmailIntro(custom || `Thank you for the opportunity to provide our proposal${p.propertyAddress ? " for the roofing works at " + p.propertyAddress : ""}.\n\nYour detailed quotation is ready to review, with the proposed works and pricing together in one place.`) +
     ProjectSummaryCard([["Project",p.jobTitle],["Location",p.propertyAddress],["Quote reference",p.quote.quote_ref],["Status","Ready to review"]]) +
-    EmailSection("Your proposal includes",Checklist([p.quote.roof_report ? "Detailed roof report" : "",p.quote.scope_of_works ? "Recommended works and full scope" : "",multiple ? "Pricing and available options" : "Project pricing",p.quote.guarantee_text ? "Guarantee and project information" : ""])) +
-    PrimaryCTA("VIEW YOUR QUOTATION",p.quoteUrl,multiple ? "Review the full proposal, select your preferred option and accept securely online." : "Review the full quotation and accept securely online.") +
-    EmailSection("What happens next?",NumberedSteps(["Review your quotation","Contact us with any questions",...(multiple ? ["Select your preferred option"] : []),"Accept the quotation online","We contact you about programme, access and pre-start arrangements"])) + ContactPanel(p),p);
+    EmailSection("Your proposal includes",Checklist([p.quote.roof_report ? "Detailed roof report" : "",p.quote.scope_of_works ? "Recommended works and full scope" : "",multiple ? "Option A/B pricing" : selectable ? "Individually selectable work items and a live total" : "One complete project price",p.quote.guarantee_text ? "Guarantee and project information" : ""])) +
+    PrimaryCTA("VIEW YOUR QUOTATION",p.quoteUrl,multiple ? "Review the full proposal, select your preferred option and accept securely online." : selectable ? "Review the work items, choose what you want to proceed with and see the total update online." : "Review the complete quotation and accept securely online.") +
+    EmailSection("What happens next?",NumberedSteps(["Review your quotation","Contact us with any questions",...(multiple ? ["Select your preferred option"] : selectable ? ["Choose the work items you want to proceed with"] : []),"Accept the quotation online","We contact you about programme, access and pre-start arrangements"])) + ContactPanel(p),p);
 }
 export function revisedQuoteEmail(p: QuoteProps) {
   return EmailShell("Updated quotation","Your revised proposal is ready",intro({...p,messageBody:p.messageBody === DEFAULT_QUOTE_EMAIL_MESSAGE ? null : p.messageBody},`We have updated your quotation${p.propertyAddress ? " for " + p.propertyAddress : ""}. Please review the revised proposal before proceeding.`) +

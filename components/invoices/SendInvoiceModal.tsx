@@ -20,6 +20,10 @@ type Props = {
 export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDate, customerName, customerEmail, onClose, onSent, documents = [] }: Props) {
   const [email, setEmail] = useState(customerEmail ?? "");
   const [emailGreetingName, setEmailGreetingName] = useState(customerName || "Customer");
+  const [emailSubject, setEmailSubject] = useState(`Invoice ${invoiceRef} from We Are Roofing UK Ltd`);
+  const [emailBody, setEmailBody] = useState(
+    `Please find your invoice for ${jobTitle}. The invoice and payment details are provided below.\n\nIf you have any questions, please reply to this email.`
+  );
   const [paymentDueDate, setPaymentDueDate] = useState(dueDate);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -45,6 +49,14 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDa
       setError("Choose the date payment is due.");
       return;
     }
+    if (!emailSubject.trim()) {
+      setError("Add an email subject before sending this invoice.");
+      return;
+    }
+    if (!emailBody.trim()) {
+      setError("Add an email message before sending this invoice.");
+      return;
+    }
 
     setSendingMode(mode);
     setError(null);
@@ -56,9 +68,11 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDa
       body: JSON.stringify({
         to_email: nextEmail,
         email_customer_name: emailGreetingName.trim(),
+        email_subject: emailSubject.trim(),
+        email_body: emailBody.trim(),
         due_date: paymentDueDate,
-        test: mode === "test"
-        ,attachment_document_ids: selectedDocumentIds
+        test: mode === "test",
+        attachment_document_ids: selectedDocumentIds
       })
     });
 
@@ -159,6 +173,36 @@ export function SendInvoiceModal({ invoiceId, invoiceRef, jobTitle, total, dueDa
           />
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
             This controls the opening line, for example Hi Brian & Clare or Hi Mr & Mrs Linden.
+          </p>
+        </div>
+
+        <div className="mt-5">
+          <label className="label" htmlFor={`invoice-send-subject-${invoiceId}`}>
+            Email subject
+          </label>
+          <input
+            className="field mt-2"
+            id={`invoice-send-subject-${invoiceId}`}
+            maxLength={300}
+            onChange={(event) => setEmailSubject(event.target.value)}
+            value={emailSubject}
+          />
+        </div>
+
+        <div className="mt-5">
+          <label className="label" htmlFor={`invoice-send-body-${invoiceId}`}>
+            Email message
+          </label>
+          <textarea
+            className="field mt-2 min-h-40 resize-y"
+            id={`invoice-send-body-${invoiceId}`}
+            maxLength={20000}
+            onChange={(event) => setEmailBody(event.target.value)}
+            rows={7}
+            value={emailBody}
+          />
+          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+            Edit this before sending. The greeting, invoice summary, payment details and invoice button are added automatically.
           </p>
         </div>
 

@@ -1,6 +1,6 @@
 import type { JobStatus } from "@/lib/types";
 
-export type PipelineGroupKey = "all" | "new" | "survey" | "quoting" | "sent" | "booked" | "materials" | "in_progress" | "completed";
+export type PipelineGroupKey = "all" | "enquiry" | "survey" | "quote" | "won" | "preparing" | "on_site" | "complete" | "closed";
 
 export type PipelineStage = "alert" | "pending" | "ready" | "active" | "complete";
 
@@ -15,9 +15,9 @@ export type PipelineGroup = {
 
 export const PIPELINE_GROUPS: PipelineGroup[] = [
   {
-    key: "new",
-    label: "New Leads",
-    shortLabel: "New Leads",
+    key: "enquiry",
+    label: "Enquiry",
+    shortLabel: "Enquiry",
     statuses: ["New Lead"],
     dropStatus: "New Lead",
     stage: "pending"
@@ -31,51 +31,51 @@ export const PIPELINE_GROUPS: PipelineGroup[] = [
     stage: "pending"
   },
   {
-    key: "quoting",
-    label: "Quoting",
-    shortLabel: "Quoting",
-    statuses: ["Ready For AI Quote", "Quote Drafted", "Ready To Send"],
+    key: "quote",
+    label: "Quote",
+    shortLabel: "Quote",
+    statuses: ["Ready For AI Quote", "Quote Drafted", "Ready To Send", "Quote Sent", "Follow-Up Needed"],
     dropStatus: "Ready For AI Quote",
     stage: "ready"
   },
   {
-    key: "sent",
-    label: "Sent",
-    shortLabel: "Sent",
-    statuses: ["Quote Sent", "Follow-Up Needed"],
-    dropStatus: "Quote Sent",
-    stage: "pending"
-  },
-  {
-    key: "booked",
-    label: "Booked",
-    shortLabel: "Booked",
-    statuses: ["Accepted", "Booked", "Scaffold In Situ"],
-    dropStatus: "Booked",
+    key: "won",
+    label: "Won",
+    shortLabel: "Won",
+    statuses: ["Accepted"],
+    dropStatus: "Accepted",
     stage: "active"
   },
   {
-    key: "materials",
-    label: "Materials",
-    shortLabel: "Materials",
-    statuses: ["Materials Needed", "Materials Ordered"],
-    dropStatus: "Materials Ordered",
+    key: "preparing",
+    label: "Preparing",
+    shortLabel: "Preparing",
+    statuses: ["Materials Needed", "Materials Ordered", "Scaffold In Situ", "Booked"],
+    dropStatus: "Materials Needed",
     stage: "active"
   },
   {
-    key: "in_progress",
-    label: "In Progress",
-    shortLabel: "Active",
+    key: "on_site",
+    label: "On Site",
+    shortLabel: "On Site",
     statuses: ["In Progress"],
     dropStatus: "In Progress",
     stage: "active"
   },
   {
-    key: "completed",
-    label: "Completed",
-    shortLabel: "Done",
+    key: "complete",
+    label: "Complete",
+    shortLabel: "Complete",
     statuses: ["Completed"],
     dropStatus: "Completed",
+    stage: "complete"
+  },
+  {
+    key: "closed",
+    label: "Closed",
+    shortLabel: "Closed",
+    statuses: ["Not Proceeding", "Lost"],
+    dropStatus: "Not Proceeding",
     stage: "complete"
   }
 ];

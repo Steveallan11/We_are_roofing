@@ -49,6 +49,9 @@ export type AssistantRouteContext = {
   pathname: string;
   jobId?: string | null;
   quoteId?: string | null;
+  /** Server-resolved workspace. Never accepted from an MCP tool argument. */
+  businessId?: string | null;
+  actorId?: string | null;
 };
 
 export type AssistantChatRequest = {

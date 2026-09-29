@@ -31,6 +31,7 @@ import type {
   LabourPlanRecord,
   LabourRateRecord,
   LabourEntryRecord,
+  LiteratureAsset,
   PricingRuleRecord,
   QuoteRecord,
   ReceiptInboxRecord,
@@ -40,6 +41,9 @@ import type {
   MessageRecord,
   MessageTemplateRecord,
   SupplierRecord,
+  SupplierBillRecord,
+  SubcontractorPaymentRecord,
+  BankStatementImportRecord,
   SurveyRecord
 } from "@/lib/types";
 
@@ -223,7 +227,9 @@ export async function getConversations(): Promise<ConversationRecord[]> {
     .from("conversations")
     .select("*, customers(*), jobs(*), quotes(*)")
     .order("last_message_at", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .limit(100)
+    .abortSignal(AbortSignal.timeout(8_000));
 
   if (error) {
     if (!isMissingRelationError(error.message)) {
@@ -249,7 +255,9 @@ export async function getMessages(conversationId: string): Promise<MessageRecord
     .select("*")
     .eq("conversation_id", conversationId)
     .order("sent_at", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(500)
+    .abortSignal(AbortSignal.timeout(8_000));
 
   if (error) {
     if (!isMissingRelationError(error.message)) {
@@ -316,7 +324,8 @@ export async function getUnreadCustomerReplies(): Promise<UnreadCustomerReply[]>
     .gt("unread_count", 0)
     .neq("status", "resolved")
     .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(50);
+    .limit(50)
+    .abortSignal(AbortSignal.timeout(8_000));
 
   if (error) {
     if (!isMissingRelationError(error.message)) {
@@ -607,6 +616,70 @@ export async function getAllExpenses(): Promise<Array<JobExpense & { job?: { id:
   });
 
   return [...expenses, ...diaryExpenses].sort((a, b) => (b.expense_date || "").localeCompare(a.expense_date || ""));
+}
+
+export async function getSupplierBills(): Promise<SupplierBillRecord[]> {
+  if (!canUseSupabase()) return [];
+  const business = await getBusiness();
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("supplier_bills")
+    .select("*, supplier:suppliers(*), job:jobs(id,job_ref,job_title)")
+    .eq("business_id", business.id)
+    .order("bill_date", { ascending: false });
+  if (error) {
+    if (!isMissingRelationError(error.message)) console.warn("Supplier bills could not be loaded:", error.message);
+    return [];
+  }
+  return (data as SupplierBillRecord[] | null) ?? [];
+}
+
+export async function getSubcontractorPayments(): Promise<SubcontractorPaymentRecord[]> {
+  if (!canUseSupabase()) return [];
+  const business = await getBusiness();
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("subcontractor_payments")
+    .select("*, subcontractor:labour_people(*), job:jobs(id,job_ref,job_title)")
+    .eq("business_id", business.id)
+    .order("work_date", { ascending: false });
+  if (error) {
+    if (!isMissingRelationError(error.message)) console.warn("Subcontractor payments could not be loaded:", error.message);
+    return [];
+  }
+  return (data as SubcontractorPaymentRecord[] | null) ?? [];
+}
+
+export async function getBankStatementImports(): Promise<BankStatementImportRecord[]> {
+  if (!canUseSupabase()) return [];
+  const business = await getBusiness();
+  const { data, error } = await createSupabaseAdminClient()
+    .from("bank_statement_imports")
+    .select("*, transactions:bank_transactions(*)")
+    .eq("business_id", business.id)
+    .order("created_at", { ascending: false })
+    .order("row_index", { referencedTable: "bank_transactions", ascending: true })
+    .limit(25);
+  if (error) {
+    if (!isMissingRelationError(error.message)) console.warn("Bank statement imports could not be loaded:", error.message);
+    return [];
+  }
+  return (data as BankStatementImportRecord[] | null) ?? [];
+}
+
+export async function getLiteratureAssets(): Promise<LiteratureAsset[]> {
+  if (!canUseSupabase()) return [];
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("literature_assets")
+    .select("*")
+    .eq("is_active", true)
+    .order("display_name", { ascending: true });
+  if (error) {
+    if (!isMissingRelationError(error.message)) console.warn("Literature could not be loaded:", error.message);
+    return [];
+  }
+  return (data as LiteratureAsset[] | null) ?? [];
 }
 
 export async function getJobFinancialSnapshots(): Promise<JobFinancialSnapshot[]> {

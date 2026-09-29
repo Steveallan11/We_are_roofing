@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { UnifiedInbox, type ComposeContact } from "@/components/comms/UnifiedInbox";
-import { getConversations, getJobs, getMessages, getMessageTemplates } from "@/lib/data";
+import { getConversations, getJobs, getLiteratureAssets, getMessages, getMessageTemplates } from "@/lib/data";
 
 type Props = {
   searchParams?: Promise<{ compose?: string; job?: string }>;
@@ -10,9 +10,10 @@ export default async function CommunicationsPage({ searchParams }: Props) {
   const query = searchParams ? await searchParams : undefined;
   const [conversations, jobs] = await Promise.all([getConversations(), getJobs()]);
   const firstConversation = conversations[0] ?? null;
-  const [messages, templates] = await Promise.all([
+  const [messages, templates, literature] = await Promise.all([
     firstConversation ? getMessages(firstConversation.id) : Promise.resolve([]),
-    getMessageTemplates()
+    getMessageTemplates(),
+    getLiteratureAssets()
   ]);
   const contacts: ComposeContact[] = jobs.map((job) => ({
     jobId: job.id,
@@ -36,6 +37,7 @@ export default async function CommunicationsPage({ searchParams }: Props) {
         initialConversations={conversations}
         initialMessages={messages}
         templates={templates}
+        literature={literature}
       />
     </AppShell>
   );

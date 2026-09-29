@@ -20,6 +20,9 @@ export default async function CustomerDetailPage({ params }: Props) {
   if (!customer) notFound();
 
   const customerJobs = jobs.filter((job) => job.customer_id === customer.id);
+  const openJobs = customerJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
+  const previousJobs = customerJobs.filter((job) => !openJobs.includes(job));
+  const messageJob = openJobs[0] ?? customerJobs[0];
   const lifetimeValue = customerJobs.reduce((sum, job) => sum + Number(job.final_value ?? getJobPipelineValue(job) ?? 0), 0);
 
   return (
@@ -31,6 +34,11 @@ export default async function CustomerDetailPage({ params }: Props) {
           <Link className="button-primary" href={`/jobs/new?customerId=${customer.id}` as Route}>
             New Job
           </Link>
+          {messageJob ? (
+            <Link className="button-secondary" href={`/comms?compose=1&job=${messageJob.id}` as Route}>
+              Email Customer
+            </Link>
+          ) : null}
           <Link className="button-ghost" href={"/customers" as Route}>
             Customers
           </Link>
@@ -40,7 +48,24 @@ export default async function CustomerDetailPage({ params }: Props) {
       <section className="page-grid">
         <div className="stack">
           {customerJobs.length ? (
-            customerJobs.map((job) => <JobCard job={job} key={job.id} list />)
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="section-kicker">Open jobs</p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">Open any job to see its survey, quote, work, money and files.</p>
+                </div>
+                <span className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)]">{openJobs.length}</span>
+              </div>
+              {openJobs.length ? openJobs.map((job) => <JobCard job={job} key={job.id} list />) : <p className="card p-5 text-sm text-[var(--muted)]">No open jobs for this customer.</p>}
+              {previousJobs.length ? (
+                <details className="card p-4">
+                  <summary className="cursor-pointer font-semibold text-[var(--text-primary)]">Previous and archived jobs ({previousJobs.length})</summary>
+                  <div className="mt-4 grid gap-3">
+                    {previousJobs.map((job) => <JobCard job={job} key={job.id} list />)}
+                  </div>
+                </details>
+              ) : null}
+            </>
           ) : (
             <div className="card p-8 text-center">
               <p className="font-condensed text-3xl text-white">No jobs yet</p>
@@ -63,7 +88,7 @@ export default async function CustomerDetailPage({ params }: Props) {
             <div className="mt-4 grid gap-3 text-sm">
               <Summary label="Jobs" value={customerJobs.length.toString()} />
               <Summary label="Lifetime Value" value={currency(lifetimeValue)} />
-              <Summary label="Open Jobs" value={customerJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)).length.toString()} />
+              <Summary label="Open Jobs" value={openJobs.length.toString()} />
             </div>
           </div>
           <div className="card p-5">

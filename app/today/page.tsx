@@ -33,6 +33,13 @@ export default async function TodayPage() {
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
   const attentionJobs = jobs.filter(needsAttention);
   const openJobs = jobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status));
+  const overdueInvoices = jobs.flatMap((job) =>
+    (job.invoices ?? [])
+      .filter((invoice) => invoice.status === "Overdue" || (!["Paid", "Void", "Draft"].includes(invoice.status) && new Date(invoice.due_date).getTime() < todayStart.getTime()))
+      .map((invoice) => ({ job, invoice }))
+  );
+  const materialsNeeded = openJobs.filter((job) => job.status === "Materials Needed");
+  const surveysToBook = openJobs.filter((job) => job.status === "Survey Needed" && !job.survey_date);
   const surveysToday = jobs
     .filter((job) => job.survey_date)
     .filter((job) => {
@@ -50,8 +57,30 @@ export default async function TodayPage() {
         new Date(left.updated_at ?? left.created_at ?? 0).getTime()
     )
     .slice(0, 3);
+  const workToday = openJobs.filter((job) => job.status === "In Progress" || (job.start_date && new Date(job.start_date) >= todayStart && new Date(job.start_date) < todayEnd));
 
-  const priorities: PriorityItem[] = [
+  const rawPriorities: PriorityItem[] = [
+    ...overdueInvoices.map(({ job, invoice }) => ({
+      id: `invoice-${invoice.id}`,
+      title: `${invoice.invoice_ref} is overdue`,
+      detail: `${job.customer?.full_name ?? job.job_title} owes ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(invoice.balance_due ?? 0))}`,
+      href: `/jobs/${job.id}?tab=money` as Route,
+      kind: "task" as const
+    })),
+    ...materialsNeeded.map((job) => ({
+      id: `materials-${job.id}`,
+      title: `${job.job_ref ?? job.job_title} needs materials`,
+      detail: "Order or confirm the materials for this job",
+      href: `/jobs/${job.id}?tab=work` as Route,
+      kind: "job" as const
+    })),
+    ...surveysToBook.map((job) => ({
+      id: `survey-${job.id}`,
+      title: `${job.customer?.full_name ?? job.job_title} needs a survey booking`,
+      detail: job.property_address,
+      href: `/jobs/${job.id}/book-survey` as Route,
+      kind: "job" as const
+    })),
     ...upcomingTasks.map((task) => ({
       id: `task-${task.id}`,
       title: task.title || "Task needs completing",
@@ -66,7 +95,7 @@ export default async function TodayPage() {
       href: (reply.job_id ? `/jobs/${reply.job_id}` : "/comms") as Route,
       kind: "message" as const
     })),
-    ...attentionJobs.map((job) => ({
+    ...attentionJobs.filter((job) => !materialsNeeded.some((item) => item.id === job.id) && !surveysToBook.some((item) => item.id === job.id)).map((job) => ({
       id: `job-${job.id}`,
       title: `${job.job_ref ?? "Job"} · ${job.customer?.full_name ?? job.job_title}`,
       detail: getAttentionReason(job),
@@ -74,6 +103,7 @@ export default async function TodayPage() {
       kind: "job" as const
     }))
   ];
+  const priorities = rawPriorities;
 
   const dateLabel = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
@@ -105,9 +135,9 @@ export default async function TodayPage() {
           </div>
           <div className="today-quick-actions" aria-label="Quick actions">
             <QuickAction href="/jobs/new" label="Add a new job" icon="+" />
+            <QuickAction href="/jobs?filter=complete" label="Create an invoice" icon="£" />
+            <QuickAction href="/money?tab=expenses&action=new" label="Add an expense" icon="−" />
             <QuickAction href="/customers" label="Find a customer" icon="⌕" />
-            <QuickAction href="/comms" label="Open messages" icon="✉" />
-            <QuickAction href="/calendar" label="View calendar" icon="□" />
           </div>
         </section>
 
@@ -184,6 +214,14 @@ export default async function TodayPage() {
             ) : (
               <p className="text-sm text-[var(--text-muted)]">Use the calendar when you are ready to book a survey or site visit.</p>
             )}
+          </PageSection>
+
+          <PageSection
+            kicker="Today's work"
+            title={workToday.length ? `${workToday.length} ${workToday.length === 1 ? "job" : "jobs"} on site` : "No site work scheduled today"}
+            actions={<Button asChild size="sm" variant="ghost"><Link href="/jobs">Open jobs</Link></Button>}
+          >
+            {workToday.length ? <TodayJobsGrid jobs={workToday.slice(0, 4)} /> : <p className="text-sm text-[var(--text-muted)]">Jobs starting today and work in progress will appear here.</p>}
           </PageSection>
 
           <Card padding="lg">

@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { CostLineItem, LabourPlanRecord, QuoteOption, QuoteRecord } from "@/lib/types";
+import type { CostLineItem, LabourPlanRecord, QuoteOption, QuotePricingMode, QuoteRecord } from "@/lib/types";
 import { applyRateCardToCostBreakdown, findRateForItem, type RateCardEntry } from "@/lib/pricing/rateCard";
 import {
   BILLED_SEPARATELY_DEFAULT_NOTE,
@@ -56,6 +56,9 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
     return rateCard.length ? applyRateCardToCostBreakdown(initial, rateCard).updated : initial;
   });
   const [options, setOptions] = useState<QuoteOption[]>(() => quote?.options ?? []);
+  const [pricingMode, setPricingMode] = useState<QuotePricingMode>(() =>
+    quote?.customer_pricing_mode ?? ((quote?.options?.length ?? 0) >= 2 ? "options" : "single")
+  );
   const [messages, setMessages] = useState<Array<{ id: string; sender_type: string; sender_name?: string | null; message: string; created_at?: string }>>([]);
   const [reply, setReply] = useState("");
   const [selectedTakeoffSourceId, setSelectedTakeoffSourceId] = useState<string | null>(null);
@@ -273,6 +276,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
   }
 
   function addOption() {
+    setPricingMode("options");
     setOptions((current) => {
       if (current.length === 0) {
         return buildDefaultQuoteOptionsFromLines(costBreakdown);
@@ -291,6 +295,21 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
         }
       ];
     });
+  }
+
+  function choosePricingMode(mode: QuotePricingMode) {
+    setPricingMode(mode);
+    if (mode === "options" && options.length < 2) {
+      setOptions(buildDefaultQuoteOptionsFromLines(costBreakdown));
+    }
+    setSuccess(
+      mode === "single"
+        ? "Customer view set to one fixed quote. Save changes to publish it."
+        : mode === "options"
+          ? "Customer view set to Option A/B. Save changes after reviewing both options."
+          : "Customer view set to selectable work items. Each priced line can be ticked separately."
+    );
+    setError(null);
   }
 
   function updateOption(optionId: string, updates: Partial<QuoteOption>) {
@@ -475,6 +494,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          customer_pricing_mode: pricingMode,
           roof_report: roofReport,
           scope_of_works: scopeOfWorks,
           cost_breakdown: costBreakdown.map((item) => normaliseCostLine({ ...item, cost: Number(item.cost || 0) })),
@@ -872,6 +892,35 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
       </div>
 
       <div className="card p-5">
+        <p className="section-kicker text-[0.65rem] uppercase">Customer Pricing Layout</p>
+        <h2 className="mt-2 font-display text-3xl text-white">How should the customer choose?</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+          Choose this deliberately. Roof or drawing section names no longer change the customer layout automatically.
+        </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <PricingModeButton
+            active={pricingMode === "single"}
+            description="One complete price. The customer accepts the whole quotation."
+            label="Single Quote"
+            onClick={() => choosePricingMode("single")}
+          />
+          <PricingModeButton
+            active={pricingMode === "options"}
+            description="Two alternative packages. The customer chooses one option only."
+            label="Option A / Option B"
+            onClick={() => choosePricingMode("options")}
+          />
+          <PricingModeButton
+            active={pricingMode === "selectable_items"}
+            description="The customer ticks individual work items and sees a running total."
+            label="Pick Individual Works"
+            onClick={() => choosePricingMode("selectable_items")}
+          />
+        </div>
+      </div>
+
+      {pricingMode === "options" ? (
+      <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="section-kicker text-[0.65rem] uppercase">Quote Options</p>
@@ -1085,6 +1134,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
           </div>
         )}
       </div>
+      ) : null}
 
       <div className="card p-5">
         <p className="section-kicker text-[0.65rem] uppercase">Quote Wording</p>
@@ -1507,6 +1557,29 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
       </div>
 
     </div>
+  );
+}
+
+function PricingModeButton({ active, description, label, onClick }: { active: boolean; description: string; label: string; onClick: () => void }) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`min-h-36 rounded-2xl border-2 p-4 text-left transition ${
+        active
+          ? "border-[var(--gold)] bg-[var(--gold)] text-black shadow-[0_0_0_4px_rgba(212,175,55,0.12)]"
+          : "border-[var(--border)] bg-[var(--surface-deep)] text-white hover:border-[var(--gold)]/50"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="flex items-start justify-between gap-3">
+        <span className="font-display text-2xl leading-tight">{label}</span>
+        <span className={`rounded-full px-2.5 py-1 font-ui text-[0.65rem] font-black uppercase tracking-[0.1em] ${active ? "bg-black text-[var(--gold)]" : "bg-[var(--gold)]/10 text-[var(--gold)]"}`}>
+          {active ? "Selected" : "Choose"}
+        </span>
+      </span>
+      <span className={`mt-3 block font-ui text-sm leading-6 ${active ? "text-black/70" : "text-[var(--muted)]"}`}>{description}</span>
+    </button>
   );
 }
 

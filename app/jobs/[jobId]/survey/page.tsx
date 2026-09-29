@@ -5,6 +5,7 @@ import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { QuoteActions } from "@/components/jobs/quote-actions";
 import { AppShell } from "@/components/layout/app-shell";
 import { SurveyForm } from "@/components/forms/survey-form";
+import { SurveyImportPanel } from "@/components/forms/SurveyImportPanel";
 import { SurveyTypePicker } from "@/components/survey/SurveyTypePicker";
 import { getJobBundle } from "@/lib/data";
 
@@ -32,6 +33,12 @@ export default async function SurveyPage({ params }: Props) {
       }
     >
       <div className="stack">
+        <SurveyImportPanel
+          jobId={bundle.job.id}
+          documents={bundle.documents
+            .filter((document) => ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(document.mime_type ?? ""))
+            .map((document) => ({ id: document.id, display_name: document.display_name, mime_type: document.mime_type, document_type: document.document_type }))}
+        />
         <div className="card p-5">
           <p className="section-kicker text-[0.65rem] uppercase">Survey Route</p>
           <div className="mt-4">
@@ -76,6 +83,7 @@ export default async function SurveyPage({ params }: Props) {
             </div>
           </div>
           <SurveyForm
+            key={bundle.survey?.updated_at ?? "new-survey"}
             initialSurvey={bundle.survey}
             jobId={bundle.job.id}
             roofType={(bundle.job.roof_type as "Flat" | "Pitched" | "Slate" | "Tile" | "Fascia" | "Chimney" | "Mixed" | "Other") ?? "Other"}

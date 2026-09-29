@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import type { CookieOptions } from "@supabase/ssr";
 import { createServerClient } from "@supabase/ssr";
 
-const protectedPrefixes = ["/today", "/dashboard", "/diary", "/crm", "/jobs", "/customers", "/comms", "/money", "/surveys", "/calendar", "/knowledge", "/settings"];
+const protectedPrefixes = ["/today", "/dashboard", "/diary", "/crm", "/jobs", "/customers", "/comms", "/money", "/documents", "/surveys", "/calendar", "/knowledge", "/settings"];
 const publicApiPrefixes = ["/api/auth/logout", "/api/weather", "/api/comms/webhooks", "/api/invoices/mark-overdue"];
 
 function isPublicApi(pathname: string) {
@@ -59,8 +59,8 @@ export async function middleware(request: NextRequest) {
       }
     );
 
-    const result = await supabase.auth.getSession();
-    session = result.data.session;
+    const result = await supabase.auth.getUser();
+    session = result.data.user;
   } catch (error) {
     console.error("Middleware session check failed", {
       pathname,
@@ -114,6 +114,7 @@ export const config = {
   matcher: [
     "/",
     "/login",
+    "/oauth/:path*",
     "/api/:path*",
     "/today/:path*",
     "/dashboard/:path*",
@@ -123,6 +124,7 @@ export const config = {
     "/customers/:path*",
     "/comms/:path*",
     "/money/:path*",
+    "/documents/:path*",
     "/surveys/:path*",
     "/calendar/:path*",
     "/knowledge/:path*",

@@ -284,7 +284,18 @@ export async function POST(request: Request, { params }: Props) {
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ ok: false, error: error?.message ?? "Unable to create invoice." }, { status: 500 });
+    console.error("Invoice creation failed", {
+      jobId,
+      invoiceRef,
+      error: error?.message ?? "No invoice returned after insert"
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "We couldn't create this invoice. Nothing has been saved. Please try again or contact support."
+      },
+      { status: 500 }
+    );
   }
 
   const invoice = data as InvoiceRecord;

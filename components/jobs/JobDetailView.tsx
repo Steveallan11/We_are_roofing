@@ -13,6 +13,7 @@ import { PhotoUploadButton } from "@/components/forms/photo-upload";
 import { AcceptQuoteButton } from "@/components/jobs/AcceptQuoteButton";
 import { DeleteJobAction } from "@/components/jobs/delete-job-action";
 import { JobMoneyTab } from "@/components/jobs/JobMoneyTab";
+import { JobStatusMenu } from "@/components/jobs/JobStatusMenu";
 import { JobTitleEditor } from "@/components/jobs/job-title-editor";
 import { PaymentSchedule } from "@/components/jobs/PaymentSchedule";
 import { ScheduleWorks } from "@/components/jobs/ScheduleWorks";
@@ -36,7 +37,7 @@ import { getNextActionLabel } from "@/lib/job-workflow";
 import { getNextAction } from "@/lib/jobs/nextAction";
 import { buildQuoteOptionPriceSummary, getJobPipelineValue, getOptionTotal, getQuotePipelineValue, isFromOptionValue } from "@/lib/quotes/value";
 import { getSurveyHighlights, getSurveyMeasurementsSummary } from "@/lib/survey-utils";
-import { currency, formatDate, cn } from "@/lib/utils";
+import { currency, formatDate } from "@/lib/utils";
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { NextActionButton } from "@/components/jobs/NextActionButton";
 import { JobDiaryTab } from "@/components/diary/JobDiaryTab";
@@ -78,16 +79,15 @@ export type JobDetailViewProps = {
   paymentSchedule: React.ComponentProps<typeof PaymentSchedule>["initialSchedule"];
 };
 
-type TabId = "overview" | "survey" | "quote" | "work" | "money" | "files" | "history";
+type TabId = "overview" | "survey" | "quote" | "work" | "money" | "files";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "survey", label: "Survey" },
   { value: "quote", label: "Quote" },
-  { value: "work", label: "Work" },
+  { value: "work", label: "Job" },
   { value: "money", label: "Money" },
-  { value: "files", label: "Files" },
-  { value: "history", label: "History" }
+  { value: "files", label: "Files" }
 ];
 
 const LEGACY_TABS: Record<string, TabId> = {
@@ -95,7 +95,7 @@ const LEGACY_TABS: Record<string, TabId> = {
   materials: "work",
   labour: "work",
   documents: "files",
-  activity: "history"
+  activity: "overview"
 };
 
 export function JobDetailView(props: JobDetailViewProps) {
@@ -160,6 +160,8 @@ export function JobDetailView(props: JobDetailViewProps) {
             survey={survey}
             documents={documents}
             commercialLabel={commercialLabel}
+            invoices={invoices}
+            activity={activity ?? []}
           />
         </TabsContent>
 
@@ -195,17 +197,22 @@ export function JobDetailView(props: JobDetailViewProps) {
         </TabsContent>
 
         <TabsContent value="files">
-          <DocumentsTab
-            job={job}
-            documents={documents}
-            invoices={invoices}
-            quote={quote}
-          />
+          <div className="stack">
+            <DocumentsTab
+              job={job}
+              documents={documents}
+              invoices={invoices}
+              quote={quote}
+            />
+            <details className="card p-4">
+              <summary className="min-h-11 cursor-pointer py-2 font-semibold text-[var(--text)]">More job records and controls</summary>
+              <div className="mt-4">
+                <ActivityTab activity={activity ?? []} emailLogs={emailLogs} job={job} />
+              </div>
+            </details>
+          </div>
         </TabsContent>
 
-        <TabsContent value="history">
-          <ActivityTab job={job} emailLogs={emailLogs} activity={activity ?? []} />
-        </TabsContent>
       </Tabs>
 
     </div>
@@ -255,6 +262,9 @@ function JobDetailHeader({
             {customer.phone ? <a className="font-semibold" href={`tel:${customer.phone}`}>{customer.phone}</a> : null}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
+            <SmartButton variant="ghost" size="sm" href="/jobs">
+              Back to jobs
+            </SmartButton>
             <SmartButton variant="secondary" size="sm" href={customer.phone ? `tel:${customer.phone}` : `/customers/${customer.id}`}>
               Call customer
             </SmartButton>
@@ -264,6 +274,7 @@ function JobDetailHeader({
             <SmartButton variant="ghost" size="sm" href={`/customers/${customer.id}`}>
               Customer details
             </SmartButton>
+            <JobStatusMenu jobId={job.id} status={job.status} />
           </div>
         </div>
 
@@ -335,17 +346,25 @@ function OverviewTab({
   customer,
   survey,
   documents,
-  commercialLabel
+  commercialLabel,
+  invoices,
+  activity
 }: {
   job: Job;
   customer: Customer;
   survey?: SurveyRecord | null;
   documents: JobDocumentRecord[];
   commercialLabel: string;
+  invoices: InvoiceRecord[];
+  activity: ActivityRecord[];
 }) {
+  const outstanding = invoices
+    .filter((invoice) => !["Paid", "Void"].includes(invoice.status))
+    .reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+  const nextDate = job.survey_date ?? job.start_date ?? job.follow_up_date;
   return (
     <div className="stack">
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Stat
           label="Contact"
           value={customer.phone ?? "No phone"}
@@ -361,6 +380,7 @@ function OverviewTab({
           tone={survey ? "active" : "pending"}
         />
         <Stat label="Files" value={documents.length.toString()} hint="Reports, PDFs and uploads" />
+        <Stat label="Still owed" value={currency(outstanding)} hint={outstanding > 0 ? "Open invoice balance" : "Nothing outstanding"} tone={outstanding > 0 ? "pending" : "active"} />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -373,9 +393,15 @@ function OverviewTab({
             <InfoRow label="Roof type" value={job.roof_type ?? "TBC"} />
             <InfoRow label="Job type" value={job.job_type ?? "TBC"} />
             <InfoRow label="Last updated" value={formatDate(job.updated_at ?? null)} />
+            <InfoRow label="Next date" value={nextDate ? formatDate(nextDate) : "Not set"} />
+            <InfoRow label="Internal note" value={job.internal_notes || "No internal note"} />
           </div>
         </PageSection>
       </div>
+
+      <PageSection kicker="Timeline" title="Recent activity" description="The latest customer, quote, invoice and job events.">
+        <ActivityTimeline compact entries={activity} jobId={job.id} emptyMessage="No activity has been recorded for this job yet." />
+      </PageSection>
     </div>
   );
 }
@@ -493,6 +519,17 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
     );
   }
 
+  const checklist = [
+    ["Roof report", Boolean(quote.roof_report?.trim())],
+    ["Scope of works", Boolean(quote.scope_of_works?.trim())],
+    ["Pricing", (quote.cost_breakdown?.length ?? 0) > 0 || (quote.options?.length ?? 0) > 0],
+    ["Options", quote.customer_pricing_mode === "single" || (quote.options?.length ?? 0) > 0],
+    ["Exclusions", Boolean(quote.exclusions?.trim())],
+    ["Guarantee", Boolean(quote.guarantee_text?.trim())],
+    ["Terms", Boolean(quote.terms?.trim())],
+    ["Customer email", Boolean(quote.customer_email_subject?.trim() && quote.customer_email_body?.trim())]
+  ] as const;
+
   return (
     <PageSection
       kicker={quote.quote_ref ?? "Quote"}
@@ -509,6 +546,28 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
         </>
       }
     >
+      <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="Quote review checklist">
+        {checklist.map(([label, complete]) => (
+          <div className={`rounded-lg border px-3 py-2 text-sm ${complete ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-amber-500/30 bg-amber-500/10 text-amber-100"}`} key={label}>
+            <span aria-hidden="true">{complete ? "✓" : "!"}</span> {label}
+          </div>
+        ))}
+      </div>
+
+      {quote.missing_info?.length ? (
+        <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="font-semibold text-amber-100">Needs checking</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-100/90">
+            {quote.missing_info.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="mb-5 grid grid-cols-3 gap-3 rounded-xl border border-[var(--border)] bg-black/20 p-4 text-right">
+        <Stat label="Net" value={currency(quote.subtotal)} />
+        <Stat label="VAT" value={currency(quote.vat_amount)} />
+        <Stat label="Total" value={currency(quote.total)} tone="active" />
+      </div>
       <div className="space-y-2 text-sm text-[var(--text-muted)]">
         <div className="flex items-center justify-between">
           <span>Status</span>
@@ -522,7 +581,12 @@ function QuoteTab({ job, quote }: { job: Job; quote?: QuoteRecord | null }) {
 
       {quote.status !== "Accepted" && quote.status !== "Declined" ? (
         <div className="mt-4 border-t border-[var(--border)] pt-4">
-          <AcceptQuoteButton options={quote.options ?? []} quoteId={quote.id} />
+          <AcceptQuoteButton
+            costBreakdown={quote.cost_breakdown ?? []}
+            options={quote.options ?? []}
+            pricingMode={quote.customer_pricing_mode}
+            quoteId={quote.id}
+          />
         </div>
       ) : null}
 

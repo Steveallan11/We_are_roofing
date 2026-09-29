@@ -113,6 +113,7 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
   const subtitle = customer.customer_type === "business" ? customer.contact_person_name || "No contact person saved" : getPrimaryEmail(customer) ?? "No email saved";
   const phone = getPrimaryPhone(customer);
   const email = getPrimaryEmail(customer);
+  const messageJob = activeJobs[0] ?? customer.jobs[0];
   const missing = [email ? null : "Missing email", phone ? null : "Missing phone"].filter(Boolean);
   const initials = displayName
     .split(" ")
@@ -173,7 +174,7 @@ export function CustomerSummaryCard({ customer }: { customer: CustomerWithJobs }
         ) : null}
         {email ? (
           <Button variant="ghost" size="sm" asChild>
-            <a href={`mailto:${email}`}>Email</a>
+            {messageJob ? <Link href={`/comms?compose=1&job=${messageJob.id}` as Route}>Email</Link> : <a href={`mailto:${email}`}>Email</a>}
           </Button>
         ) : null}
       </div>

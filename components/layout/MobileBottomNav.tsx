@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { NewActionMenu } from "@/components/layout/NewActionMenu";
 
 function NavIcon({ path, size = 18, color = "currentColor" }: { path: string; size?: number; color?: string }) {
   return (
@@ -26,21 +27,15 @@ const MOBILE_NAV = [
     href: "/jobs",
     icon: "M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
   },
-  {
-    id: "money",
-    label: "Money",
-    href: "/money",
-    icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-  },
+];
+
+const MORE_ITEMS = [
   {
     id: "customers",
     label: "Customers",
     href: "/customers",
-    icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-  }
-];
-
-const MORE_ITEMS = [
+    icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+  },
   {
     id: "comms",
     label: "Messages",
@@ -52,6 +47,12 @@ const MORE_ITEMS = [
     label: "Calendar",
     href: "/calendar",
     icon: "M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+  },
+  {
+    id: "documents",
+    label: "Documents",
+    href: "/documents",
+    icon: "M7 3h7l5 5v13H7z M14 3v6h5 M10 13h6 M10 17h6"
   },
   {
     id: "settings",
@@ -74,9 +75,16 @@ export function MobileBottomNav() {
     let active = true;
 
     async function loadUnreadCount() {
-      const response = await fetch("/api/comms/conversations?summary=1", { cache: "no-store" });
-      const result = (await response.json().catch(() => null)) as { unreadCount?: number } | null;
-      if (active) setUnreadCount(Number(result?.unreadCount ?? 0));
+      try {
+        const response = await fetch("/api/comms/conversations?summary=1", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(8_000)
+        });
+        const result = (await response.json().catch(() => null)) as { unreadCount?: number } | null;
+        if (active && response.ok) setUnreadCount(Number(result?.unreadCount ?? 0));
+      } catch {
+        // Keep navigation responsive if the communications service is slow.
+      }
     }
 
     void loadUnreadCount();
@@ -110,6 +118,13 @@ export function MobileBottomNav() {
               </Link>
             );
           })}
+          <NewActionMenu mobile />
+          <Link aria-current={pathname.startsWith("/money") ? "page" : undefined} className={`mobile-bottom-nav__item ${pathname.startsWith("/money") ? "is-active" : ""}`} href={"/money" as Route}>
+            <span className="mobile-bottom-nav__icon">
+              <NavIcon color={pathname.startsWith("/money") ? "var(--gold)" : "var(--text-faint)"} path="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </span>
+            <span>Money</span>
+          </Link>
           <button
             aria-expanded={moreOpen}
             aria-label="More navigation"

@@ -21,6 +21,7 @@ import {
   calculateFlatMetrics,
   calculatePitchedMetrics
 } from "@/lib/survey-utils";
+import { moduleForSurveyType, normaliseEnabledModules, type SurveyModuleKey } from "@/lib/surveys/schema";
 
 type Props = {
   jobId: string;
@@ -53,6 +54,14 @@ const SURVEY_META: Array<{
   { type: "Chimney / Lead", roofType: "Chimney", icon: "Stack", description: "Flashings, flaunching, lead runs, pots and repointing." },
   { type: "Other / Misc", roofType: "Other", icon: "Other", description: "General inspections, defects and one-off roofing work." }
 ];
+
+const MODULE_TO_SURVEY_TYPE: Record<SurveyModuleKey, SurveyType> = {
+  pitched_roof: "Pitched / Tiled",
+  flat_roof: "Flat Roof",
+  fascias: "Fascias / Soffits / Gutters",
+  chimney: "Chimney / Lead",
+  other: "Other / Misc"
+};
 
 function toNumber(value: string) {
   if (!value.trim()) return null;
@@ -729,6 +738,9 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [selectedSurveyType, setSelectedSurveyType] = useState<SurveyType>((initialSurvey?.survey_type as SurveyType) ?? surveyType);
+  const [enabledModules, setEnabledModules] = useState<SurveyModuleKey[]>(
+    normaliseEnabledModules(initialSurvey?.enabled_modules, initialSurvey?.survey_type ?? surveyType)
+  );
   const [selectedRoofType, setSelectedRoofType] = useState<RoofType>((initialSurvey?.roof_type as RoofType) ?? roofType);
   const [scaffoldRequired, setScaffoldRequired] = useState(initialSurvey?.scaffold_required ?? false);
   const [noPhotoConfirmation, setNoPhotoConfirmation] = useState(initialSurvey?.no_photo_confirmation ?? false);
@@ -750,37 +762,34 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
   const [adaptiveSections, setAdaptiveSections] = useState<SurveyAdaptiveSections>(defaultAdaptiveSections(initialSurvey));
 
   const measurementsSummary = useMemo(() => {
-    if (selectedSurveyType === "Pitched / Tiled") {
+    const parts: string[] = [];
+    if (enabledModules.includes("pitched_roof")) {
       const metrics = calculatePitchedMetrics(adaptiveSections.pitched_roof);
-      return [
+      parts.push(...[
         metrics.roofAreaEstimate ? `${metrics.roofAreaEstimate}m2 roof area` : null,
         metrics.totalRidgeMetres ? `${metrics.totalRidgeMetres}m ridge` : null,
         metrics.totalHipMetres ? `${metrics.totalHipMetres}m hips` : null,
         metrics.totalValleyMetres ? `${metrics.totalValleyMetres}m valleys` : null
-      ].filter(Boolean).join(" | ");
+      ].filter(Boolean) as string[]);
     }
-    if (selectedSurveyType === "Flat Roof") {
+    if (enabledModules.includes("flat_roof")) {
       const metrics = calculateFlatMetrics(adaptiveSections.flat_roof);
-      return [metrics.roofAreaEstimate ? `${metrics.roofAreaEstimate}m2 area` : null, metrics.perimeterMetres ? `${metrics.perimeterMetres}m perimeter` : null]
-        .filter(Boolean)
-        .join(" | ");
+      parts.push(...[metrics.roofAreaEstimate ? `${metrics.roofAreaEstimate}m2 flat area` : null, metrics.perimeterMetres ? `${metrics.perimeterMetres}m flat perimeter` : null].filter(Boolean) as string[]);
     }
-    if (selectedSurveyType === "Fascias / Soffits / Gutters") {
+    if (enabledModules.includes("fascias")) {
       const metrics = calculateFasciaMetrics(adaptiveSections.fascias);
-      return metrics.totalLinearMetres ? `${metrics.totalLinearMetres}m total run` : "";
+      if (metrics.totalLinearMetres) parts.push(`${metrics.totalLinearMetres}m fascia/gutter run`);
     }
-    if (selectedSurveyType === "Chimney / Lead") {
+    if (enabledModules.includes("chimney")) {
       const metrics = calculateChimneyMetrics(adaptiveSections.chimney);
-      return metrics.totalMeasuredRun ? `${metrics.totalMeasuredRun}m measured lead run` : "";
+      if (metrics.totalMeasuredRun) parts.push(`${metrics.totalMeasuredRun}m measured lead run`);
     }
-
-    const other = adaptiveSections.other;
-    return [other?.measured_area_m2 ? `${other.measured_area_m2}m2 area` : null, other?.measured_run_m ? `${other.measured_run_m}m measured run` : null]
-      .filter(Boolean)
-      .join(" | ");
-  }, [adaptiveSections, selectedSurveyType]);
-
-  const surveyMeta = SURVEY_META.find((item) => item.type === selectedSurveyType);
+    if (enabledModules.includes("other")) {
+      const other = adaptiveSections.other;
+      parts.push(...[other?.measured_area_m2 ? `${other.measured_area_m2}m2 other area` : null, other?.measured_run_m ? `${other.measured_run_m}m other run` : null].filter(Boolean) as string[]);
+    }
+    return parts.join(" | ");
+  }, [adaptiveSections, enabledModules]);
 
   return (
     <form
@@ -807,6 +816,7 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
           raw_notes: formState.raw_notes.trim(),
           survey_type: selectedSurveyType,
           roof_type: selectedRoofType,
+          enabled_modules: enabledModules,
           no_photo_confirmation: noPhotoConfirmation,
           adaptive_sections: adaptiveSections
         };
@@ -830,7 +840,9 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
       }}
     >
       <div className="card p-5">
-        <p className="section-kicker text-[0.65rem] uppercase">Survey Type</p>
+        <p className="section-kicker text-[0.65rem] uppercase">Survey Sections</p>
+        <p className="mt-2 text-sm text-[var(--muted)]">Choose one primary section and activate every additional roof area or work type covered by this site visit.</p>
+        <p className="mt-4 label">Primary section</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {SURVEY_META.map((item) => (
             <button
@@ -843,6 +855,8 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
               onClick={() => {
                 setSelectedSurveyType(item.type);
                 setSelectedRoofType(item.roofType);
+                const module = moduleForSurveyType(item.type);
+                setEnabledModules((current) => Array.from(new Set([module, ...current])));
               }}
               type="button"
             >
@@ -851,6 +865,28 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
               <p className="mt-1 text-xs text-[var(--muted)]">{item.description}</p>
             </button>
           ))}
+        </div>
+        <p className="mt-5 label">Active sections</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {SURVEY_META.map((item) => {
+            const module = moduleForSurveyType(item.type);
+            const primary = item.type === selectedSurveyType;
+            const active = enabledModules.includes(module);
+            return (
+              <button
+                aria-pressed={active}
+                className={`min-h-14 rounded-xl border px-4 py-3 text-left text-sm font-semibold ${active ? "border-[var(--gold)] bg-[rgba(212,175,55,0.12)] text-[var(--gold-l)]" : "border-[var(--border)] text-[var(--muted)]"}`}
+                key={`active-${item.type}`}
+                onClick={() => {
+                  if (primary) return;
+                  setEnabledModules((current) => active ? current.filter((key) => key !== module) : [...current, module]);
+                }}
+                type="button"
+              >
+                {active ? "✓ " : "+ "}{item.type}{primary ? " · Primary" : ""}
+              </button>
+            );
+          })}
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
@@ -894,11 +930,13 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
       </div>
 
       <div className="card p-5">
-        <p className="section-kicker text-[0.65rem] uppercase">Specialist Survey</p>
-        <p className="mt-3 text-sm text-[var(--muted)]">{surveyMeta?.description}</p>
+        <p className="section-kicker text-[0.65rem] uppercase">Specialist Survey Sections</p>
+        <p className="mt-3 text-sm text-[var(--muted)]">{enabledModules.length} active section{enabledModules.length === 1 ? "" : "s"}. Hidden sections keep their previously entered data.</p>
       </div>
 
-      <SpecialistSurveyBody jobId={jobId} adaptiveSections={adaptiveSections} onChange={setAdaptiveSections} selectedSurveyType={selectedSurveyType} />
+      {enabledModules.map((module) => (
+        <SpecialistSurveyBody key={module} jobId={jobId} adaptiveSections={adaptiveSections} onChange={setAdaptiveSections} selectedSurveyType={MODULE_TO_SURVEY_TYPE[module]} />
+      ))}
 
       <div className="card sticky bottom-4 z-10 p-5">
         <div className="flex flex-wrap items-center gap-3">

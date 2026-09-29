@@ -7,7 +7,7 @@ import { CustomerContext } from "@/components/comms/CustomerContext";
 import { MessageComposer } from "@/components/comms/MessageComposer";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useWindowSize } from "@/lib/hooks/useWindowSize";
-import type { ConversationRecord, MessageRecord, MessageTemplateRecord } from "@/lib/types";
+import type { ConversationRecord, LiteratureAsset, MessageRecord, MessageTemplateRecord } from "@/lib/types";
 
 export type ComposeContact = {
   jobId: string;
@@ -25,9 +25,10 @@ type Props = {
   initialConversation: ConversationRecord | null;
   initialMessages: MessageRecord[];
   templates: MessageTemplateRecord[];
+  literature: LiteratureAsset[];
 };
 
-export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConversations, initialConversation, initialMessages, templates }: Props) {
+export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConversations, initialConversation, initialMessages, templates, literature }: Props) {
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedId, setSelectedId] = useState<string | null>(initialConversation?.id ?? initialConversations[0]?.id ?? null);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(initialConversation ?? initialConversations[0] ?? null);
@@ -175,6 +176,7 @@ export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConv
         <ConversationThread messages={messages} />
         <MessageComposer
           conversationId={selectedConversation?.id ?? null}
+          conversation={selectedConversation}
           defaultChannel={selectedConversation?.primary_channel ?? "email"}
           onSent={(nextMessages) => {
             setMessages(nextMessages);
@@ -193,6 +195,7 @@ export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConv
             );
           }}
           templates={templates}
+          literature={literature}
         />
       </div>
     </div>

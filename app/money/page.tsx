@@ -1,17 +1,22 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { MoneyTabs } from "@/components/money/MoneyTabs";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
-import { getAllExpenses, getJobFinancialSnapshots, getJobs, getPricingRules, getReceiptInbox } from "@/lib/data";
+import { getAllExpenses, getBankStatementImports, getJobFinancialSnapshots, getJobs, getLabourPeople, getPricingRules, getReceiptInbox, getSubcontractorPayments, getSupplierBills, getSuppliers } from "@/lib/data";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { currency } from "@/lib/utils";
 
 export default async function MoneyPage() {
-  const [jobs, pricingRules, expenses, receiptInbox, jobFinancials] = await Promise.all([
+  const [jobs, pricingRules, expenses, receiptInbox, jobFinancials, labourPeople, subcontractorPayments, suppliers, supplierBills, bankStatementImports] = await Promise.all([
     getJobs(),
     getPricingRules(),
     getAllExpenses(),
     getReceiptInbox(),
-    getJobFinancialSnapshots()
+    getJobFinancialSnapshots(),
+    getLabourPeople(),
+    getSubcontractorPayments(),
+    getSuppliers(),
+    getSupplierBills(),
+    getBankStatementImports()
   ]);
   const hasRateCard = pricingRules.some((rule) => rule.rule_name && rule.flat_adjustment != null);
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
@@ -28,7 +33,17 @@ export default async function MoneyPage() {
       wide
     >
       {!hasRateCard ? <RateCardNudge /> : null}
-      <MoneyTabs jobs={jobs} expenses={expenses} receiptInbox={receiptInbox} jobFinancials={jobFinancials} />
+      <MoneyTabs
+        jobs={jobs}
+        expenses={expenses}
+        receiptInbox={receiptInbox}
+        jobFinancials={jobFinancials}
+        labourPeople={labourPeople}
+        subcontractorPayments={subcontractorPayments}
+        suppliers={suppliers}
+        supplierBills={supplierBills}
+        bankStatementImports={bankStatementImports}
+      />
     </AppShell>
   );
 }

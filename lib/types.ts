@@ -395,6 +395,7 @@ export type SurveyRecord = {
   processing_status?: "pending" | "processing" | "complete" | "failed" | null;
   processing_error?: string | null;
   adaptive_sections?: SurveyAdaptiveSections;
+  enabled_modules?: Array<"pitched_roof" | "flat_roof" | "fascias" | "chimney" | "other">;
   created_at?: string;
   updated_at?: string;
 };
@@ -413,6 +414,8 @@ export type JobPhoto = {
   uploaded_at?: string;
 };
 
+export type QuotePricingMode = "single" | "options" | "selectable_items";
+
 export type QuoteRecord = {
   id: string;
   job_id: string;
@@ -424,6 +427,7 @@ export type QuoteRecord = {
   subtotal: number;
   vat_amount: number;
   total: number;
+  customer_pricing_mode?: QuotePricingMode | null;
   options?: QuoteOption[] | null;
   accepted_option_id?: string | null;
   guarantee_text?: string | null;
@@ -489,6 +493,17 @@ export type LabourPersonRecord = {
   skills?: string[] | null;
   emergency_contact?: string | null;
   insurance_notes?: string | null;
+  utr_number?: string | null;
+  cis_status?: "gross" | "net_20" | "net_30" | "not_registered";
+  vat_registered?: boolean;
+  vat_number?: string | null;
+  payment_terms_days?: number;
+  bank_account_name?: string | null;
+  bank_sort_code?: string | null;
+  bank_account_number?: string | null;
+  public_liability_expiry?: string | null;
+  employers_liability_expiry?: string | null;
+  verification_notes?: string | null;
   is_active: boolean;
   notes?: string | null;
   created_at?: string;
@@ -530,6 +545,115 @@ export type LabourPlanRecord = {
   created_at?: string;
   updated_at?: string;
   entries?: LabourEntryRecord[];
+};
+
+export type SubcontractorPaymentRecord = {
+  id: string;
+  business_id: string;
+  subcontractor_id: string;
+  job_id: string;
+  cost_reference?: string | null;
+  work_date: string;
+  period_end_date?: string | null;
+  invoice_reference?: string | null;
+  description: string;
+  quantity: number;
+  unit: "hour" | "day" | "item" | "fixed";
+  unit_rate: number;
+  net_amount: number;
+  vat_rate: number;
+  vat_amount: number;
+  gross_amount: number;
+  cis_rate: number;
+  cis_deduction: number;
+  amount_payable: number;
+  amount_paid: number;
+  amount_outstanding: number;
+  due_date?: string | null;
+  status: "Draft" | "Approved" | "Part Paid" | "Paid" | "Cancelled";
+  payment_date?: string | null;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  subcontractor?: LabourPersonRecord | null;
+  job?: Pick<Job, "id" | "job_ref" | "job_title"> | null;
+};
+
+export type SupplierBillRecord = {
+  id: string;
+  business_id: string;
+  supplier_id: string;
+  job_id?: string | null;
+  bill_number: string;
+  supplier_reference?: string | null;
+  bill_date: string;
+  tax_point_date: string;
+  due_date?: string | null;
+  status: "Draft" | "Received" | "Part Paid" | "Paid" | "Overdue" | "Cancelled" | "Credited";
+  subtotal: number;
+  vat_amount: number;
+  total: number;
+  amount_paid: number;
+  amount_outstanding: number;
+  expense_category?: string | null;
+  notes?: string | null;
+  supplier?: SupplierRecord | null;
+  job?: Pick<Job, "id" | "job_ref" | "job_title"> | null;
+};
+
+export type BankStatementImportRecord = {
+  id: string;
+  business_id: string;
+  import_ref: string;
+  source_name: string;
+  original_filename?: string | null;
+  account_name?: string | null;
+  account_last_four?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  status: "Review" | "Ready" | "Committed" | "Cancelled";
+  row_count: number;
+  debit_total: number;
+  credit_total: number;
+  notes?: string | null;
+  committed_at?: string | null;
+  created_at: string;
+  transactions?: BankTransactionRecord[];
+};
+
+export type BankTransactionRecord = {
+  id: string;
+  business_id: string;
+  import_id: string;
+  transaction_ref: string;
+  row_index: number;
+  transaction_date: string;
+  description: string;
+  reference?: string | null;
+  amount: number;
+  direction: "money_in" | "money_out";
+  balance?: number | null;
+  currency: string;
+  fingerprint: string;
+  proposed_type: "expense" | "customer_payment" | "supplier_payment" | "transfer" | "refund" | "income" | "ignore" | "unmatched";
+  category?: string | null;
+  vat_code: "0" | "5" | "20" | "exempt" | "outside_scope";
+  net_amount?: number | null;
+  vat_amount: number;
+  gross_amount?: number | null;
+  proposed_supplier_name?: string | null;
+  proposed_job_ref?: string | null;
+  proposed_invoice_number?: string | null;
+  proposed_bill_number?: string | null;
+  confidence: number;
+  reasoning?: string | null;
+  review_status: "Needs Review" | "Approved" | "Rejected" | "Duplicate" | "Committed";
+  duplicate_of?: string | null;
+  committed_entity_type?: string | null;
+  committed_at?: string | null;
+  created_at: string;
 };
 
 export type JobFinancialSnapshot = {
@@ -730,6 +854,41 @@ export type InvoiceLineItem = {
   category?: "materials" | "labour" | "roof_works" | "access" | string;
 };
 
+export type CommunicationDraftStatus = "draft" | "sending" | "sent" | "failed" | "discarded";
+
+export type CommunicationDraft = {
+  id: string;
+  business_id: string;
+  conversation_id: string;
+  customer_id?: string | null;
+  job_id?: string | null;
+  channel: Extract<ConversationChannel, "email" | "sms" | "whatsapp">;
+  subject?: string | null;
+  body: string;
+  literature_ids: string[];
+  job_document_ids: string[];
+  status: CommunicationDraftStatus;
+  created_by: string;
+  sent_message_id?: string | null;
+  sent_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LiteratureAsset = {
+  id: string;
+  business_id: string;
+  display_name: string;
+  description?: string | null;
+  storage_bucket: string;
+  storage_path: string;
+  mime_type?: string | null;
+  file_size?: number | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type InvoiceType = "standard" | "deposit" | "interim" | "final";
 export type InvoiceVatTreatment = "standard" | "domestic_reverse_charge";
 
@@ -796,6 +955,8 @@ export type JobExpense = {
   description: string;
   supplier_name?: string | null;
   amount: number;
+  net_amount?: number | null;
+  gross_amount?: number | null;
   vat_amount: number;
   cis_applicable?: boolean | null;
   cis_rate?: number | null;

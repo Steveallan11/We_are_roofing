@@ -2,8 +2,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import { ensureBusinessRecord, getNextJobRef } from "@/lib/workflows";
+import { createJobEmailDraft, sendCommunicationDraft } from "@/lib/comms/communicationDrafts";
 import type { AssistantRouteContext, ToolExecutionResult } from "@/lib/assistant/types";
 import type { JobStatus, QuoteRecord, QuoteStatus } from "@/lib/types";
+import { executeFinanceTool } from "@/lib/finance/service";
+import { buildQuoteUpdate, type QuoteUpdatePlan } from "@/lib/quotes/mcpQuoteEditing";
+import { executeSurveyTool } from "@/lib/surveys/service";
 
 const VALID_JOB_STATUSES: JobStatus[] = [
   "New Lead",
@@ -401,13 +405,15 @@ async function getCustomerJobs(input: Record<string, unknown>): Promise<ToolExec
   };
 }
 
-async function getQuotes(input: Record<string, unknown>): Promise<ToolExecutionResult> {
+async function getQuotes(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
   const supabase = getSupabase();
   const limit = Math.max(1, Math.min(Number(input.limit ?? 10), 50));
-  const { data, error } = await supabase
+  let query = supabase
     .from("quotes")
     .select("*, jobs(job_ref, job_title, property_address)")
     .order("created_at", { ascending: false });
+  if (routeContext?.businessId) query = query.eq("business_id", routeContext.businessId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   let rows = data ?? [];
   if (input.status) rows = rows.filter((quote) => quote.status === input.status);
@@ -558,6 +564,221 @@ async function getOverdueItems(): Promise<ToolExecutionResult> {
   };
 }
 
+async function resolveScopedQuote(input: Record<string, unknown>, routeContext?: AssistantRouteContext) {
+  const businessId = routeContext?.businessId;
+  if (!businessId) throw new Error("This quote tool requires an authenticated workspace.");
+  const supabase = getSupabase();
+  let query = supabase.from("quotes").select("*").eq("business_id", businessId);
+  if (input.quote_ref) query = query.eq("quote_ref", String(input.quote_ref).trim());
+  else if (input.job_ref) {
+    const { data: job, error: jobError } = await supabase.from("jobs").select("id").eq("business_id", businessId).eq("job_ref", String(input.job_ref).trim()).maybeSingle();
+    if (jobError || !job) throw new Error(jobError?.message ?? `Job ${input.job_ref} was not found in this workspace.`);
+    query = query.eq("job_id", job.id).order("version_number", { ascending: false }).limit(1);
+  } else throw new Error("quote_ref or job_ref is required.");
+  const { data, error } = await query.maybeSingle();
+  if (error || !data) throw new Error(error?.message ?? "Quote was not found in this workspace.");
+  return data as QuoteRecord & { business_id: string };
+}
+
+async function quoteContext(quote: QuoteRecord & { business_id: string }) {
+  const supabase = getSupabase();
+  const { data: job, error: jobError } = await supabase.from("jobs").select("id, job_ref, job_title, property_address, customer_id").eq("business_id", quote.business_id).eq("id", quote.job_id).maybeSingle();
+  if (jobError || !job) throw new Error(jobError?.message ?? "The quote's job was not found in this workspace.");
+  const { data: customer, error: customerError } = await supabase.from("customers").select("full_name, email, phone").eq("business_id", quote.business_id).eq("id", job.customer_id).maybeSingle();
+  if (customerError) throw new Error(customerError.message);
+  return { job, customer };
+}
+
+function numberedQuoteLines(lines: QuoteRecord["cost_breakdown"]) {
+  return (lines ?? []).map((line, index) => ({ line_number: index + 1, ...line }));
+}
+
+async function getQuoteDetail(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  const quote = await resolveScopedQuote(input, routeContext);
+  const { job, customer } = await quoteContext(quote);
+  return {
+    ok: true,
+    summary: `${quote.quote_ref} is ${quote.status} for ${customer?.full_name ?? "the customer"}, totalling ${currency(getQuotePipelineValue(quote) ?? quote.total ?? 0)}.`,
+    data: {
+      quote_ref: quote.quote_ref,
+      version_number: quote.version_number,
+      status: quote.status,
+      updated_at: quote.updated_at,
+      job,
+      customer,
+      roof_report: quote.roof_report,
+      scope_of_works: quote.scope_of_works,
+      guarantee_text: quote.guarantee_text,
+      exclusions: quote.exclusions,
+      terms: quote.terms,
+      customer_email_subject: quote.customer_email_subject,
+      customer_email_body: quote.customer_email_body,
+      confidence: quote.confidence,
+      missing_info: quote.missing_info,
+      pricing_notes: quote.pricing_notes,
+      subtotal: quote.subtotal,
+      vat_amount: quote.vat_amount,
+      total: quote.total,
+      lines: numberedQuoteLines(quote.cost_breakdown),
+      options: (quote.options ?? []).map((option) => ({ ...option, lines: numberedQuoteLines(option.cost_breakdown) }))
+    }
+  };
+}
+
+function quoteUpdatePlan(input: Record<string, unknown>): QuoteUpdatePlan {
+  return {
+    ...(input.customer_pricing_mode === "single" || input.customer_pricing_mode === "options" || input.customer_pricing_mode === "selectable_items"
+      ? { customer_pricing_mode: input.customer_pricing_mode }
+      : {}),
+    ...(typeof input.roof_report === "string" ? { roof_report: input.roof_report } : {}),
+    ...(typeof input.scope_of_works === "string" ? { scope_of_works: input.scope_of_works } : {}),
+    ...(typeof input.guarantee_text === "string" ? { guarantee_text: input.guarantee_text } : {}),
+    ...(typeof input.exclusions === "string" ? { exclusions: input.exclusions } : {}),
+    ...(typeof input.terms === "string" ? { terms: input.terms } : {}),
+    ...(typeof input.customer_email_subject === "string" ? { customer_email_subject: input.customer_email_subject } : {}),
+    ...(typeof input.customer_email_body === "string" ? { customer_email_body: input.customer_email_body } : {}),
+    ...(input.confidence === "Low" || input.confidence === "Medium" || input.confidence === "High" ? { confidence: input.confidence } : {}),
+    ...(Array.isArray(input.missing_info) ? { missing_info: input.missing_info.map(String) } : {}),
+    ...(typeof input.pricing_note === "string" ? { pricing_note: input.pricing_note } : {}),
+    line_changes: Array.isArray(input.line_changes) ? input.line_changes as QuoteUpdatePlan["line_changes"] : [],
+    option_updates: Array.isArray(input.option_updates) ? input.option_updates as QuoteUpdatePlan["option_updates"] : []
+  };
+}
+
+async function buildQuoteMcpUpdate(input: Record<string, unknown>, routeContext?: AssistantRouteContext) {
+  const quote = await resolveScopedQuote(input, routeContext);
+  if (!["Draft", "Needs Review", "Approved"].includes(quote.status)) {
+    throw new Error(`${quote.quote_ref} is ${quote.status}. Sent, accepted or declined quotes cannot be edited through ChatGPT; create a new version or reopen it in the OS.`);
+  }
+  const { data: business, error } = await getSupabase().from("businesses").select("vat_rate").eq("id", quote.business_id).maybeSingle();
+  if (error) throw new Error(error.message);
+  const vatRate = Number(business?.vat_rate ?? 20) / 100;
+  const update = buildQuoteUpdate(quote, quoteUpdatePlan(input), vatRate);
+  const { job, customer } = await quoteContext(quote);
+  return { quote, update, job, customer };
+}
+
+async function previewQuoteUpdate(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  const { quote, update, customer } = await buildQuoteMcpUpdate(input, routeContext);
+  return {
+    ok: true,
+    summary: `Preview ready for ${quote.quote_ref}. The total changes from ${currency(update.preview.previous.total)} to ${currency(getQuotePipelineValue({ ...quote, ...update.patch } as QuoteRecord) ?? update.preview.updated.total)}. Nothing has been saved.`,
+    data: { quote_ref: quote.quote_ref, customer: customer?.full_name ?? null, expected_updated_at: quote.updated_at, ...update.preview, instructions: "Show this preview to the user. Call update_quote only after they confirm these exact changes." }
+  };
+}
+
+async function updateQuoteFromMcp(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (input.confirmed !== true) throw new Error("confirmed must be true after the user reviews the quote update preview.");
+  const { quote, update, customer } = await buildQuoteMcpUpdate(input, routeContext);
+  const expectedUpdatedAt = String(input.expected_updated_at ?? "").trim();
+  if (!expectedUpdatedAt) throw new Error("expected_updated_at from get_quote_detail or preview_quote_update is required.");
+  if (quote.updated_at && expectedUpdatedAt !== quote.updated_at) throw new Error("This quote changed after it was reviewed. Load it again before updating.");
+  const nextStatus: QuoteStatus = quote.status === "Approved" ? "Needs Review" : quote.status;
+  const nextPricingNotes = [...new Set([...(update.patch.pricing_notes ?? quote.pricing_notes ?? []), `[ChatGPT ${new Date().toISOString()}] Confirmed quote update applied.`])];
+  const supabase = getSupabase();
+  const { data: updated, error } = await supabase.from("quotes").update({ ...update.patch, status: nextStatus, pricing_notes: nextPricingNotes, updated_at: new Date().toISOString() }).eq("business_id", quote.business_id).eq("id", quote.id).eq("updated_at", expectedUpdatedAt).select("*").maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!updated) throw new Error("This quote changed while the update was being saved. Load it again and review the latest version.");
+  const pipelineValue = getQuotePipelineValue(updated as QuoteRecord) ?? Number(updated.total ?? 0);
+  const jobUpdate = await supabase.from("jobs").update({ estimated_value: pipelineValue, updated_at: new Date().toISOString() }).eq("business_id", quote.business_id).eq("id", quote.job_id);
+  if (jobUpdate.error) throw new Error(`Quote updated, but the job value could not be refreshed: ${jobUpdate.error.message}`);
+  return { ok: true, summary: `Updated ${quote.quote_ref} for ${customer?.full_name ?? "the customer"}. The revised quote value is ${currency(pipelineValue)}${nextStatus !== quote.status ? " and it now needs review again" : ""}.`, data: { quote_ref: quote.quote_ref, status: nextStatus, updated_at: updated.updated_at, subtotal: updated.subtotal, vat_amount: updated.vat_amount, total: pipelineValue, lines: numberedQuoteLines(updated.cost_breakdown ?? []), options: updated.options ?? [] } };
+}
+
+async function listLiterature(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (!routeContext?.businessId) throw new Error("An authenticated workspace is required.");
+  const supabase = getSupabase();
+  const query = String(input.query ?? "").trim().toLowerCase();
+  const { data, error } = await supabase
+    .from("literature_assets")
+    .select("id, display_name, description, mime_type, file_size")
+    .eq("business_id", routeContext.businessId)
+    .eq("is_active", true)
+    .order("display_name");
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []).filter((item) => !query || [item.display_name, item.description].some((value) => String(value ?? "").toLowerCase().includes(query)));
+  return {
+    ok: true,
+    summary: rows.length ? `Found ${rows.length} available literature file${rows.length === 1 ? "" : "s"}.` : "No literature matched that search.",
+    data: rows
+  };
+}
+
+async function listJobDocuments(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (!routeContext?.businessId) throw new Error("An authenticated workspace is required.");
+  const jobRef = String(input.job_ref ?? "").trim();
+  const queryText = String(input.query ?? "").trim().toLowerCase();
+  const supabase = getSupabase();
+  const { data: job, error: jobError } = await supabase.from("jobs").select("id,job_ref,job_title").eq("business_id", routeContext.businessId).eq("job_ref", jobRef).maybeSingle();
+  if (jobError || !job) throw new Error(jobError?.message ?? `Job ${jobRef} was not found in this workspace.`);
+  const [documentsResult, invoicesResult, quotesResult] = await Promise.all([
+    supabase.from("job_documents").select("id,display_name,document_type,mime_type,file_size,invoice_id,quote_id,storage_bucket,storage_path,content_html,created_at").eq("job_id", job.id).order("created_at", { ascending: false }),
+    supabase.from("invoices").select("id,invoice_ref,status,total").eq("business_id", routeContext.businessId).eq("job_id", job.id),
+    supabase.from("quotes").select("id,quote_ref,status,total").eq("business_id", routeContext.businessId).eq("job_id", job.id)
+  ]);
+  const error = documentsResult.error ?? invoicesResult.error ?? quotesResult.error;
+  if (error) throw new Error(error.message);
+  const invoices = new Map((invoicesResult.data ?? []).map((item) => [item.id, item]));
+  const quotes = new Map((quotesResult.data ?? []).map((item) => [item.id, item]));
+  const documents = (documentsResult.data ?? []).map((document) => {
+    const invoice = document.invoice_id ? invoices.get(document.invoice_id) : null;
+    const quote = document.quote_id ? quotes.get(document.quote_id) : null;
+    return {
+      document_id: document.id,
+      display_name: document.display_name,
+      document_type: document.document_type,
+      mime_type: document.mime_type,
+      file_size: document.file_size,
+      invoice_number: invoice?.invoice_ref ?? null,
+      invoice_status: invoice?.status ?? null,
+      invoice_total: invoice?.total ?? null,
+      quote_reference: quote?.quote_ref ?? null,
+      quote_status: quote?.status ?? null,
+      attachable: Boolean((document.storage_bucket && document.storage_path) || document.content_html),
+      created_at: document.created_at
+    };
+  }).filter((document) => !queryText || [document.display_name, document.document_type, document.invoice_number, document.quote_reference].some((value) => String(value ?? "").toLowerCase().includes(queryText)));
+  return {
+    ok: true,
+    summary: documents.length ? `Found ${documents.length} job document${documents.length === 1 ? "" : "s"} for ${job.job_ref}.` : `No job documents matched for ${job.job_ref}.`,
+    data: { job_ref: job.job_ref, job_title: job.job_title, documents }
+  };
+}
+
+async function draftCustomerEmail(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (!routeContext?.businessId) throw new Error("An authenticated workspace is required.");
+  const result = await createJobEmailDraft({
+    jobRef: String(input.job_ref ?? ""),
+    subject: String(input.subject ?? "").trim(),
+    body: String(input.body ?? "").trim(),
+    literatureNames: Array.isArray(input.literature_names) ? input.literature_names.map(String) : [],
+    jobDocumentIds: Array.isArray(input.job_document_ids) ? input.job_document_ids.map(String) : [],
+    businessId: routeContext.businessId,
+    createdBy: "chatgpt"
+  });
+  return {
+    ok: true,
+    summary: `Saved an email draft for ${result.preview.job_ref}. Nothing has been sent. Review the recipient, subject, message and attachments before sending.`,
+    data: { draft_id: result.draft.id, ...result.preview }
+  };
+}
+
+async function sendCustomerEmailDraft(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (!routeContext?.businessId) throw new Error("An authenticated workspace is required.");
+  const result = await sendCommunicationDraft(String(input.draft_id ?? ""), input.confirmed === true, routeContext.businessId);
+  return {
+    ok: true,
+    summary: "The confirmed customer email was sent and recorded in the job history.",
+    data: {
+      draft_id: result.draftId,
+      message_id: result.messageId,
+      provider_message_id: result.providerId,
+      status: result.status,
+      attachments: result.attachments
+    }
+  };
+}
+
 async function navigateTo(input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
   let path = String(input.path ?? "");
   const destination = typeof input.destination === "string" ? input.destination : "";
@@ -608,6 +829,20 @@ async function navigateTo(input: Record<string, unknown>, routeContext?: Assista
 }
 
 export async function executeToolCall(toolName: string, input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (["get_survey_schema", "get_job_survey", "preview_survey_update", "preview_survey_from_document", "update_survey", "set_survey_modules"].includes(toolName)) {
+    return executeSurveyTool(toolName, input, routeContext);
+  }
+  if ([
+    "get_invoices", "get_invoice_detail", "get_payments", "get_supplier_bills", "get_expenses", "get_job_financials",
+    "get_sales_summary", "get_vat_summary", "get_outstanding_debtors", "get_outstanding_creditors",
+    "get_profitability_report", "get_financial_summary", "get_accountant_pack", "create_invoice", "record_customer_payment",
+    "create_supplier_bill", "record_supplier_payment", "create_expense", "create_credit_note", "get_subcontractors",
+    "save_subcontractor", "record_subcontractor_cost", "record_subcontractor_payment", "preview_bank_statement_import",
+    "get_unmatched_transactions", "categorise_bank_transaction", "link_transaction_to_job", "match_customer_payment",
+    "reconcile_supplier_payment", "commit_bank_statement_import", "get_bank_reconciliation_summary"
+  ].includes(toolName)) {
+    return executeFinanceTool(toolName, input, routeContext);
+  }
   switch (toolName) {
     case "get_jobs":
       return getJobs(input);
@@ -626,7 +861,13 @@ export async function executeToolCall(toolName: string, input: Record<string, un
     case "get_customer_jobs":
       return getCustomerJobs(input);
     case "get_quotes":
-      return getQuotes(input);
+      return getQuotes(input, routeContext);
+    case "get_quote_detail":
+      return getQuoteDetail(input, routeContext);
+    case "preview_quote_update":
+      return previewQuoteUpdate(input, routeContext);
+    case "update_quote":
+      return updateQuoteFromMcp(input, routeContext);
     case "update_quote_status":
       return updateQuoteStatus(input);
     case "get_pipeline_summary":
@@ -635,6 +876,14 @@ export async function executeToolCall(toolName: string, input: Record<string, un
       return getRevenueSummary(input);
     case "get_overdue_items":
       return getOverdueItems();
+    case "list_literature":
+      return listLiterature(input, routeContext);
+    case "list_job_documents":
+      return listJobDocuments(input, routeContext);
+    case "draft_customer_email":
+      return draftCustomerEmail(input, routeContext);
+    case "send_customer_email_draft":
+      return sendCustomerEmailDraft(input, routeContext);
     case "navigate_to":
       return navigateTo(input, routeContext);
     default:

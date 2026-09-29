@@ -6,7 +6,6 @@ import { AttentionBanner } from "@/components/jobs/AttentionBanner";
 import { JobCard } from "@/components/jobs/job-card";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { JobSearchDialog } from "@/components/jobs/JobSearchDialog";
-import { PipelineStrip } from "@/components/jobs/PipelineStrip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getPipelineGroup, PIPELINE_GROUPS, type PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
 import { needsAttention, type JobForAction } from "@/lib/jobs/nextAction";
@@ -17,13 +16,15 @@ import { currency } from "@/lib/utils";
 
 type Props = {
   jobs: JobForAction[];
-  initialFilter?: PipelineGroupKey | "all" | "attention";
+  initialFilter?: WorkspaceFilter;
 };
+
+export type WorkspaceFilter = PipelineGroupKey | "all" | "attention" | "stale" | "archived";
 
 export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
   const [optimisticJobs, setOptimisticJobs] = useState(jobs);
-  const [activeFilter, setActiveFilter] = useState<PipelineGroupKey | "all" | "attention">(initialFilter);
-  const [view, setView] = useState<"board" | "list">("board");
+  const [activeFilter, setActiveFilter] = useState<WorkspaceFilter>(initialFilter);
+  const [view, setView] = useState<"board" | "list">("list");
   const [draggingJobId, setDraggingJobId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -45,14 +46,18 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
 
   const attentionJobs = useMemo(() => optimisticJobs.filter(needsAttention), [optimisticJobs]);
   const activeJobs = useMemo(() => optimisticJobs.filter((job) => !["Completed", "Not Proceeding", "Lost", "Archived"].includes(job.status)), [optimisticJobs]);
+  const staleJobs = useMemo(() => activeJobs.filter(isStaleJob), [activeJobs]);
+  const archivedJobs = useMemo(() => optimisticJobs.filter((job) => job.status === "Archived"), [optimisticJobs]);
   const pipelineValue = useMemo(() => activeJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0), [activeJobs]);
   const filteredJobs = useMemo(() => {
     if (activeFilter === "attention") return attentionJobs;
+    if (activeFilter === "stale") return staleJobs;
+    if (activeFilter === "archived") return archivedJobs;
     const group = getPipelineGroup(activeFilter);
-    if (!group) return optimisticJobs;
+    if (!group) return activeJobs;
     return optimisticJobs.filter((job) => group.statuses.includes(job.status));
-  }, [activeFilter, attentionJobs, optimisticJobs]);
-  const visibleGroups = activeFilter === "all" || activeFilter === "attention" ? PIPELINE_GROUPS : PIPELINE_GROUPS.filter((group) => group.key === activeFilter);
+  }, [activeFilter, activeJobs, archivedJobs, attentionJobs, optimisticJobs, staleJobs]);
+  const visibleGroups = activeFilter === "all" || activeFilter === "attention" || activeFilter === "stale" ? PIPELINE_GROUPS.filter((group) => !["complete", "closed"].includes(group.key)) : PIPELINE_GROUPS.filter((group) => group.key === activeFilter);
 
   const moveJobToStatus = async (jobId: string, status: JobStatus) => {
     const previousJobs = optimisticJobs;
@@ -72,20 +77,24 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
     }
   };
 
+  const applyStatusLocally = (jobId: string, status: JobStatus) => {
+    setOptimisticJobs((current) => current.map((job) => (job.id === jobId ? { ...job, status, updated_at: new Date().toISOString() } : job)));
+  };
+
   return (
     <div className="stack">
-      <section className="hidden gap-3 md:grid-cols-3 lg:grid">
+      <section className="grid gap-3 sm:grid-cols-3">
         <SummaryTile label="Active jobs" value={activeJobs.length.toString()} hint="Open work excluding completed, lost, and archived" />
         <SummaryTile label="Pipeline value" value={currency(pipelineValue)} hint="Estimated value across active jobs" />
-        <SummaryTile label="Urgent" value={attentionJobs.length.toString()} hint="Follow-ups, ready-to-send, or surveys due today" danger={attentionJobs.length > 0} />
+        <SummaryTile label="Needs sorting" value={staleJobs.length.toString()} hint="No update for 45 days or more" danger={staleJobs.length > 0} />
       </section>
 
-      <div className="hidden flex-col gap-3 md:flex-row md:items-center md:justify-between lg:flex">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">Roofing Pipeline</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Board for the day-to-day flow. List view is for quick scanning.</p>
+          <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[var(--dim)]">Jobs workspace</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Use the list for daily work. Switch to the board when moving several jobs.</p>
         </div>
-        <div className="hidden gap-2 lg:flex">
+        <div className="flex gap-2">
           <Button variant={view === "board" ? "primary" : "secondary"} size="sm" onClick={() => setView("board")}>
             Board
           </Button>
@@ -109,48 +118,20 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
         </Button>
       </div>
 
-      <div className="hidden lg:block">
-        <PipelineStrip active={activeFilter === "attention" ? "all" : activeFilter} jobs={optimisticJobs} onSelect={setActiveFilter} />
-      </div>
-      <div className="hidden lg:block">
-        <PipelineTotalsBar jobs={activeJobs} />
-      </div>
-      <JobFilters active={activeFilter} attentionCount={attentionJobs.length} onSelect={setActiveFilter} />
+      <JobFilters active={activeFilter} archivedCount={archivedJobs.length} attentionCount={attentionJobs.length} staleCount={staleJobs.length} onSelect={setActiveFilter} />
 
       {filteredJobs.length === 0 ? (
         <EmptyState title="No jobs here" message="This filter is clear. Switch back to All Jobs or add a new lead." actionHref="/jobs/new" actionLabel="+ Add Job" />
       ) : (
         <>
-          <div className="grid gap-4 lg:hidden">
-            {visibleGroups.map((group) => {
-              const groupJobs = filteredJobs.filter((job) => group.statuses.includes(job.status));
-              if (groupJobs.length === 0) return null;
-              const color = getStatusColor(groupJobs[0].status).dot;
-              return (
-                <section key={group.key}>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-                    <p className="section-kicker text-[0.62rem]">{group.label} ({groupJobs.length})</p>
-                    <div className="h-px flex-1 bg-[var(--border)]" />
-                  </div>
-                  <div className="grid gap-3">
-                    {groupJobs.map((job) => (
-                      <JobCard job={job} key={job.id} list />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-
-          {view === "list" || activeFilter === "attention" ? (
-            <div className="hidden gap-3 lg:grid">
+          {view === "list" || activeFilter === "attention" || activeFilter === "stale" || activeFilter === "archived" ? (
+            <div className="grid gap-3">
               {filteredJobs.map((job) => (
-                <JobCard job={job} key={job.id} list />
+                <JobCard job={job} key={job.id} list onStatusChange={applyStatusLocally} />
               ))}
             </div>
           ) : (
-            <div className="hidden gap-4 overflow-x-auto pb-2 lg:flex">
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {visibleGroups.map((group) => {
                 const groupJobs = optimisticJobs.filter((job) => group.statuses.includes(job.status));
                 const value = groupJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
@@ -187,7 +168,7 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
                             onDragStart={() => setDraggingJobId(job.id)}
                             className={draggingJobId === job.id ? "opacity-50" : ""}
                           >
-                            <JobCard compact job={job} />
+                            <JobCard compact job={job} onStatusChange={applyStatusLocally} />
                           </div>
                         ))
                       ) : (
@@ -209,46 +190,6 @@ export function JobsWorkspace({ jobs, initialFilter = "all" }: Props) {
   );
 }
 
-function PipelineTotalsBar({ jobs }: { jobs: JobForAction[] }) {
-  const total = Math.max(jobs.length, 1);
-  const segments = PIPELINE_GROUPS.map((group) => {
-    const groupJobs = jobs.filter((job) => group.statuses.includes(job.status));
-    const value = groupJobs.reduce((sum, job) => sum + Number(getJobPipelineValue(job) ?? 0), 0);
-    const color = groupJobs[0] ? getStatusColor(groupJobs[0].status).dot : "var(--border-mid)";
-    return {
-      color,
-      count: groupJobs.length,
-      label: group.label,
-      value,
-      width: `${(groupJobs.length / total) * 100}%`
-    };
-  }).filter((segment) => segment.count > 0);
-
-  if (jobs.length === 0) return null;
-
-  return (
-    <div className="card p-3">
-      <div className="flex h-3 overflow-hidden rounded-full bg-[var(--surface-deep)]">
-        {segments.map((segment) => (
-          <div
-            key={segment.label}
-            style={{ background: segment.color, width: segment.width }}
-            title={`${segment.label}: ${segment.count} job${segment.count === 1 ? "" : "s"} · ${currency(segment.value)}`}
-          />
-        ))}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-3 text-xs text-[var(--muted)]">
-        {segments.map((segment) => (
-          <span className="inline-flex items-center gap-2" key={segment.label}>
-            <span className="h-2 w-2 rounded-full" style={{ background: segment.color }} />
-            {segment.label}: {segment.count}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function SummaryTile({ label, value, hint, danger = false }: { label: string; value: string; hint: string; danger?: boolean }) {
   return (
     <div className={`card p-4 ${danger ? "border-[color:var(--emergency-border)] bg-[color:var(--emergency-bg)]" : ""}`}>
@@ -257,4 +198,12 @@ function SummaryTile({ label, value, hint, danger = false }: { label: string; va
       <p className="mt-2 text-xs text-[var(--muted)]">{hint}</p>
     </div>
   );
+}
+
+function isStaleJob(job: JobForAction) {
+  if (["Completed", "Not Proceeding", "Lost", "Archived", "In Progress"].includes(job.status)) return false;
+  const date = job.updated_at || job.created_at;
+  if (!date) return false;
+  const age = Date.now() - new Date(date).getTime();
+  return Number.isFinite(age) && age >= 45 * 24 * 60 * 60 * 1000;
 }

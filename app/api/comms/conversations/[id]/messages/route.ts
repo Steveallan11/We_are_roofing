@@ -3,6 +3,7 @@ import { requireAdminApi } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMessages } from "@/lib/data";
 import { sendMessage } from "@/lib/comms/sendMessage";
+import { loadLiteratureAttachments } from "@/lib/comms/literatureAttachments";
 import { canPersistToSupabase } from "@/lib/workflows";
 import type { ConversationChannel } from "@/lib/types";
 
@@ -25,10 +26,16 @@ export async function POST(request: Request, { params }: Props) {
     body?: string;
     subject?: string | null;
     templateType?: string | null;
+    literatureIds?: string[];
+    confirmed?: boolean;
   };
 
   if (!body.channel || !body.body?.trim()) {
     return NextResponse.json({ ok: false, error: "Channel and message body are required." }, { status: 400 });
+  }
+
+  if (body.confirmed !== true) {
+    return NextResponse.json({ ok: false, error: "Review and confirm the message before sending." }, { status: 400 });
   }
 
   if (!canPersistToSupabase()) {
@@ -50,6 +57,15 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const customer = conversation.customers as { email?: string | null; phone?: string | null; contact_person_email?: string | null; contact_person_phone?: string | null } | null;
+  let attachments: Awaited<ReturnType<typeof loadLiteratureAttachments>> = [];
+  try {
+    attachments = body.channel === "email" ? await loadLiteratureAttachments(supabase, body.literatureIds ?? []) : [];
+  } catch (attachmentError) {
+    return NextResponse.json(
+      { ok: false, error: attachmentError instanceof Error ? attachmentError.message : "The selected literature could not be attached." },
+      { status: 400 }
+    );
+  }
   const result = await sendMessage({
     conversationId: id,
     channel: body.channel,
@@ -59,7 +75,8 @@ export async function POST(request: Request, { params }: Props) {
     toPhone: customer?.phone || customer?.contact_person_phone || null,
     jobId: typeof conversation.job_id === "string" ? conversation.job_id : null,
     quoteId: typeof conversation.quote_id === "string" ? conversation.quote_id : null,
-    templateType: body.templateType || "manual_message"
+    templateType: body.templateType || "manual_message",
+    attachments
   });
 
   const messages = await getMessages(id);

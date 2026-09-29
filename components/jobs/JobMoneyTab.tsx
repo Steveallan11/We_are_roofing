@@ -12,6 +12,7 @@ import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyse
 import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { getQuoteLineItemCategory, getQuoteValueLines, isScaffoldLine } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
+import { getVariationInvoiceProgress } from "@/lib/variations/invoicing";
 import type { InvoiceRecord, InvoiceType, InvoiceVatTreatment, Job, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
 
 type Props = {
@@ -110,6 +111,7 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
   const [interimMode, setInterimMode] = useState<"fixed" | "percentage">("fixed");
   const [interimValue, setInterimValue] = useState("");
   const [interimDescription, setInterimDescription] = useState("");
+  const [interimVariationId, setInterimVariationId] = useState("");
   const [sendInvoice, setSendInvoice] = useState<InvoiceRecord | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceRecord | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
@@ -124,6 +126,10 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
 
   const liveInvoices = invoices.filter((invoice) => invoice.status !== "Void");
   const approvedVariations = variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
+  const invoiceableAdditionalWorks = variations
+    .filter((variation) => ["Accepted", "Invoiced"].includes(variation.status))
+    .map((variation) => ({ variation, progress: getVariationInvoiceProgress(invoices, variation.id, Number(variation.total ?? 0)) }))
+    .filter(({ progress }) => progress.remaining > 0.01);
   const invoiceableQuoteTotal = quote ? calculateFirmQuoteTotal(quote) : 0;
   const quoteFinancials = useMemo(() => calculateFinancialQuoteTotals(quote), [quote]);
   const invoiceablePayableTotal = vatTreatment === "domestic_reverse_charge" ? quoteFinancials.net : invoiceableQuoteTotal;
@@ -283,7 +289,39 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
     notify(null, null);
     setBusy("create-interim");
     const value = Number(interimValue);
+    if (interimVariationId) {
+      const selected = invoiceableAdditionalWorks.find(({ variation }) => variation.id === interimVariationId);
+      if (!selected) {
+        setBusy(null);
+        notify(null, "That additional work is no longer available to invoice. Refresh and try again.");
+        return;
+      }
+      if (!Number.isFinite(value) || value <= 0 || value > selected.progress.remaining + 0.01) {
+        setBusy(null);
+        notify(null, `Enter an amount up to ${currency(selected.progress.remaining)}.`);
+        return;
+      }
+      const response = await fetch(`/api/variations/${interimVariationId}/invoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: value })
+      });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
+      setBusy(null);
+      if (!response.ok || !result?.ok) {
+        notify(null, result?.error || "Additional work invoice could not be created.");
+        return;
+      }
+      setShowInterimForm(false);
+      setInterimVariationId("");
+      setInterimValue("");
+      setInterimDescription("");
+      notify([result.message, result.warning].filter(Boolean).join(" "), null);
+      startTransition(() => router.refresh());
+      return;
+    }
     if (vatTreatment === "domestic_reverse_charge" && (!reverseChargeConfirmed || !customerVatNumber.trim())) {
+      setBusy(null);
       notify(null, "Enter the customer's VAT number and confirm the reverse-charge checks before raising the invoice.");
       return;
     }
@@ -577,19 +615,46 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
         {!quote ? (
           <p className="text-sm text-[#ffcf7d]">Create a quote first — invoices are raised from the approved quote.</p>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setShowDepositForm((current) => !current)} disabled={hasDeposit || busy !== null}>
-              {hasDeposit ? "Deposit Raised ✓" : "Raise Deposit Invoice"}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setShowInterimForm((current) => !current)} disabled={busy !== null}>
-              Raise Custom Invoice
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => createInvoice("final")} disabled={hasFinal || busy !== null}>
-              {busy === "create-final" ? "Creating..." : hasFinal ? "Final Raised ✓" : "Raise Final Balance"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => createInvoice("standard")} disabled={busy !== null}>
-              {busy === "create-standard" ? "Creating..." : "Full Invoice"}
-            </Button>
+          <div className="space-y-3">
+            {invoiceableAdditionalWorks.length > 0 ? (
+              <div className="rounded-xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 p-4">
+                <p className="font-semibold text-[var(--text)]">Approved additional work ready to invoice</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Select an item to add it to the normal invoice flow.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {invoiceableAdditionalWorks.map(({ variation, progress }) => (
+                    <Button
+                      disabled={busy !== null}
+                      key={variation.id}
+                      onClick={() => {
+                        setInterimVariationId(variation.id);
+                        setInterimMode("fixed");
+                        setInterimValue(progress.remaining.toFixed(2));
+                        setInterimDescription(`${variation.title} (${variation.variation_ref})`);
+                        setShowInterimForm(true);
+                      }}
+                      size="sm"
+                      variant="primary"
+                    >
+                      Invoice {variation.variation_ref} · {currency(progress.remaining)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setShowDepositForm((current) => !current)} disabled={hasDeposit || busy !== null}>
+                {hasDeposit ? "Deposit Raised ✓" : "Raise Deposit Invoice"}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setInterimVariationId(""); setShowInterimForm((current) => !current); }} disabled={busy !== null}>
+                Raise Custom Invoice
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => createInvoice("final")} disabled={hasFinal || busy !== null}>
+                {busy === "create-final" ? "Creating..." : hasFinal ? "Final Raised ✓" : "Raise Final Balance"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => createInvoice("standard")} disabled={busy !== null}>
+                {busy === "create-standard" ? "Creating..." : "Full Invoice"}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -639,14 +704,44 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
           <div className="mt-3 rounded-xl border border-[var(--border)] p-4">
             <p className="text-sm font-semibold text-[var(--text)]">Custom invoice</p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Raise a one-off payment at any point in the job — scaffold up, materials landed, a stage of work complete. Raise as many of
-              these as the job needs.
+              {interimVariationId
+                ? "Invoice approved additional work here. It remains linked to the additional-work record so its invoiced and remaining balances stay correct."
+                : "Raise a one-off payment at any point in the job — scaffold up, materials landed, or a stage of work complete."}
             </p>
+
+            {invoiceableAdditionalWorks.length > 0 ? (
+              <label className="mt-3 block">
+                <span className="label">Invoice against</span>
+                <select
+                  className="field min-h-11"
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    setInterimVariationId(id);
+                    const selected = invoiceableAdditionalWorks.find(({ variation }) => variation.id === id);
+                    if (selected) {
+                      setInterimMode("fixed");
+                      setInterimValue(selected.progress.remaining.toFixed(2));
+                      setInterimDescription(`${selected.variation.title} (${selected.variation.variation_ref})`);
+                    } else {
+                      setInterimValue("");
+                      setInterimDescription("");
+                    }
+                  }}
+                  value={interimVariationId}
+                >
+                  <option value="">Main contract / stage payment</option>
+                  {invoiceableAdditionalWorks.map(({ variation, progress }) => (
+                    <option key={variation.id} value={variation.id}>{variation.variation_ref} — {variation.title} ({currency(progress.remaining)} left)</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
 
             <label className="mt-3 block">
               <span className="label">What's this for?</span>
               <input
                 className="field min-h-11"
+                disabled={Boolean(interimVariationId)}
                 onChange={(event) => setInterimDescription(event.target.value)}
                 placeholder="e.g. Scaffolding up — stage payment"
                 type="text"
@@ -655,30 +750,32 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
             </label>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <div className="flex overflow-hidden rounded-lg border border-[var(--border)]">
-                <button
-                  className={`px-3 py-2 text-sm ${interimMode === "fixed" ? "bg-[var(--gold)] text-black" : "text-[var(--text-muted)]"}`}
-                  onClick={() => setInterimMode("fixed")}
-                  type="button"
-                >
-                  £ Amount
-                </button>
-                <button
-                  className={`px-3 py-2 text-sm ${interimMode === "percentage" ? "bg-[var(--gold)] text-black" : "text-[var(--text-muted)]"}`}
-                  onClick={() => setInterimMode("percentage")}
-                  type="button"
-                >
-                  % of quote
-                </button>
-              </div>
+              {!interimVariationId ? (
+                <div className="flex overflow-hidden rounded-lg border border-[var(--border)]">
+                  <button
+                    className={`px-3 py-2 text-sm ${interimMode === "fixed" ? "bg-[var(--gold)] text-black" : "text-[var(--text-muted)]"}`}
+                    onClick={() => setInterimMode("fixed")}
+                    type="button"
+                  >
+                    £ Amount
+                  </button>
+                  <button
+                    className={`px-3 py-2 text-sm ${interimMode === "percentage" ? "bg-[var(--gold)] text-black" : "text-[var(--text-muted)]"}`}
+                    onClick={() => setInterimMode("percentage")}
+                    type="button"
+                  >
+                    % of quote
+                  </button>
+                </div>
+              ) : null}
               <input
-                className="field w-28 min-h-11 text-center"
+                className="field min-h-11 w-28 text-center"
                 inputMode="decimal"
                 onChange={(event) => setInterimValue(event.target.value)}
                 placeholder={interimMode === "fixed" ? "0.00" : "0"}
                 value={interimValue}
               />
-              {interimMode === "percentage" ? (
+              {!interimVariationId && interimMode === "percentage" ? (
                 <span className="text-sm text-[var(--text-muted)]">
                   = {currency(estimateAmountDue((invoiceablePayableTotal * (Number(interimValue) || 0)) / 100))} due
                 </span>
@@ -692,9 +789,9 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variations,
                 onClick={createInterimInvoice}
                 disabled={busy !== null || !(Number(interimValue) > 0)}
               >
-                {busy === "create-interim" ? "Creating..." : "Create Invoice"}
+                {busy === "create-interim" ? "Creating..." : interimVariationId ? "Create Additional Work Invoice" : "Create Invoice"}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowInterimForm(false)}>
+              <Button variant="ghost" size="sm" onClick={() => { setShowInterimForm(false); setInterimVariationId(""); }}>
                 Cancel
               </Button>
             </div>

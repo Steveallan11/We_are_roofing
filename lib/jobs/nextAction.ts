@@ -56,23 +56,24 @@ export function getAttentionReason(job: JobForAction) {
 }
 
 export function getNextAction(job: JobForAction): JobAction {
-  if (job.status === "New Lead") return { label: "Book Survey", href: `/jobs/${job.id}/book-survey`, kind: "primary" };
+  if (job.status === "New Lead") return { label: "Review enquiry / arrange survey", href: `/jobs/${job.id}/book-survey`, kind: "primary" };
   if (job.status === "Survey Needed" && isPastDate(job.follow_up_date)) return { label: "Chase Up", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
-  if (job.status === "Survey Needed") return { label: "Book Survey", href: `/jobs/${job.id}/book-survey`, kind: "primary" };
-  if (job.status === "Survey Complete") return { label: "Generate Quote", href: `/jobs/${job.id}/survey`, kind: "primary" };
-  if (job.status === "Ready For AI Quote") return { label: "Generate Quote", href: `/jobs/${job.id}/survey`, kind: "primary" };
+  if (job.status === "Survey Needed") return { label: "Book or complete survey", href: `/jobs/${job.id}/book-survey`, kind: "primary" };
+  if (job.status === "Survey Complete") return { label: "Prepare quote", href: `/jobs/${job.id}/quote`, kind: "primary" };
+  if (job.status === "Ready For AI Quote") return { label: "Prepare quote", href: `/jobs/${job.id}/quote`, kind: "primary" };
   if (job.status === "Quote Drafted") return { label: "Review Quote", href: `/jobs/${job.id}/quote`, kind: "primary" };
   if (job.status === "Ready To Send") return { label: "Send Quote", href: `/jobs/${job.id}/quote`, kind: "primary" };
-  if (job.status === "Quote Sent") return { label: "Chase Up", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
-  if (job.status === "Follow-Up Needed") return { label: "Follow Up", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
-  if (job.status === "Accepted") return { label: "Book In", href: `/jobs/${job.id}`, kind: "primary" };
+  if (job.status === "Quote Sent" && (daysSince(job.quote_sent_at) ?? 0) >= 7) return { label: "Follow up with customer", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
+  if (job.status === "Quote Sent") return { label: "Await customer response", href: `/jobs/${job.id}/quote`, kind: "secondary" };
+  if (job.status === "Follow-Up Needed") return { label: "Contact customer", href: `tel:${job.customer?.phone ?? ""}`, kind: "primary" };
+  if (job.status === "Accepted") return { label: "Prepare job", href: `/jobs/${job.id}?tab=work`, kind: "primary" };
   if (job.status === "Materials Needed") return { label: "Order Materials", href: `/jobs/${job.id}/materials`, kind: "primary" };
-  if (job.status === "Materials Ordered") return { label: "Confirm Delivery", href: `/jobs/${job.id}/materials`, kind: "primary" };
-  if (job.status === "Scaffold In Situ") return { label: "Start Work", href: `/jobs/${job.id}`, kind: "primary" };
-  if (job.status === "Booked") return { label: "View Job Sheet", href: `/jobs/${job.id}`, kind: "primary" };
-  if (job.status === "In Progress") return { label: "Complete Job", href: `/jobs/${job.id}`, kind: "primary" };
-  if (job.status === "Completed") return { label: "Create Invoice", href: `/jobs/${job.id}`, kind: "primary" };
-  if (job.status === "Not Proceeding") return { label: "Archive", href: `/jobs/${job.id}`, kind: "secondary" };
+  if (job.status === "Materials Ordered") return { label: "Confirm job preparation", href: `/jobs/${job.id}?tab=work`, kind: "primary" };
+  if (job.status === "Scaffold In Situ") return { label: "Confirm start", href: `/jobs/${job.id}?tab=work`, kind: "primary" };
+  if (job.status === "Booked") return { label: "Start job", href: `/jobs/${job.id}?tab=work`, kind: "primary" };
+  if (job.status === "In Progress") return { label: "Continue / update job", href: `/jobs/${job.id}?tab=work`, kind: "primary" };
+  if (job.status === "Completed") return { label: "Finalise paperwork and invoice", href: `/jobs/${job.id}?tab=money`, kind: "primary" };
+  if (["Not Proceeding", "Lost", "Archived"].includes(job.status)) return { label: "No action needed", href: `/jobs/${job.id}`, kind: "secondary" };
   return { label: "Open Job", href: `/jobs/${job.id}`, kind: "primary" };
 }
 

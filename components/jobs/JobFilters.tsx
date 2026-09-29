@@ -1,18 +1,23 @@
 "use client";
 
-import { PIPELINE_GROUPS, type PipelineGroupKey } from "@/lib/jobs/pipelineGroups";
+import { PIPELINE_GROUPS } from "@/lib/jobs/pipelineGroups";
+import type { WorkspaceFilter } from "@/components/jobs/jobs-workspace";
 
 type Props = {
-  active: PipelineGroupKey | "all" | "attention";
-  onSelect: (key: PipelineGroupKey | "all" | "attention") => void;
+  active: WorkspaceFilter;
+  onSelect: (key: WorkspaceFilter) => void;
   attentionCount: number;
+  staleCount: number;
+  archivedCount: number;
 };
 
-export function JobFilters({ active, onSelect, attentionCount }: Props) {
-  const items: Array<{ key: PipelineGroupKey | "all" | "attention"; label: string }> = [
+export function JobFilters({ active, onSelect, attentionCount, staleCount, archivedCount }: Props) {
+  const items: Array<{ key: WorkspaceFilter; label: string }> = [
     { key: "all", label: "All" },
     ...PIPELINE_GROUPS.map((group) => ({ key: group.key, label: group.shortLabel })),
-    { key: "attention", label: `Attention ${attentionCount}` }
+    { key: "attention", label: `Attention ${attentionCount}` },
+    { key: "stale", label: `Quiet 45+ days ${staleCount}` },
+    { key: "archived", label: `Archived ${archivedCount}` }
   ];
 
   return (

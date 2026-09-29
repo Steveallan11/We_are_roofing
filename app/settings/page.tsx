@@ -28,6 +28,10 @@ export default async function SettingsPage() {
             <p className="section-kicker text-[0.65rem] uppercase">Nurture Templates</p>
             <p className="mt-2 text-sm text-[var(--text-second)]">Edit follow-up email templates and sequence wording.</p>
           </Link>
+          <Link className="card p-4 no-underline transition hover:border-[var(--gold)]/60" href={"/settings/literature" as Route}>
+            <p className="section-kicker text-[0.65rem] uppercase">Customer Literature</p>
+            <p className="mt-2 text-sm text-[var(--text-second)]">Upload brochures and product sheets once, then attach them to any customer email.</p>
+          </Link>
         </div>
         <NurtureTemplatesEditor />
       </div>

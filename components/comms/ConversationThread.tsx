@@ -18,8 +18,17 @@ export function ConversationThread({ messages }: Props) {
                 <div className="flex items-center gap-2 text-[0.7rem] uppercase tracking-[0.18em] text-[var(--dim)]">
                   <span>{message.channel.replace("_", " ")}</span>
                   <span>{formatTime(message.sent_at ?? message.created_at)}</span>
+                  {outbound ? <span className={message.status === "failed" ? "text-[#ff9a91]" : "text-[var(--muted)]"}>{message.status}</span> : null}
                 </div>
+                {message.subject ? <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{message.subject}</p> : null}
                 <p className="mt-2 whitespace-pre-line text-sm text-[var(--text)]">{message.body}</p>
+                {message.attachments?.length ? (
+                  <div className="mt-3 border-t border-[var(--border)] pt-2 text-xs text-[var(--muted)]">
+                    {message.attachments.map((attachment, index) => (
+                      <p key={`${String(attachment.filename ?? "attachment")}-${index}`}>Attachment: {String(attachment.filename ?? "Customer literature")}</p>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           );

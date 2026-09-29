@@ -18,6 +18,8 @@ export async function POST(request: Request, { params }: Props) {
   const body = (await request.json().catch(() => ({}))) as {
     to_email?: string;
     email_customer_name?: string;
+    email_subject?: string;
+    email_body?: string;
     due_date?: string;
     test?: boolean;
     attachment_document_ids?: string[];
@@ -79,6 +81,16 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
+  const defaultSubject = `${invoice.invoice_type === "deposit" ? "Deposit invoice" : invoice.variation_id ? "Additional work invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`;
+  const emailSubject = body.email_subject?.trim() || defaultSubject;
+  const emailBody = body.email_body?.trim();
+  if (emailSubject.length > 300 || /[\r\n]/.test(emailSubject)) {
+    return NextResponse.json({ ok: false, error: "Email subject must be one line and no more than 300 characters." }, { status: 400 });
+  }
+  if (emailBody && emailBody.length > 20000) {
+    return NextResponse.json({ ok: false, error: "Email message must be no more than 20,000 characters." }, { status: 400 });
+  }
+
   const artifacts = await persistInvoiceArtifacts(supabase, bundle, invoice);
   const extraAttachments = await loadJobDocumentAttachments(supabase, bundle.job.id, body.attachment_document_ids ?? []);
   const appUrl = getAppUrl();
@@ -90,10 +102,11 @@ export async function POST(request: Request, { params }: Props) {
   try {
     emailResult = await sendEmail({
       to: toEmail,
-      subject: `${isTestSend ? "[TEST] " : ""}${invoice.invoice_type === "deposit" ? "Deposit invoice" : invoice.variation_id ? "Additional work invoice" : "Invoice"} ${invoice.invoice_ref} from We Are Roofing UK Ltd`,
+      subject: `${isTestSend ? "[TEST] " : ""}${emailSubject}`,
       html: invoiceSentEmail({
         customerName: emailCustomerName,
         customerGreeting: emailCustomerName,
+        messageBody: emailBody,
         invoiceRef: invoice.invoice_ref,
         invoiceUrl,
         jobTitle: bundle.job.job_title,
@@ -109,7 +122,14 @@ export async function POST(request: Request, { params }: Props) {
         businessPhone: bundle.business.phone,
         businessEmail: bundle.business.email
       }),
-      text: `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready. Payment is due by ${dueDate}. Open it here: ${invoiceUrl}`,
+      text: [
+        `Hi ${emailCustomerName},`,
+        emailBody || `Your invoice ${invoice.invoice_ref} from We Are Roofing UK Ltd is ready.`,
+        `Invoice: ${invoice.invoice_ref}`,
+        `Payment due: ${dueDate}`,
+        `Amount due: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Math.max(0, Number(invoice.total ?? 0) - Number(invoice.cis_deduction_amount ?? 0)))}`,
+        `View invoice: ${invoiceUrl}`
+      ].join("\n\n"),
       attachments: extraAttachments,
       jobId: bundle.job.id,
       templateType: isTestSend ? "invoice_test" : "invoice_sent",

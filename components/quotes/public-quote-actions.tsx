@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { CostLineItem, QuoteOption } from "@/lib/types";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import type { CostLineItem, QuoteOption, QuotePricingMode } from "@/lib/types";
 import { buildQuoteOptionCustomerRows, buildQuoteOptionDetailRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
 import { isPriceToBeConfirmed } from "@/lib/quotes/provisional";
 import { currency } from "@/lib/utils";
@@ -10,40 +10,35 @@ type Props = {
   quoteId: string;
   costBreakdown?: CostLineItem[];
   options: QuoteOption[];
+  pricingMode: QuotePricingMode;
   token?: string | null;
 };
 
-export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token }: Props) {
-  const sectionChoices = buildSectionChoices(costBreakdown);
-  const useSectionSelection = shouldUseSectionSelection(sectionChoices, options);
-  const hasOptionSelection = !useSectionSelection && options.length > 1;
-  const hasSingleQuote = !useSectionSelection && options.length === 0 && sectionChoices.length > 0;
-  const optionalLineIndexes = getOptionalLineIndexes(costBreakdown);
-  const hasOptionalExtras = hasSingleQuote && optionalLineIndexes.length > 0;
-  const useLineSelection = useSectionSelection || hasOptionalExtras;
+export function PublicQuoteActions({ costBreakdown = [], pricingMode, quoteId, options, token }: Props) {
+  const pricedLines = costBreakdown.flatMap((line, index) => (Number(line.cost || 0) > 0 ? [{ ...line, originalIndex: index }] : []));
+  const hasOptionSelection = pricingMode === "options";
+  const useLineSelection = pricingMode === "selectable_items";
   const [message, setMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
-    useSectionSelection ? null : options.find((option) => option.recommended)?.id ?? options[0]?.id ?? null
+    hasOptionSelection ? options.find((option) => option.recommended)?.id ?? options[0]?.id ?? null : null
   );
-  const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>(() =>
-    sectionChoices.flatMap((section) => section.indexes).filter((index) => !optionalLineIndexes.includes(index))
-  );
+  const [selectedLineIndexes, setSelectedLineIndexes] = useState<number[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const selectedOption = useSectionSelection ? null : options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null;
-  const hasSelection = useLineSelection ? selectedLineIndexes.length > 0 : options.length ? Boolean(selectedOptionId) : selectedLineIndexes.length > 0 || sectionChoices.length === 0;
+  const selectedOption = hasOptionSelection ? options.find((option) => option.id === selectedOptionId) ?? options[0] ?? null : null;
+  const hasSelection = useLineSelection ? selectedLineIndexes.length > 0 : hasOptionSelection ? Boolean(selectedOptionId) : pricedLines.length > 0;
   const hasName = customerName.trim().length >= 2;
   const hasValidEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
   const acceptanceHelper = getAcceptanceHelper({ hasName, hasSelectedOption: hasSelection, hasValidEmail });
 
   if (!token) {
     return (
-      <div className="mt-8 rounded-[1.5rem] border border-[var(--gold)]/35 bg-[var(--surface)] p-5 shadow-2xl md:p-7">
-        <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Read-only quote link</p>
-        <h2 className="mt-3 font-display text-3xl text-white md:text-4xl">Ask Andy for the secure quote link</h2>
-        <p className="mt-3 font-ui text-base leading-7 text-[var(--text-muted)]">
+      <div className="mt-8 rounded-xl border border-[#d8d1c2] bg-[#fffdf8] p-5 shadow-sm md:p-7">
+        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.16em] text-[#8a6a08]">Read-only quote link</p>
+        <h2 className="mt-3 font-display text-3xl font-extrabold uppercase text-[#24221e] md:text-4xl">Ask Andy for the secure quote link</h2>
+        <p className="mt-3 font-ui text-[17px] leading-7 text-[#514d46]">
           This older quote link is available for viewing only. To accept the quote or send a question through the portal, use the latest secure link from your email.
         </p>
       </div>
@@ -62,7 +57,7 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        option_id: useLineSelection ? null : selectedOptionId,
+        option_id: hasOptionSelection ? selectedOptionId : null,
         selected_line_indexes: useLineSelection ? selectedLineIndexes : [],
         customer_name: customerName.trim(),
         customer_email: customerEmail.trim()
@@ -96,31 +91,26 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
   }
 
   return (
-    <div className="mt-6 space-y-5">
-      <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#f8f3e3] p-5 shadow-2xl md:p-7">
-        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">
-          {useSectionSelection ? "Choose your roof sections" : hasOptionSelection ? "Choose your preferred option" : "Your quotation"}
-        </p>
-        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-5xl">
-          {useSectionSelection ? "Choose the sections you want done" : hasOptionSelection ? "Choose the option that suits you best" : "Your quoted price"}
-        </h2>
-        <p className="mt-3 font-ui text-base leading-7 text-[#4a4a4a] md:text-lg md:leading-8">
-          {useSectionSelection
-            ? "Select the roof sections you would like us to carry out now. Each section shows the roof works price and any scaffold/access cost separately."
-            : hasOptionSelection
-              ? "Below are your quote options. Select the option you would like us to carry out."
-              : "The price below covers the quoted works described in the roof report and scope of works."}
-        </p>
+    <div className="scroll-mt-4 space-y-5" id="pricing">
+      <section className="rounded-xl border border-[#ded8cc] bg-[#fffdf9] p-5 shadow-[0_8px_26px_rgba(48,41,27,0.05)] sm:p-6 md:p-8">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:gap-4">
+          <span className="pt-1 font-ui text-xs font-black tracking-[0.12em] text-[#92740e]">03</span>
+          <div>
+            <h2 className="font-display text-[1.8rem] font-extrabold uppercase leading-[1.05] tracking-[-0.035em] text-[#23221f] sm:text-3xl md:text-4xl">Your Quotation</h2>
+            <p className="mt-2 font-ui text-[0.7rem] font-extrabold uppercase leading-5 tracking-[0.13em] text-[#766a4a]">Price for the works described above</p>
+            <p className="mt-4 max-w-3xl font-ui text-[17px] leading-[1.65] text-[#4a4741]">
+              {hasOptionSelection
+                ? "Compare the two complete alternatives below, then select one option."
+                : useLineSelection
+                  ? "Tick each item you would like to proceed with. Your price, VAT and total update immediately."
+                  : "This is a single quotation for the complete scope of works described above."}
+            </p>
+          </div>
+        </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2" aria-label="Quote options">
-        {useSectionSelection ? (
-          <SectionChoiceList
-            sections={sectionChoices}
-            selectedLineIndexes={selectedLineIndexes}
-            setSelectedLineIndexes={setSelectedLineIndexes}
-          />
-        ) : options.length ? (
+      <section className="grid gap-3 md:grid-cols-2" aria-label="Quote pricing">
+        {hasOptionSelection && options.length ? (
           options.map((option, index) => {
             const meta = getQuoteOptionPresentation(option, index);
             const isSelected = selectedOptionId === option.id;
@@ -168,13 +158,14 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
             </button>
           );
           })
-        ) : hasSingleQuote ? (
-          <SingleQuoteSummary
-            lines={costBreakdown}
-            optionalLineIndexes={optionalLineIndexes}
-            selectedLineIndexes={selectedLineIndexes}
-            setSelectedLineIndexes={setSelectedLineIndexes}
-          />
+        ) : hasOptionSelection ? (
+          <p className="rounded-2xl border border-[#b42318]/30 bg-[#fff1f0] p-4 font-ui text-base text-[#7a271a] md:col-span-2">
+            The quote options are still being prepared. Please contact us before accepting.
+          </p>
+        ) : useLineSelection ? (
+          <SelectableWorksList lines={pricedLines} selectedLineIndexes={selectedLineIndexes} setSelectedLineIndexes={setSelectedLineIndexes} />
+        ) : pricedLines.length ? (
+          <SingleQuoteSummary lines={costBreakdown} />
         ) : (
           <p className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 font-ui text-base text-[var(--text-second)]">
             Ready to proceed? Confirm your details, then accept below.
@@ -182,20 +173,28 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
         )}
       </section>
 
-      {selectedOption ? <SelectedOptionDetail option={selectedOption} selectedIndex={options.findIndex((option) => option.id === selectedOption.id)} /> : null}
+      {hasOptionSelection && selectedOption ? <SelectedOptionDetail option={selectedOption} selectedIndex={options.findIndex((option) => option.id === selectedOption.id)} /> : null}
 
-      <section className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#f8f3e3] p-5 shadow-2xl md:p-7">
-        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[#8a6a08]">Ready to accept this quote?</p>
-        <h2 className="mt-2 font-display text-3xl leading-tight text-[#1f1f1f] md:text-4xl">Ready to go ahead?</h2>
-        <p className="mt-3 font-ui text-base leading-7 text-[#4a4a4a]">
-          Enter your details below and we&apos;ll confirm your selection and next steps.
-        </p>
-        <p className="mt-2 font-ui text-sm leading-6 text-[#6a6a6a]">
-          We&apos;ll use these details to confirm your selection and contact you about the next stage.
-        </p>
+      <section className="scroll-mt-4 rounded-xl border border-[#ded8cc] bg-[#fffdf9] p-5 shadow-[0_8px_26px_rgba(48,41,27,0.05)] sm:p-6 md:p-8" id="accept-quote">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:gap-4">
+          <span className="pt-1 font-ui text-xs font-black tracking-[0.12em] text-[#92740e]">04</span>
+          <div>
+            <h2 className="font-display text-[1.8rem] font-extrabold uppercase leading-[1.05] tracking-[-0.035em] text-[#23221f] sm:text-3xl md:text-4xl">Your Decision</h2>
+            <p className="mt-2 font-ui text-[0.7rem] font-extrabold uppercase leading-5 tracking-[0.13em] text-[#766a4a]">Accept the quotation or ask us a question</p>
+            <p className="mt-4 max-w-3xl font-ui text-[17px] leading-[1.65] text-[#4a4741]">
+              When you are happy with the report, scope and price, enter your details to accept securely. Nothing is submitted until you press the acceptance button.
+            </p>
+          </div>
+        </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2">
-          <input className="field min-h-12" onChange={(event) => setCustomerName(event.target.value)} placeholder="Full name" autoComplete="name" value={customerName} />
-          <input className="field min-h-12" onChange={(event) => setCustomerEmail(event.target.value)} placeholder="Email address" type="email" inputMode="email" autoComplete="email" value={customerEmail} />
+          <label className="font-ui text-sm font-bold text-[#333]">
+            Full name
+            <input className="field mt-2 min-h-12" onChange={(event) => setCustomerName(event.target.value)} placeholder="Enter your full name" autoComplete="name" value={customerName} />
+          </label>
+          <label className="font-ui text-sm font-bold text-[#333]">
+            Email address
+            <input className="field mt-2 min-h-12" onChange={(event) => setCustomerEmail(event.target.value)} placeholder="Enter your email address" type="email" inputMode="email" autoComplete="email" value={customerEmail} />
+          </label>
         </div>
         <p className={`mt-4 font-ui text-sm font-semibold ${canAccept ? "text-[#166534]" : "text-[#8a4b00]"}`}>{acceptanceHelper}</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -218,8 +217,8 @@ export function PublicQuoteActions({ costBreakdown = [], quoteId, options, token
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border border-[var(--border)] bg-[#101010] p-5 md:p-7">
-        <p className="section-kicker text-[0.68rem] uppercase text-[var(--gold)]">Have a question?</p>
+      <section className="rounded-xl border border-[#342f23] bg-[#171714] p-5 md:p-7">
+        <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.16em] text-[#d4af37]">Have a question?</p>
         <p className="mt-3 font-ui text-base leading-7 text-[#d6d6d6]">If anything is unclear, send Andy a message before accepting.</p>
         <textarea className="field mt-5 min-h-36 text-base leading-7" onChange={(event) => setMessage(event.target.value)} placeholder="Type your question here..." value={message} />
         <button className="button-ghost mt-3 !min-h-12 !text-base" onClick={sendMessage} type="button">
@@ -441,90 +440,52 @@ function shouldUseSectionSelection(sections: SectionChoice[], options: QuoteOpti
   return sections.every((section) => section.name !== "Quoted works");
 }
 
-function SingleQuoteSummary({
-  lines,
-  optionalLineIndexes,
-  selectedLineIndexes,
-  setSelectedLineIndexes
-}: {
-  lines: CostLineItem[];
-  optionalLineIndexes: number[];
-  selectedLineIndexes: number[];
-  setSelectedLineIndexes: (indexes: number[]) => void;
-}) {
+function SingleQuoteSummary({ lines }: { lines: CostLineItem[] }) {
   const pricedLines = lines.map((line, index) => ({ ...line, originalIndex: index })).filter((line) => Number(line.cost || 0) > 0);
-  const baseLines = pricedLines.filter((line) => !optionalLineIndexes.includes(line.originalIndex));
-  const optionalLines = pricedLines.filter((line) => optionalLineIndexes.includes(line.originalIndex));
-  const selectedLines = pricedLines.filter((line) => selectedLineIndexes.includes(line.originalIndex));
-  const billableSelectedLines = selectedLines.filter((line) => !line.billed_separately);
-  const net = billableSelectedLines.reduce((sum, line) => sum + Number(line.cost || 0), 0);
-  const vat = billableSelectedLines.reduce((sum, line) => sum + (line.vat_applicable ? Number(line.cost || 0) * 0.2 : 0), 0);
-
-  function toggleOptionalLine(index: number) {
-    if (selectedLineIndexes.includes(index)) {
-      setSelectedLineIndexes(selectedLineIndexes.filter((selectedIndex) => selectedIndex !== index));
-      return;
-    }
-    setSelectedLineIndexes([...selectedLineIndexes, index]);
-  }
+  const billableLines = pricedLines.filter((line) => !line.billed_separately);
+  const directLines = pricedLines.filter((line) => line.billed_separately);
+  const net = roundMoney(billableLines.reduce((sum, line) => sum + Number(line.cost || 0), 0));
+  const vat = roundMoney(billableLines.reduce((sum, line) => sum + getLineVat(line), 0));
 
   return (
     <div className="space-y-3 md:col-span-2">
-      <div className="rounded-[1.4rem] border-2 border-[var(--gold)] bg-[var(--gold)] p-5 text-black shadow-[0_0_0_4px_rgba(212,175,55,0.16)] md:p-6">
-        <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-black/65">Your quote before VAT</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <h3 className="font-display text-3xl leading-tight">Quoted works</h3>
-          <strong className="font-display text-4xl leading-none">{currency(net)}</strong>
+      <div className="rounded-xl border border-[#6f5b1e] bg-[#10100f] p-5 md:p-7">
+        <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-[#d4af37]">Complete quotation</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-4">
+          <h3 className="font-display text-2xl font-extrabold uppercase leading-tight text-white sm:text-3xl">All works included</h3>
+          <strong className="break-all font-display text-[2.45rem] leading-none text-[#ead16c] sm:text-5xl">{currency(net + vat)}</strong>
         </div>
-        <p className="mt-3 font-ui text-sm leading-6 text-black/70">The main figure is shown before VAT. The full VAT total is clearly confirmed below.</p>
-        <div className="mt-5 space-y-3 border-t border-black/20 pt-4 font-ui">
-          {baseLines.map((line) => (
-            <CustomerQuoteLine key={`base-${line.originalIndex}`} line={line} />
+        <p className="mt-3 font-ui text-sm leading-6 text-[#cfcfcf]">Total including VAT</p>
+        <div className="mt-5 divide-y divide-white/10 border-y border-white/10 font-ui">
+          {billableLines.map((line) => (
+            <div className="py-4" key={`single-${line.originalIndex}`}>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-5">
+                <div>
+                  <p className="font-bold leading-6 text-white">{getCustomerLineLabel(line)}</p>
+                  {line.notes?.trim() ? <p className="mt-1 text-sm leading-6 text-[#bdbdbd]">{line.notes.trim()}</p> : null}
+                </div>
+                <div className="sm:text-right">
+                  <strong className="block text-white">{currency(Number(line.cost || 0))}</strong>
+                  <span className="text-xs text-[#a9a9a9]">before VAT</span>
+                </div>
+              </div>
+            </div>
           ))}
-          <span className="block border-t border-black/20 pt-3">
-            <OptionCardPriceRow isSelected label="Total before VAT" strong value={net} />
-          </span>
         </div>
       </div>
 
-      {optionalLines.length ? (
-        <div className="rounded-[1.4rem] border border-[var(--gold)]/40 bg-[#101010] p-5 md:p-6">
-          <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--gold)]">Optional upgrades</p>
-          <p className="mt-2 font-ui text-sm leading-6 text-[#d6d6d6]">Add any upgrade you would like included before accepting the quote.</p>
+      {directLines.length ? (
+        <div className="rounded-xl border border-white/10 bg-[#101010] p-5 md:p-6">
+          <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-[#d4af37]">Paid separately</p>
           <div className="mt-4 space-y-3">
-            {optionalLines.map((line) => {
-              const selected = selectedLineIndexes.includes(line.originalIndex);
-              return (
-                <button
-                  className={`flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition ${
-                    selected ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-white/15 bg-white/[0.03] text-white"
-                  }`}
-                  key={`optional-${line.originalIndex}`}
-                  onClick={() => toggleOptionalLine(line.originalIndex)}
-                  type="button"
-                >
-                  <span>
-                    <span className="block font-ui text-base font-extrabold">{getCustomerLineLabel(line)}</span>
-                    <span className={`mt-1 block font-ui text-xs ${selected ? "text-black/65" : "text-[#bdbdbd]"}`}>
-                      {selected ? "Included in your selected total" : "Tap to add this upgrade"}
-                    </span>
-                  </span>
-                  <span className="text-right">
-                    <strong className="block font-display text-2xl">{currency(Number(line.cost || 0))}</strong>
-                    <span className={`font-ui text-[0.65rem] font-bold uppercase tracking-[0.12em] ${selected ? "text-black/60" : "text-[var(--gold)]"}`}>
-                      before VAT
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+            {directLines.map((line) => <DirectPayRow key={`direct-${line.originalIndex}`} label={getCustomerLineLabel(line)} note={line.billed_separately_note} value={Number(line.cost || 0)} />)}
           </div>
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-[var(--gold)]/30 bg-[#17130a] p-4 font-ui md:p-5">
+      <div className="rounded-xl border border-[#6f5b1e] bg-[#17130a] p-4 font-ui md:p-5">
         <div className="flex items-center justify-between gap-4 text-sm text-[#d6d6d6]">
-          <span>Selected price before VAT</span>
+          <span>Price before VAT</span>
           <strong className="text-white">{currency(net)}</strong>
         </div>
         <div className="mt-2 flex items-center justify-between gap-4 text-sm text-[#d6d6d6]">
@@ -533,11 +494,96 @@ function SingleQuoteSummary({
         </div>
         <div className="mt-3 flex items-end justify-between gap-4 border-t border-[var(--gold)]/35 pt-3">
           <span className="text-base font-bold text-white">Total including VAT</span>
+          <strong className="break-all text-right font-display text-3xl text-[#ead16c]">{currency(net + vat)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SelectableWorksList({
+  lines,
+  selectedLineIndexes,
+  setSelectedLineIndexes
+}: {
+  lines: Array<CostLineItem & { originalIndex: number }>;
+  selectedLineIndexes: number[];
+  setSelectedLineIndexes: Dispatch<SetStateAction<number[]>>;
+}) {
+  const selectableLines = lines.filter((line) => !line.billed_separately);
+  const directLines = lines.filter((line) => line.billed_separately);
+  const selectedLines = selectableLines.filter((line) => selectedLineIndexes.includes(line.originalIndex));
+  const net = roundMoney(selectedLines.reduce((sum, line) => sum + Number(line.cost || 0), 0));
+  const vat = roundMoney(selectedLines.reduce((sum, line) => sum + getLineVat(line), 0));
+
+  function toggleLine(index: number) {
+    setSelectedLineIndexes((current) =>
+      current.includes(index) ? current.filter((selectedIndex) => selectedIndex !== index) : [...current, index]
+    );
+  }
+
+  return (
+    <div className="space-y-3 md:col-span-2">
+      {selectableLines.map((line) => {
+        const selected = selectedLineIndexes.includes(line.originalIndex);
+        const gross = roundMoney(Number(line.cost || 0) + getLineVat(line));
+        return (
+          <button
+            aria-pressed={selected}
+            className={`w-full rounded-[1.25rem] border-2 p-4 text-left transition md:p-5 ${
+              selected ? "border-[var(--gold)] bg-[var(--gold)] text-black" : "border-[var(--border)] bg-[#101010] text-white hover:border-[var(--gold)]/50"
+            }`}
+            key={`selectable-${line.originalIndex}`}
+            onClick={() => toggleLine(line.originalIndex)}
+            type="button"
+          >
+            <span className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 md:gap-4">
+              <span className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-md border-2 text-sm font-black ${selected ? "border-black bg-black text-[var(--gold)]" : "border-[var(--gold)] text-transparent"}`}>
+                ✓
+              </span>
+              <span className="min-w-0">
+                <span className="block font-ui text-base font-extrabold">{getCustomerLineLabel(line)}</span>
+                {line.quote_section?.trim() ? <span className={`mt-1 block font-ui text-xs font-bold uppercase tracking-[0.08em] ${selected ? "text-black/60" : "text-[var(--gold)]"}`}>{line.quote_section.trim()}</span> : null}
+                {line.notes?.trim() ? <span className={`mt-2 block font-ui text-sm leading-6 ${selected ? "text-black/70" : "text-[#bdbdbd]"}`}>{line.notes.trim()}</span> : null}
+              </span>
+              <span className="shrink-0 text-right">
+                <strong className="block font-display text-2xl">{currency(gross)}</strong>
+                <span className={`font-ui text-[0.65rem] font-bold uppercase tracking-[0.1em] ${selected ? "text-black/60" : "text-[#a9a9a9]"}`}>including VAT</span>
+              </span>
+            </span>
+          </button>
+        );
+      })}
+
+      {!selectableLines.length ? <p className="rounded-2xl border border-white/10 bg-[#101010] p-4 text-[#d6d6d6]">No selectable priced work has been added yet.</p> : null}
+
+      {directLines.length ? (
+        <div className="rounded-[1.25rem] border border-white/10 bg-[#101010] p-5">
+          <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--gold)]">Paid separately and not selectable</p>
+          <div className="mt-4 space-y-3">
+            {directLines.map((line) => <DirectPayRow key={`select-direct-${line.originalIndex}`} label={getCustomerLineLabel(line)} note={line.billed_separately_note} value={Number(line.cost || 0)} />)}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="sticky bottom-3 rounded-2xl border border-[var(--gold)]/40 bg-[#17130a]/95 p-4 font-ui shadow-2xl backdrop-blur md:p-5">
+        <div className="flex items-center justify-between gap-4 text-sm text-[#d6d6d6]"><span>Selected before VAT</span><strong className="text-white">{currency(net)}</strong></div>
+        <div className="mt-2 flex items-center justify-between gap-4 text-sm text-[#d6d6d6]"><span>VAT</span><strong className="text-white">{currency(vat)}</strong></div>
+        <div className="mt-3 flex items-end justify-between gap-4 border-t border-[var(--gold)]/35 pt-3">
+          <span><span className="block text-base font-bold text-white">Your selected total</span><span className="mt-1 block text-xs text-[#a9a9a9]">{selectedLines.length} item{selectedLines.length === 1 ? "" : "s"} selected</span></span>
           <strong className="font-display text-3xl text-[var(--gold-l)]">{currency(net + vat)}</strong>
         </div>
       </div>
     </div>
   );
+}
+
+function getLineVat(line: CostLineItem) {
+  return line.vat_applicable ? roundMoney(Number(line.cost || 0) * 0.2) : 0;
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function CustomerQuoteLine({ line }: { line: CostLineItem }) {

@@ -4,13 +4,14 @@ import { learnPricingFromQuote } from "@/lib/pricing/learning";
 import { calculateOptionNet, calculateOptionVat, getQuotePipelineValue, normaliseQuoteCostLine, normaliseQuoteOption } from "@/lib/quotes/value";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canPersistToSupabase } from "@/lib/workflows";
-import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
+import type { CostLineItem, QuoteOption, QuotePricingMode, QuoteRecord } from "@/lib/types";
 
 type Props = {
   params: Promise<{ quoteId: string }>;
 };
 
 type QuoteUpdateBody = {
+  customer_pricing_mode?: QuotePricingMode;
   roof_report?: string;
   scope_of_works?: string;
   cost_breakdown?: CostLineItem[];
@@ -29,6 +30,10 @@ type QuoteUpdateBody = {
 export async function PATCH(request: Request, { params }: Props) {
   const { quoteId } = await params;
   const body = (await request.json()) as QuoteUpdateBody;
+
+  if (body.customer_pricing_mode && !isQuotePricingMode(body.customer_pricing_mode)) {
+    return NextResponse.json({ ok: false, error: "Choose a valid customer pricing layout." }, { status: 400 });
+  }
 
   const lineItems = (body.cost_breakdown ?? []).map(normaliseCostLine);
   const normalisedOptions = normaliseQuoteOptions(body.options ?? []);
@@ -114,6 +119,10 @@ export async function PATCH(request: Request, { params }: Props) {
   }
 
   return NextResponse.json({ ok: true, quote: updatedQuote });
+}
+
+function isQuotePricingMode(value: string): value is QuotePricingMode {
+  return value === "single" || value === "options" || value === "selectable_items";
 }
 
 function normaliseQuoteOptions(options: QuoteOption[]) {

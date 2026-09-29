@@ -9,6 +9,7 @@ import {
 } from "@/lib/survey-utils";
 import { JOB_DOCUMENTS_BUCKET, ensurePrivateStorageBucket } from "@/lib/storage";
 import { canPersistToSupabase } from "@/lib/workflows";
+import { normaliseEnabledModules } from "@/lib/surveys/schema";
 
 type Props = {
   params: Promise<{ jobId: string }>;
@@ -31,6 +32,7 @@ const CORE_KEYS = new Set([
   "raw_notes",
   "survey_type",
   "roof_type",
+  "enabled_modules",
   "no_photo_confirmation"
 ]);
 
@@ -106,6 +108,7 @@ async function saveSurvey(request: Request, { params }: Props) {
     raw_notes: String(body.raw_notes ?? ""),
     survey_type: surveyType,
     roof_type: roofType,
+    enabled_modules: normaliseEnabledModules(body.enabled_modules, surveyType),
     no_photo_confirmation: Boolean(body.no_photo_confirmation),
     adaptive_sections: adaptiveSections,
     updated_at: new Date().toISOString()
@@ -269,6 +272,7 @@ function buildSurveySnapshotHtml({
   const coreRows = [
     ["Surveyor", survey.surveyor_name],
     ["Survey Type", survey.survey_type],
+    ["Survey Sections", Array.isArray(survey.enabled_modules) ? survey.enabled_modules.map((module) => getSurveySectionLabel(String(module))).join(", ") : ""],
     ["Roof Type", survey.roof_type],
     ["Roof Condition", survey.roof_condition],
     ["Problem Observed", survey.problem_observed],

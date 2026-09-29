@@ -29,6 +29,17 @@ type PersonInput = {
   skills?: string[] | string | null;
   emergency_contact?: string | null;
   insurance_notes?: string | null;
+  utr_number?: string | null;
+  cis_status?: "gross" | "net_20" | "net_30" | "not_registered";
+  vat_registered?: boolean;
+  vat_number?: string | null;
+  payment_terms_days?: number | string | null;
+  bank_account_name?: string | null;
+  bank_sort_code?: string | null;
+  bank_account_number?: string | null;
+  public_liability_expiry?: string | null;
+  employers_liability_expiry?: string | null;
+  verification_notes?: string | null;
   is_active?: boolean;
   notes?: string | null;
 };
@@ -77,6 +88,17 @@ export async function POST(request: Request) {
       skills: Array.isArray(person.skills) ? person.skills : String(person.skills || "").split(",").map((item) => item.trim()).filter(Boolean),
       emergency_contact: person.emergency_contact || null,
       insurance_notes: person.insurance_notes || null,
+      utr_number: person.utr_number || null,
+      cis_status: person.cis_status || "not_registered",
+      vat_registered: Boolean(person.vat_registered),
+      vat_number: person.vat_registered ? person.vat_number || null : null,
+      payment_terms_days: Math.max(0, Math.min(365, Number(person.payment_terms_days ?? 7))),
+      bank_account_name: person.bank_account_name || null,
+      bank_sort_code: person.bank_sort_code || null,
+      bank_account_number: person.bank_account_number || null,
+      public_liability_expiry: person.public_liability_expiry || null,
+      employers_liability_expiry: person.employers_liability_expiry || null,
+      verification_notes: person.verification_notes || null,
       is_active: person.is_active !== false,
       notes: person.notes || null,
       updated_at: new Date().toISOString()
@@ -93,7 +115,8 @@ export async function POST(request: Request) {
   const savedPeople = [];
   for (const person of peopleRows) {
     const { id, ...payload } = person;
-    const result = id
+    const isStoredPerson = Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
+    const result = isStoredPerson
       ? await supabase.from("labour_people").update(payload).eq("id", id).eq("business_id", business.id).select("*").single()
       : await supabase.from("labour_people").insert(payload).select("*").single();
 

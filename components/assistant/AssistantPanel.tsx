@@ -9,7 +9,7 @@ export function AssistantPanel() {
   const pathname = usePathname();
   const assistant = useAssistant();
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname.startsWith("/quote/") || pathname.startsWith("/variation/") || pathname.startsWith("/share/")) {
     return null;
   }
 

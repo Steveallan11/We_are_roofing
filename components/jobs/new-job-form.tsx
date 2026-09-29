@@ -182,16 +182,9 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
         if (form.postcode) {
           await lookupPostcode();
         }
-        setStep(3);
+        await handleSubmit();
         return;
       }
-
-      if (step === 3) {
-        setStep(4);
-        return;
-      }
-
-      await handleSubmit();
     } catch (err) {
       console.error("Wizard error:", err);
       setError("Something went wrong. Please try again.");
@@ -207,7 +200,6 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
         : Boolean(form.full_name && form.phone);
     }
     if (step === 2) return Boolean(form.property_address && form.job_type && form.roof_type);
-    if (step === 3) return Boolean(form.job_title && form.urgency && form.source);
     return true;
   }
 
@@ -271,11 +263,11 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <CardKicker>New Job Wizard</CardKicker>
-            <CardTitle className="mt-2">Step {step} of 4</CardTitle>
+            <CardKicker>Quick job capture</CardKicker>
+            <CardTitle className="mt-2">Step {step} of 2</CardTitle>
           </div>
           <div className="hidden gap-2 md:flex">
-            {[1, 2, 3, 4].map((item) => (
+            {[1, 2].map((item) => (
               <span className={`h-2 w-12 rounded-full ${item <= step ? "bg-[var(--gold)]" : "bg-white/10"}`} key={item} />
             ))}
           </div>
@@ -423,6 +415,15 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
                   </option>
                 ))}
               </Select>
+              <div className="md:col-span-2">
+                <Textarea
+                  label="What do they need?"
+                  value={form.internal_notes}
+                  onChange={(event) => updateField("internal_notes", event.target.value)}
+                  rows={4}
+                  placeholder="Briefly describe the leak, repair, replacement or survey they have asked for"
+                />
+              </div>
             </div>
           </section>
         ) : null}
@@ -495,12 +496,12 @@ export function NewJobForm({ customers, prefillCustomerId }: Props) {
               Back
             </Button>
           ) : null}
-          {step < 4 ? (
+          {step < 2 ? (
             <Button variant="primary" size="md" disabled={!canContinue() || loading || isPending} onClick={handleNext}>
               {loading ? "Processing..." : "Continue"}
             </Button>
           ) : (
-            <Button variant="primary" size="md" disabled={isPending || loading} onClick={handleNext}>
+            <Button variant="primary" size="md" disabled={!canContinue() || isPending || loading} onClick={handleNext}>
               {isPending || loading ? "Processing..." : "Create Job"}
             </Button>
           )}

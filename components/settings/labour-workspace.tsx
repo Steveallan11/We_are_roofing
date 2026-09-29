@@ -39,6 +39,17 @@ const DEFAULT_PERSON: LabourPersonRecord = {
   skills: [],
   emergency_contact: "",
   insurance_notes: "",
+  utr_number: "",
+  cis_status: "not_registered",
+  vat_registered: false,
+  vat_number: "",
+  payment_terms_days: 7,
+  bank_account_name: "",
+  bank_sort_code: "",
+  bank_account_number: "",
+  public_liability_expiry: "",
+  employers_liability_expiry: "",
+  verification_notes: "",
   is_active: true,
   notes: ""
 };
@@ -196,6 +207,50 @@ export function LabourWorkspace({ initialRates, initialPeople }: Props) {
                   <input className="field" onChange={(event) => updatePerson(index, { emergency_contact: event.target.value })} value={person.emergency_contact ?? ""} />
                 </Field>
               </div>
+              {person.worker_type === "subcontractor" ? (
+                <div className="mt-4 rounded-xl border border-[var(--gold)]/25 bg-[var(--gold)]/5 p-4">
+                  <p className="section-kicker text-[0.62rem] uppercase">Subcontractor finance details</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <Field label="UTR number">
+                      <input className="field" onChange={(event) => updatePerson(index, { utr_number: event.target.value })} value={person.utr_number ?? ""} />
+                    </Field>
+                    <Field label="CIS status">
+                      <select className="field" onChange={(event) => updatePerson(index, { cis_status: event.target.value as LabourPersonRecord["cis_status"] })} value={person.cis_status ?? "not_registered"}>
+                        <option value="gross">Gross payment status</option>
+                        <option value="net_20">20% CIS deduction</option>
+                        <option value="net_30">30% CIS deduction</option>
+                        <option value="not_registered">Not registered / confirm</option>
+                      </select>
+                    </Field>
+                    <Field label="Payment terms (days)">
+                      <input className="field" min={0} max={365} onChange={(event) => updatePerson(index, { payment_terms_days: Number(event.target.value || 0) })} type="number" value={person.payment_terms_days ?? 7} />
+                    </Field>
+                    <Field label="VAT number">
+                      <input className="field" disabled={!person.vat_registered} onChange={(event) => updatePerson(index, { vat_number: event.target.value })} value={person.vat_number ?? ""} />
+                    </Field>
+                    <Field label="Account name">
+                      <input className="field" onChange={(event) => updatePerson(index, { bank_account_name: event.target.value })} value={person.bank_account_name ?? ""} />
+                    </Field>
+                    <Field label="Sort code">
+                      <input className="field" inputMode="numeric" onChange={(event) => updatePerson(index, { bank_sort_code: event.target.value })} value={person.bank_sort_code ?? ""} />
+                    </Field>
+                    <Field label="Account number">
+                      <input className="field" inputMode="numeric" onChange={(event) => updatePerson(index, { bank_account_number: event.target.value })} value={person.bank_account_number ?? ""} />
+                    </Field>
+                    <label className="flex min-h-11 items-center gap-3 rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--text)]">
+                      <input checked={Boolean(person.vat_registered)} onChange={(event) => updatePerson(index, { vat_registered: event.target.checked })} type="checkbox" />
+                      VAT registered
+                    </label>
+                    <Field label="Public liability expires">
+                      <input className="field" onChange={(event) => updatePerson(index, { public_liability_expiry: event.target.value })} type="date" value={person.public_liability_expiry ?? ""} />
+                    </Field>
+                    <Field label="Employers liability expires">
+                      <input className="field" onChange={(event) => updatePerson(index, { employers_liability_expiry: event.target.value })} type="date" value={person.employers_liability_expiry ?? ""} />
+                    </Field>
+                  </div>
+                  <textarea className="field mt-3 min-h-20" onChange={(event) => updatePerson(index, { verification_notes: event.target.value })} placeholder="CIS verification, insurance checks and payment notes..." value={person.verification_notes ?? ""} />
+                </div>
+              ) : null}
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <textarea className="field min-h-20" onChange={(event) => updatePerson(index, { insurance_notes: event.target.value })} placeholder="Insurance, CIS, subcontractor paperwork..." value={person.insurance_notes ?? ""} />
                 <textarea className="field min-h-20" onChange={(event) => updatePerson(index, { notes: event.target.value })} placeholder="General notes..." value={person.notes ?? ""} />

@@ -11,6 +11,9 @@ dist
 *.log
 tsconfig.tsbuildinfo
 /outputs/
+/output/
+/tmp/
+/supabase/.temp/
 
 
 we-are-roofing-app/

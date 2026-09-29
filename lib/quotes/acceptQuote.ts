@@ -1,5 +1,6 @@
 import { createActivity } from "@/lib/activity/createActivity";
 import { learnPricingFromQuote } from "@/lib/pricing/learning";
+import { resolveQuotePricingMode, validateQuoteAcceptanceChoice } from "@/lib/quotes/pricingMode";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { CostLineItem, QuoteOption, QuoteRecord } from "@/lib/types";
 
@@ -37,9 +38,14 @@ export async function acceptQuote(supabase: SupabaseAdmin, params: AcceptQuotePa
   const quoteOptions = (quoteRecord.options ?? []) as QuoteOption[];
   const acceptedOption = quoteOptions.find((option) => option.id === params.optionId) ?? null;
   const hasSelectedLineIndexes = Array.isArray(params.selectedLineIndexes) && params.selectedLineIndexes.length > 0;
-  if (quoteOptions.length > 0 && !acceptedOption && !hasSelectedLineIndexes) {
-    return { ok: false, status: 400, error: "Choose which quote option was accepted." };
-  }
+  const pricingMode = resolveQuotePricingMode(quoteRecord.customer_pricing_mode, quoteOptions.length);
+  const selectionError = validateQuoteAcceptanceChoice({
+    pricingMode,
+    hasAcceptedOption: Boolean(acceptedOption),
+    hasSelectedLines: hasSelectedLineIndexes,
+    optionId: params.optionId
+  });
+  if (selectionError) return { ok: false, status: 400, error: selectionError };
 
   let acceptedTotal = Number(quoteRecord.total ?? 0);
   let acceptedLines = (quoteRecord.cost_breakdown ?? []) as CostLineItem[];
@@ -49,7 +55,7 @@ export async function acceptQuote(supabase: SupabaseAdmin, params: AcceptQuotePa
     updated_at: new Date().toISOString()
   };
 
-  if (hasSelectedLineIndexes) {
+  if (pricingMode === "selectable_items" && hasSelectedLineIndexes) {
     const allLines = (quoteRecord.cost_breakdown ?? []) as CostLineItem[];
     const selectedIndexes = new Set((params.selectedLineIndexes ?? []).filter((index) => Number.isInteger(index) && index >= 0));
     const selectedLines = allLines.filter((_, index) => selectedIndexes.has(index)).map(normaliseCostLine);
@@ -63,7 +69,7 @@ export async function acceptQuote(supabase: SupabaseAdmin, params: AcceptQuotePa
     quoteUpdates.total = selectedTotals.total;
     acceptedTotal = selectedTotals.total;
     acceptedLines = selectedLines;
-  } else if (acceptedOption) {
+  } else if (pricingMode === "options" && acceptedOption) {
     const selectedLines = (acceptedOption.cost_breakdown ?? []).map(normaliseCostLine);
     const selectedTotals = calculateTotals(selectedLines);
     quoteUpdates.cost_breakdown = selectedLines;

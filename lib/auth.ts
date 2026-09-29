@@ -11,9 +11,18 @@ export async function getSession() {
   try {
     const supabase = await createSupabaseServerClient();
     const {
+      data: { user },
+      error: userError
+    } = await supabase.auth.getUser();
+
+    // getSession() only reads the locally stored token. Revalidate it with
+    // Supabase before treating the request as authenticated.
+    if (userError || !user) return null;
+
+    const {
       data: { session }
     } = await supabase.auth.getSession();
-    return session;
+    return session?.user.id === user.id ? session : null;
   } catch {
     return null;
   }

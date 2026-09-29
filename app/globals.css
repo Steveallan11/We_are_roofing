@@ -1269,6 +1269,43 @@ a[role="button"]:active,
   cursor: pointer;
 }
 
+.mobile-new-action {
+  position: relative;
+  display: grid;
+  min-width: 56px;
+  place-items: center;
+}
+
+.mobile-bottom-nav__new {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 3px solid var(--obsidian);
+  border-radius: 999px;
+  background: var(--gold);
+  color: #111;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transform: translateY(-10px);
+}
+
+.mobile-new-action__sheet {
+  position: fixed;
+  right: 12px;
+  bottom: calc(var(--bottomnav-height) + 12px + env(safe-area-inset-bottom));
+  left: 12px;
+  z-index: 70;
+  padding: 8px;
+  border: 1px solid var(--gold-border);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: 0 -14px 40px rgba(0,0,0,0.55);
+}
+
 .mobile-more-sheet {
   position: fixed;
   inset: 0;

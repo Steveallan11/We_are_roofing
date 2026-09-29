@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type {
   Job,
   Customer,
@@ -11,11 +12,17 @@ import type {
   InvoiceRecord,
   JobExpense,
   JobFinancialSnapshot,
-  ReceiptInboxRecord
+  ReceiptInboxRecord,
+  LabourPersonRecord,
+  SubcontractorPaymentRecord,
+  SupplierBillRecord,
+  SupplierRecord,
+  BankStatementImportRecord
 } from "@/lib/types";
 import { currency } from "@/lib/utils";
-import { getQuotePipelineValue } from "@/lib/quotes/value";
 import { ReceiptInbox } from "@/components/money/ReceiptInbox";
+import { FinanceReportsTab, SubcontractorsTab, SupplierBillsTab } from "@/components/money/FinanceOperations";
+import { BankReconciliationTab } from "@/components/money/BankReconciliationTab";
 
 type ExpenseWithJob = JobExpense & { job?: { id: string; job_title: string; job_ref?: string | null } | null };
 
@@ -24,6 +31,11 @@ interface MoneyTabsProps {
   expenses?: ExpenseWithJob[];
   receiptInbox?: ReceiptInboxRecord[];
   jobFinancials?: JobFinancialSnapshot[];
+  labourPeople?: LabourPersonRecord[];
+  subcontractorPayments?: SubcontractorPaymentRecord[];
+  suppliers?: SupplierRecord[];
+  supplierBills?: SupplierBillRecord[];
+  bankStatementImports?: BankStatementImportRecord[];
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
@@ -38,8 +50,12 @@ const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   other: "Other"
 };
 
-export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancials = [] }: MoneyTabsProps) {
-  const [activeTab, setActiveTab] = useState<"revenue" | "jobProfit" | "expenses" | "invoices" | "forecast">("revenue");
+export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancials = [], labourPeople = [], subcontractorPayments = [], suppliers = [], supplierBills = [], bankStatementImports = [] }: MoneyTabsProps) {
+  type MoneyTab = "revenue" | "jobProfit" | "expenses" | "invoices" | "subcontractors" | "supplierBills" | "bankReview" | "reports" | "forecast";
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab") as MoneyTab | null;
+  const validTabs: MoneyTab[] = ["revenue", "jobProfit", "expenses", "invoices", "subcontractors", "supplierBills", "bankReview", "reports", "forecast"];
+  const [activeTab, setActiveTab] = useState<MoneyTab>(requestedTab && validTabs.includes(requestedTab) ? requestedTab : "revenue");
 
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
   const invoicesWithJobs = jobs.flatMap((job) =>
@@ -47,7 +63,6 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
   );
   const invoices = invoicesWithJobs.map((item) => item.invoice);
 
-  const quotePipeline = quotes.reduce((sum, quote) => sum + Number(getQuotePipelineValue(quote) ?? 0), 0);
   const outstanding = invoicesWithJobs
     .filter((item) => !["Paid", "Void"].includes(item.invoice.status))
     .reduce((sum, item) => sum + Number(item.invoice.balance_due), 0);
@@ -67,17 +82,39 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
   const pipelineQuoted = quotes.filter((q) => q.status === "Draft").reduce((sum, q) => sum + Number(q.total ?? 0), 0);
   const pipelineSent = quotes.filter((q) => q.status === "Sent").reduce((sum, q) => sum + Number(q.total ?? 0), 0);
   const pipelineAccepted = quotes.filter((q) => q.status === "Accepted").reduce((sum, q) => sum + Number(q.total ?? 0), 0);
+  const moneyIn = invoices.reduce((sum, invoice) => sum + Number(invoice.amount_paid ?? 0), 0);
+  const moneyOut = expenses.reduce((sum, expense) => sum + Number(expense.gross_amount ?? expense.amount ?? 0), 0)
+    + supplierBills.reduce((sum, bill) => sum + Number(bill.amount_paid ?? 0), 0)
+    + subcontractorPayments.reduce((sum, payment) => sum + Number(payment.amount_paid ?? 0), 0);
+  const billsToPay = supplierBills.reduce((sum, bill) => sum + Number(bill.amount_outstanding ?? 0), 0)
+    + subcontractorPayments.reduce((sum, payment) => sum + Number(payment.amount_outstanding ?? 0), 0);
+  const invoicedNet = invoices.filter((invoice) => invoice.status !== "Void").reduce((sum, invoice) => sum + Number(invoice.subtotal ?? 0), 0);
+  const directCosts = expenses.reduce((sum, expense) => sum + Number(expense.net_amount ?? expense.amount ?? 0), 0)
+    + supplierBills.filter((bill) => !["Cancelled", "Credited"].includes(bill.status)).reduce((sum, bill) => sum + Number(bill.subtotal ?? 0), 0)
+    + subcontractorPayments.filter((payment) => payment.status !== "Cancelled").reduce((sum, payment) => sum + Number(payment.net_amount ?? 0), 0);
+  const grossProfit = invoicedNet - directCosts;
 
   const tabs = [
     { id: "revenue" as const, label: "Revenue" },
     { id: "jobProfit" as const, label: "Job Profit" },
     { id: "expenses" as const, label: "Expenses" },
     { id: "invoices" as const, label: "Invoices" },
+    { id: "subcontractors" as const, label: "Subcontractors" },
+    { id: "supplierBills" as const, label: "Supplier Bills" },
+    { id: "bankReview" as const, label: "Bank Review" },
+    { id: "reports" as const, label: "Reports" },
     { id: "forecast" as const, label: "Forecast" },
   ];
 
   return (
-    <div>
+    <div className="space-y-4">
+      <section aria-label="Money overview" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MoneyOverview label="Money In" detail="Money received" value={moneyIn} onClick={() => setActiveTab("revenue")} />
+        <MoneyOverview label="Still Owed to Us" detail="Customer invoice balances" value={outstanding} onClick={() => setActiveTab("invoices")} warning={outstanding > 0} />
+        <MoneyOverview label="Money Out" detail="Recorded payments and costs" value={moneyOut} onClick={() => setActiveTab("expenses")} />
+        <MoneyOverview label="Bills to Pay" detail="Supplier and subcontractor balances" value={billsToPay} onClick={() => setActiveTab("supplierBills")} warning={billsToPay > 0} />
+        <MoneyOverview label="Job Profit" detail="Net invoices less direct costs" value={grossProfit} onClick={() => setActiveTab("jobProfit")} />
+      </section>
       <div className="sticky top-0 border-b border-[var(--border)] bg-[var(--surface)] z-10">
         <div className="flex gap-1 overflow-x-auto">
           {tabs.map((tab) => (
@@ -96,7 +133,7 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
         </div>
       </div>
 
-      <div className="pt-4">
+      <div>
         {activeTab === "revenue" && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -224,6 +261,14 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
           </div>
         )}
 
+        {activeTab === "subcontractors" && <SubcontractorsTab jobs={jobs} people={labourPeople} payments={subcontractorPayments} />}
+
+        {activeTab === "supplierBills" && <SupplierBillsTab jobs={jobs} suppliers={suppliers} bills={supplierBills} />}
+
+        {activeTab === "bankReview" && <BankReconciliationTab imports={bankStatementImports} jobs={jobs} supplierBills={supplierBills} />}
+
+        {activeTab === "reports" && <FinanceReportsTab jobs={jobs} expenses={expenses} subcontractorPayments={subcontractorPayments} supplierBills={supplierBills} />}
+
         {activeTab === "forecast" && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -269,6 +314,16 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
         )}
       </div>
     </div>
+  );
+}
+
+function MoneyOverview({ label, detail, value, onClick, warning = false }: { label: string; detail: string; value: number; onClick: () => void; warning?: boolean }) {
+  return (
+    <button className={`min-h-28 rounded-xl border p-4 text-left transition hover:border-[var(--gold)] ${warning ? "border-amber-500/30 bg-amber-500/10" : "border-[var(--border)] bg-[var(--surface)]"}`} onClick={onClick} type="button">
+      <span className="block text-xs font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</span>
+      <span className="mt-2 block text-2xl font-bold text-[var(--text)]">{currency(value)}</span>
+      <span className="mt-1 block text-xs text-[var(--text-muted)]">{detail}</span>
+    </button>
   );
 }
 

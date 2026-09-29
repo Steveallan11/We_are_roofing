@@ -1,4 +1,5 @@
 import type { OtherSurveyDetails, SurveyAdaptiveSections, SurveyRecord, SurveyType } from "@/lib/types";
+import { normaliseEnabledModules } from "@/lib/surveys/schema";
 
 const SURVEY_SECTION_LABELS: Record<string, string> = {
   flat_roof: "Flat Roof",
@@ -197,87 +198,73 @@ export function calculateChimneyMetrics(details: SurveyAdaptiveSections["chimney
 export function getSurveyMeasurementsSummary(survey?: SurveyRecord | null) {
   if (!survey) return "Not captured yet";
   const adaptive = survey.adaptive_sections ?? {};
-  const surveyType = survey.survey_type as SurveyType | undefined;
-
-  if (surveyType === "Pitched / Tiled") {
+  const modules = normaliseEnabledModules(survey.enabled_modules, survey.survey_type);
+  const parts: string[] = [];
+  if (modules.includes("pitched_roof")) {
     const metrics = calculatePitchedMetrics(adaptive.pitched_roof);
-    const parts = [
+    parts.push(...[
       metrics.roofAreaEstimate ? `${metrics.roofAreaEstimate}m2 roof area` : null,
       metrics.totalRidgeMetres ? `${metrics.totalRidgeMetres}m ridge` : null,
       metrics.totalHipMetres ? `${metrics.totalHipMetres}m hips` : null,
       metrics.totalValleyMetres ? `${metrics.totalValleyMetres}m valleys` : null
-    ].filter(Boolean);
-    return parts.join(" | ") || survey.measurements || "Not captured yet";
+    ].filter(Boolean) as string[]);
   }
-
-  if (surveyType === "Flat Roof") {
+  if (modules.includes("flat_roof")) {
     const metrics = calculateFlatMetrics(adaptive.flat_roof);
-    const parts = [
-      metrics.roofAreaEstimate ? `${metrics.roofAreaEstimate}m2 area` : null,
-      metrics.perimeterMetres ? `${metrics.perimeterMetres}m perimeter` : null
-    ].filter(Boolean);
-    return parts.join(" | ") || survey.measurements || "Not captured yet";
+    parts.push(...[metrics.roofAreaEstimate ? `${metrics.roofAreaEstimate}m2 flat area` : null, metrics.perimeterMetres ? `${metrics.perimeterMetres}m flat perimeter` : null].filter(Boolean) as string[]);
   }
-
-  if (surveyType === "Fascias / Soffits / Gutters") {
+  if (modules.includes("fascias")) {
     const metrics = calculateFasciaMetrics(adaptive.fascias);
-    return metrics.totalLinearMetres ? `${metrics.totalLinearMetres}m total run` : survey.measurements || "Not captured yet";
+    if (metrics.totalLinearMetres) parts.push(`${metrics.totalLinearMetres}m fascia/gutter run`);
   }
-
-  if (surveyType === "Chimney / Lead") {
+  if (modules.includes("chimney")) {
     const metrics = calculateChimneyMetrics(adaptive.chimney);
-    return metrics.totalMeasuredRun ? `${metrics.totalMeasuredRun}m measured lead run` : survey.measurements || "Not captured yet";
+    if (metrics.totalMeasuredRun) parts.push(`${metrics.totalMeasuredRun}m measured lead run`);
   }
-
-  return survey.measurements || "Not captured yet";
+  return parts.join(" | ") || survey.measurements || "Not captured yet";
 }
 
 export function getSurveyHighlights(survey?: SurveyRecord | null) {
   if (!survey) return [];
   const adaptive = survey.adaptive_sections ?? {};
-  const surveyType = survey.survey_type as SurveyType | undefined;
-
-  if (surveyType === "Pitched / Tiled") {
-    return [
+  const modules = normaliseEnabledModules(survey.enabled_modules, survey.survey_type);
+  const highlights: string[] = [];
+  if (modules.includes("pitched_roof")) {
+    highlights.push(...[
       adaptive.pitched_roof?.roof_style,
       adaptive.pitched_roof?.tile_type,
       adaptive.pitched_roof?.moss_level ? `Moss: ${adaptive.pitched_roof.moss_level}` : null,
       adaptive.pitched_roof?.scaffold_type ? `Access: ${adaptive.pitched_roof.scaffold_type}` : null
-    ].filter(Boolean) as string[];
+    ].filter(Boolean) as string[]);
   }
-
-  if (surveyType === "Flat Roof") {
-    return [
+  if (modules.includes("flat_roof")) {
+    highlights.push(...[
       adaptive.flat_roof?.current_surface_type,
       adaptive.flat_roof?.recommended_system,
       adaptive.flat_roof?.standing_water ? "Standing water noted" : null
-    ].filter(Boolean) as string[];
+    ].filter(Boolean) as string[]);
   }
-
-  if (surveyType === "Fascias / Soffits / Gutters") {
-    return [
+  if (modules.includes("fascias")) {
+    highlights.push(...[
       adaptive.fascias?.current_material,
       adaptive.fascias?.gutter_profile,
       adaptive.fascias?.colour_preference
-    ].filter(Boolean) as string[];
+    ].filter(Boolean) as string[]);
   }
-
-  if (surveyType === "Chimney / Lead") {
-    return [
+  if (modules.includes("chimney")) {
+    highlights.push(...[
       adaptive.chimney?.lead_code ? `Lead ${adaptive.chimney.lead_code}` : null,
       adaptive.chimney?.chimney_count ? `${adaptive.chimney.chimney_count} chimney(s)` : null,
       adaptive.chimney?.repointing_needed ? "Repointing needed" : null
-    ].filter(Boolean) as string[];
+    ].filter(Boolean) as string[]);
   }
-
-  if (surveyType === "Other / Misc") {
-    return [
+  if (modules.includes("other")) {
+    highlights.push(...[
       (adaptive.other as OtherSurveyDetails | undefined)?.survey_focus,
       (adaptive.other as OtherSurveyDetails | undefined)?.recommended_system
-    ].filter(Boolean) as string[];
+    ].filter(Boolean) as string[]);
   }
-
-  return [];
+  return Array.from(new Set(highlights));
 }
 
 export function getSurveySectionLabel(sectionName: string) {
