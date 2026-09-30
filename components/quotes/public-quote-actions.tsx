@@ -494,7 +494,7 @@ function SingleQuoteSummary({ lines }: { lines: CostLineItem[] }) {
         </div>
         <div className="mt-3 flex items-end justify-between gap-4 border-t border-[var(--gold)]/35 pt-3">
           <span className="text-base font-bold text-white">Total including VAT</span>
-          <strong className="break-all text-right font-display text-3xl text-[#ead16c]">{currency(net + vat)}</strong>
+          <strong className="whitespace-nowrap text-right font-display text-[clamp(1.45rem,7.5vw,1.875rem)] text-[#ead16c]">{currency(net + vat)}</strong>
         </div>
       </div>
     </div>
