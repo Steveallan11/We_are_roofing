@@ -2,7 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicQuoteActions } from "@/components/quotes/public-quote-actions";
-import { toQuoteContentBlocks } from "@/lib/quotes/readableQuote";
+import { formatScopeNumber, toQuoteContentBlocks } from "@/lib/quotes/readableQuote";
 import { resolveQuotePricingMode } from "@/lib/quotes/pricingMode";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validatePublicQuoteAccess } from "@/lib/public-quote";
@@ -213,12 +213,21 @@ function ReadableText({ value, compact = false, numberHeadings = false }: { valu
     <>
       {blocks.map((block, index) => {
         if (block.kind === "heading") {
-          const headingNumber = blocks.slice(0, index + 1).filter((item) => item.kind === "heading").length;
-          return (
-            <h3 className="break-words border-l-2 border-[#d4af37] pl-3 font-display text-xl font-extrabold uppercase leading-7 tracking-[-0.015em] text-[#292722] sm:pl-4 md:text-[1.35rem]" key={`heading-${index}`}>
-              {numberHeadings || block.numbered ? <span className="mr-2 text-[#8a6a08]">{String(headingNumber).padStart(2, "0")} —</span> : null}
+          const showNumber = block.numbered || (numberHeadings && !block.emphasis);
+          const headingIndex = blocks.slice(0, index + 1).filter((item) => item.kind === "heading" && (item.numbered || (numberHeadings && !item.emphasis))).length - 1;
+          const heading = (
+            <h3 className={`min-w-0 break-words font-display font-extrabold uppercase tracking-[-0.015em] text-[#292722] ${block.emphasis ? "text-base leading-6 md:text-lg" : "text-xl leading-7 md:text-[1.35rem]"}`}>
               {block.text}
             </h3>
+          );
+
+          return showNumber ? (
+            <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-l-2 border-[#d4af37] pl-3 sm:grid-cols-[2.5rem_minmax(0,1fr)] sm:gap-3 sm:pl-4" key={`heading-${index}`}>
+              <span className="pt-0.5 font-ui text-sm font-black tabular-nums text-[#8a6a08]">{formatScopeNumber(headingIndex)}</span>
+              {heading}
+            </div>
+          ) : (
+            <div className="border-l-2 border-[#d4af37] pl-3 sm:pl-4" key={`heading-${index}`}>{heading}</div>
           );
         }
 
@@ -260,19 +269,51 @@ function getPreviewQuoteFixture(fixture = "pmma"): QuoteRecord {
 3 Hip & Ridge Repairs
 - Remove loose mortar and prepare the existing ridge line.
 - Re-bed and mechanically fix all suitable ridge tiles.`;
-  const pmmaScope = `FLAT ROOF — APPROX. 14 M²
+  const optionScope = `1 Roof Cleaning & Moss Treatment
+Manually scrape and remove moss, silt and accumulated organic debris from the tiled roof covering.
+
+1 Valley Repairs
+Clear all affected valley channels and renew failed mortar where required.
+
+1 Hips & Ridges
+Remove loose mortar and re-bed suitable hip and ridge tiles.
+
+1 Box Gutter
+Clean and repair the box gutter details included in the quotation.
+
+1 Tile Replacement
+Replace the identified defective roof tiles with suitable matching tiles.
+
+New Fascia, Soffit & Guttering Carefully remove the existing guttering, fascia and soffit from the agreed elevations.
+
+ASBESTOS WARNING
+Existing fascia and soffit materials are assumed to be non-asbestos-containing unless otherwise identified. If suspected asbestos-containing materials are discovered, work to the affected area will stop and additional testing or removal charges may apply.
+
+1 Access
+Works are priced on the basis of suitable ladder access and aluminium access towers where required. No fixed scaffolding is currently included.`;
+  const pmmaScope = `01 —FLAT ROOF — APPROX. 14 M²
 - Existing paving slabs to be lifted and removed by site/others prior to our works.
 - Inspect the exposed waterproofing, substrate, falls and perimeter details.
 - Mechanically prepare all suitable surfaces.
 
-SILTEC SILFLEX PMMA WATERPROOFING SYSTEM
+02—SILTEC SILFLEX PMMA WATERPROOFING SYSTEM
 - Install a fully reinforced Siltec RB30 PMMA waterproofing system to the prepared roof area.
 - Dress all perimeter, outlet and threshold details in accordance with the manufacturer’s specification.
 
-EXTERNAL STAIRCASE
+03 — EXTERNAL STAIRCASE
 - Prepare the staircase and landings for the specified reinforced PMMA system.
 - Protect adjacent finishes throughout the works.`;
-  const baseLines = fixture === "tiled"
+  const optionLines = [
+    { item: "Moss Scrape roof works", notes: "Roof cleaning and moss treatment.", cost: 1495, vat_applicable: true, pricing_category: "roof_works", quote_section: "Moss Scrape" },
+    { item: "Box Gutter roof works", notes: "Box gutter cleaning and repairs.", cost: 1295, vat_applicable: true, pricing_category: "roof_works", quote_section: "Box Gutter" },
+    { item: "Valleys roof works", notes: "Valley repairs.", cost: 850, vat_applicable: true, pricing_category: "roof_works", quote_section: "Valleys" },
+    { item: "Hips & Ridges roof works", notes: "Hip and ridge repairs.", cost: 720, vat_applicable: true, pricing_category: "roof_works", quote_section: "Hips & Ridges" },
+    { item: "Tile Replacement roof works", notes: "Replacement of identified defective tiles.", cost: 180, vat_applicable: true, pricing_category: "roof_works", quote_section: "Tile Replacement" },
+    { item: "Complete White uPVC Fascia, Soffit & Gutter Replacement Including Eaves Protection roof works", display_name: "White uPVC Fascia, Soffit & Guttering with Eaves Protection", notes: "Complete fascia, soffit and guttering package.", cost: 3595, vat_applicable: true, pricing_category: "roof_works", quote_section: "Fascia, Soffit & Guttering" }
+  ];
+  const baseLines = fixture === "options"
+    ? optionLines
+    : fixture === "tiled"
     ? [
         { item: "Roof cleaning and moss treatment", notes: "Complete preparation, cleaning and responsible disposal.", cost: 2450, vat_applicable: true },
         { item: "Valley, hip and ridge repairs", notes: "Repair works described in the scope above.", cost: 3975, vat_applicable: true }
@@ -285,8 +326,8 @@ EXTERNAL STAIRCASE
   const vatAmount = subtotal * 0.2;
   const options: QuoteOption[] = fixture === "options"
     ? [
-        { id: "option-a", label: "Option A", title: "Targeted roof repairs", short_description: "Focused repair programme", description: "Targeted works to the affected roof areas.", cost_breakdown: baseLines.slice(0, 1), subtotal: baseLines[0].cost, vat_amount: baseLines[0].cost * 0.2, total: baseLines[0].cost * 1.2, recommended: false },
-        { id: "option-b", label: "Option B", title: "Complete repair programme", short_description: "All specified repair works", description: "The complete scope described in this quotation.", cost_breakdown: baseLines, subtotal, vat_amount: vatAmount, total: subtotal + vatAmount, recommended: true }
+        { id: "option-a", label: "Option A", title: "Complete Roof Remedial Works", short_description: "Complete remedial roof package", description: "The complete roof remedial works described in this quotation.", cost_breakdown: baseLines.slice(0, 5), subtotal: 4540, vat_amount: 908, total: 5448, recommended: false },
+        { id: "option-b", label: "Option B", title: "Complete Roof Works + New Fascia, Soffit & Guttering", short_description: "Roof works plus the complete fascia package", description: "The complete roof works together with new fascia, soffit and guttering.", cost_breakdown: baseLines, subtotal, vat_amount: vatAmount, total: subtotal + vatAmount, recommended: true }
       ]
     : [];
 
@@ -295,10 +336,10 @@ EXTERNAL STAIRCASE
     job_id: "qa-preview-job",
     quote_ref: fixture === "tiled" ? "WR-Q-1028" : fixture === "options" ? "WR-Q-OPTIONS" : "WR-Q-PMMA",
     version_number: 1,
-    roof_report: fixture === "tiled"
+    roof_report: fixture === "tiled" || fixture === "options"
       ? "The tiled roof has a significant build-up of moss, with localised defects visible at the valleys, hips and ridge line. The covering remains suitable for a targeted repair programme, subject to the conditions set out below."
       : "The existing flat roof and external staircase were inspected for their general condition, falls, perimeter detailing and suitability for a reinforced liquid-applied waterproofing system. Local preparation will be required before installation.",
-    scope_of_works: fixture === "tiled" ? tiledScope : pmmaScope,
+    scope_of_works: fixture === "options" ? optionScope : fixture === "tiled" ? tiledScope : pmmaScope,
     cost_breakdown: baseLines,
     subtotal,
     vat_amount: vatAmount,

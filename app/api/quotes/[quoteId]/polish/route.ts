@@ -144,6 +144,11 @@ Rules:
 - ${isBuildMode ? "If the pasted context clearly contains priced line items, return an updated cost_breakdown using those explicit prices and measurements." : "Do not change prices, quantities, VAT, totals, or the cost breakdown. Treat Andy's pasted context as edit instructions for wording only."}
 - Use the measured takeoff rows as the structure for the scope.
 - Use Andy's takeoff notes as context, but do not overclaim anything not evidenced.
+- Structure scope_of_works consistently: put every subsection heading on its own standalone line in clear uppercase text, followed by its body copy or hyphen-led work items on separate lines.
+- Do not type visible section numbers into scope_of_works. The customer quote renderer generates sequential numbering from section order.
+- Put each work item beneath the heading for the roof area or system it actually describes. In particular, flat-roof or PMMA roof-area installation must appear before an EXTERNAL STAIRCASE heading; only staircase and landing work belongs beneath EXTERNAL STAIRCASE.
+- Keep ACCESS and FASCIA, SOFFIT & GUTTERING as separate sections. Access descriptions must not contain or absorb fascia work.
+- Do not turn an installation sentence into a heading. Headings name an area or system; work instructions remain hyphen-led items.
 - Return JSON only.
 
 Style instructions from Andy:

@@ -19,6 +19,8 @@ export type RoofType = (typeof ROOF_TYPES)[number];
 
 export type CostLineItem = {
   item: string;
+  /** Optional customer-facing label; the internal item/category name remains unchanged. */
+  display_name?: string;
   cost: number;
   vat_applicable: boolean;
   notes: string;

@@ -221,6 +221,36 @@ export function buildQuoteOptionCustomerRows(option: Pick<QuoteOption, "cost_bre
     .filter((row): row is QuoteCustomerPriceRow => Boolean(row));
 }
 
+const CUSTOMER_LINE_LABELS: Record<string, string> = {
+  "valley": "Valley Repairs",
+  "valleys": "Valley Repairs",
+  "valley repair": "Valley Repairs",
+  "valley repairs": "Valley Repairs",
+  "complete white upvc fascia, soffit & gutter replacement including eaves protection": "White uPVC Fascia, Soffit & Guttering with Eaves Protection",
+  "complete white upvc fascia, soffit & guttering replacement including eaves protection": "White uPVC Fascia, Soffit & Guttering with Eaves Protection",
+  "white upvc fascia, soffit & gutter replacement including eaves protection": "White uPVC Fascia, Soffit & Guttering with Eaves Protection"
+};
+
+/**
+ * Cleans internal/system pricing labels for public quotation display only.
+ * Stored names and financial data are never changed.
+ */
+export function normalizeQuoteLineItemLabel(name?: string | null) {
+  const compact = (name ?? "").replace(/\s+/g, " ").trim();
+  if (!compact) return "Quote item";
+
+  const withoutCategorySuffix = compact
+    .replace(/\s+roof\s+works\s*$/i, "")
+    .replace(/\s+works\s*$/i, (suffix) => (isClearlyGeneratedWorksSuffix(compact) ? "" : suffix))
+    .trim();
+  const knownLabel = CUSTOMER_LINE_LABELS[withoutCategorySuffix.toLowerCase()];
+  return knownLabel ?? withoutCategorySuffix;
+}
+
+function isClearlyGeneratedWorksSuffix(value: string) {
+  return /^(?:moss scrape|box gutter|valleys?|valley repairs?|hips?\s*(?:&|and)\s*ridges?|tile replacements?)\s+works$/i.test(value.trim());
+}
+
 /**
  * Same as buildQuoteOptionCustomerRows but keeps billed-separately lines in
  * the list (flagged, not summed) — for detail views that should show the
@@ -476,15 +506,15 @@ function getLineItemSummaryLabel(item: CostLineItem, category: QuotePriceSummary
 }
 
 function getDetailedLineItemLabel(item: CostLineItem, category: QuotePriceSummaryRow["id"]) {
-  const labelSource = [item.quote_section, item.item, item.source_label, item.pricing_category].find((value) => value?.trim())?.trim();
+  const labelSource = [item.display_name, item.quote_section, item.item, item.source_label, item.pricing_category].find((value) => value?.trim())?.trim();
   if (!labelSource) return getDefaultSummaryLabel(category);
 
   const normalised = labelSource.toLowerCase();
   if (category === "roof_works" && /roof works|main roof|full roof|roof refurbishment/.test(normalised)) {
-    return labelSource;
+    return normalizeQuoteLineItemLabel(labelSource);
   }
   if (category === "roof_works") {
-    return labelSource;
+    return normalizeQuoteLineItemLabel(labelSource);
   }
   if (normalised.includes("temporary roof") || normalised.includes("weather protection")) {
     return "Temporary roof/weather protection system";
@@ -492,22 +522,28 @@ function getDetailedLineItemLabel(item: CostLineItem, category: QuotePriceSummar
   if (normalised.includes("scaffold")) {
     return "Standard scaffold";
   }
-  return labelSource;
+  return normalizeQuoteLineItemLabel(labelSource);
 }
 
 function getCustomerLineItemLabel(item: CostLineItem) {
   const identity = `${item.source_id ?? ""} ${item.item ?? ""} ${item.pricing_category ?? ""} ${item.quote_section ?? ""} ${item.source_label ?? ""}`.toLowerCase();
   const category = getQuoteLineItemCategory(item);
   const section = item.quote_section && !["roof_works", "materials", "labour", "access"].includes(item.quote_section) ? item.quote_section : "";
+  const publicName = item.display_name?.trim();
+
+  if (publicName) return normalizeQuoteLineItemLabel(publicName);
 
   if (category === "materials") return section ? `${section} materials` : "Materials";
   if (category === "labour") return section ? `${section} labour` : "Labour";
-  if (category === "roof_works") return section ? `${section} roof works` : "Roof works";
+  if (category === "roof_works") {
+    const specificName = section || (!/^(?:roof works|main works|quoted works)$/i.test(item.item?.trim() || "") ? item.item : "");
+    return specificName ? normalizeQuoteLineItemLabel(specificName) : "Roof works";
+  }
   if (identity.includes("temporary roof") || identity.includes("weather protection") || identity.includes("temp roof")) {
     return section ? `${section} temporary roof protection` : "Temporary roof protection";
   }
   if (identity.includes("scaffold")) return section ? `${section} scaffold` : "Standard scaffold";
-  return item.item || "Quote item";
+  return normalizeQuoteLineItemLabel(item.item);
 }
 
 function getOptionName(option: Pick<QuoteOption, "id" | "label">, index: number) {

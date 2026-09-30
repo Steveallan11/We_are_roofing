@@ -2,7 +2,7 @@
 
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { CostLineItem, QuoteOption, QuotePricingMode } from "@/lib/types";
-import { buildQuoteOptionCustomerRows, buildQuoteOptionDetailRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation } from "@/lib/quotes/value";
+import { buildQuoteOptionCustomerRows, buildQuoteOptionDetailRows, calculateOptionNet, calculateOptionVat, getOptionTotal, getQuoteOptionPresentation, normalizeQuoteLineItemLabel } from "@/lib/quotes/value";
 import { isPriceToBeConfirmed } from "@/lib/quotes/provisional";
 import { currency } from "@/lib/utils";
 
@@ -331,8 +331,8 @@ function SectionChoiceList({
 function OptionCardPriceRow({ isSelected, label, strong = false, value }: { isSelected: boolean; label: string; strong?: boolean; value: number }) {
   return (
     <span className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 font-ui text-sm ${strong ? "font-extrabold" : "font-semibold"}`}>
-      <span className={`min-w-0 leading-5 ${isSelected ? "text-black/80" : "text-[#e5e5e5]"}`}>{label}</span>
-      <span className={`shrink-0 text-right ${isSelected ? "text-black" : "text-white"}`}>{currency(value)}</span>
+      <span className={`min-w-0 break-words leading-5 ${isSelected ? "text-black/80" : "text-[#e5e5e5]"}`}>{label}</span>
+      <span className={`shrink-0 whitespace-nowrap text-right tabular-nums ${isSelected ? "text-black" : "text-white"}`}>{currency(value)}</span>
     </span>
   );
 }
@@ -402,8 +402,9 @@ function isOptionalQuoteLine(line: CostLineItem) {
 
 function getCustomerLineLabel(line: CostLineItem) {
   const item = line.item?.trim();
-  if (item && !isInternalSectionName(item)) return item;
-  return getLineDisplayLabel(line);
+  if (line.display_name?.trim()) return normalizeQuoteLineItemLabel(line.display_name);
+  if (item && !isInternalSectionName(item)) return normalizeQuoteLineItemLabel(item);
+  return normalizeQuoteLineItemLabel(getLineDisplayLabel(line));
 }
 
 function getLineDisplayLabel(line: CostLineItem) {
@@ -453,9 +454,9 @@ function SingleQuoteSummary({ lines }: { lines: CostLineItem[] }) {
         <p className="font-ui text-xs font-extrabold uppercase tracking-[0.18em] text-[#d4af37]">Complete quotation</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-4">
           <h3 className="font-display text-2xl font-extrabold uppercase leading-tight text-white sm:text-3xl">All works included</h3>
-          <strong className="break-all font-display text-[2.45rem] leading-none text-[#ead16c] sm:text-5xl">{currency(net + vat)}</strong>
+          <strong className="whitespace-nowrap font-display text-[clamp(2rem,10vw,3rem)] leading-none text-[#ead16c]">{currency(net)}</strong>
         </div>
-        <p className="mt-3 font-ui text-sm leading-6 text-[#cfcfcf]">Total including VAT</p>
+        <p className="mt-3 font-ui text-sm leading-6 text-[#cfcfcf]">Price before VAT</p>
         <div className="mt-5 divide-y divide-white/10 border-y border-white/10 font-ui">
           {billableLines.map((line) => (
             <div className="py-4" key={`single-${line.originalIndex}`}>

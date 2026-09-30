@@ -151,6 +151,11 @@ Prioritise knowledge entries tagged andrew-style, quote-wording, and roof-report
 Use the historical quotes as style and comparable-price anchors only. Do not blindly copy old totals; instead apply the uplifted totals and current survey facts.
 Never copy an old customer's address, name, or job-specific details into the new quote. Reuse style and structure, not irrelevant facts.
 In the customer email, mention only work and roof features explicitly included in this quote's priced scope. Do not mention chimneys, dormers, skylights, or other features unless they are specifically being worked on.
+Structure scope_of_works consistently: put every subsection heading on its own standalone line in clear uppercase text, followed by its body copy or hyphen-led work items on separate lines.
+Do not type visible section numbers into scope_of_works. The customer quote renderer generates sequential numbering from section order.
+Put each work item beneath the roof area or system it actually describes. Flat-roof or PMMA roof-area installation must appear before an EXTERNAL STAIRCASE heading; only staircase and landing work belongs beneath EXTERNAL STAIRCASE.
+Keep ACCESS and FASCIA, SOFFIT & GUTTERING as separate sections. Access descriptions must not contain or absorb fascia work.
+Headings must name an area or system. Keep installation instructions as hyphen-led work items rather than headings.
 Return JSON only.
 
 Business:

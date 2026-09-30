@@ -44,4 +44,20 @@ describe("public quote content structure", () => {
       { kind: "paragraph", text: "Renew defective valley details." }
     ]);
   });
+
+  it("recognises tightly spaced numbered headings and strips their stored numbers", () => {
+    expect(toQuoteContentBlocks("01 —FLAT ROOF — APPROX. 14 M²\n- Prepare the roof area\n\n02—SILTEC SILFLEX PMMA WATERPROOFING SYSTEM\n- Install the reinforced system")).toEqual([
+      { kind: "heading", numbered: true, text: "FLAT ROOF — APPROX. 14 M²" },
+      { kind: "list", ordered: false, items: ["Prepare the roof area"] },
+      { kind: "heading", numbered: true, text: "SILTEC SILFLEX PMMA WATERPROOFING SYSTEM" },
+      { kind: "list", ordered: false, items: ["Install the reinforced system"] }
+    ]);
+  });
+
+  it("recognises bold markdown numbered headings as headings rather than body copy", () => {
+    expect(toQuoteContentBlocks("**01 — FLAT ROOF — APPROX. 14 M²**\n- Prepare all suitable surfaces")).toEqual([
+      { kind: "heading", numbered: true, text: "FLAT ROOF — APPROX. 14 M²" },
+      { kind: "list", ordered: false, items: ["Prepare all suitable surfaces"] }
+    ]);
+  });
 });

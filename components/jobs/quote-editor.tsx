@@ -1150,6 +1150,7 @@ export function QuoteEditor({ jobId, quote, rateCard = [], roofSurvey = null, la
               Scope of Works
             </label>
             <textarea className="field min-h-72 leading-7" id="scope-of-works" onChange={(event) => setScopeOfWorks(event.target.value)} value={scopeOfWorks} />
+            <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">Formatting: use a standalone ALL-CAPS line or **bold text** for emphasis. Section numbers are generated automatically on the customer quote.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
