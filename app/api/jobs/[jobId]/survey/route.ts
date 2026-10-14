@@ -94,7 +94,7 @@ async function saveSurvey(request: Request, { params }: Props) {
     job_id: jobId,
     surveyor_name: surveyorName,
     access_notes: String(body.access_notes ?? ""),
-    scaffold_required: Boolean(body.scaffold_required),
+    scaffold_required: body.scaffold_required === null ? null : Boolean(body.scaffold_required),
     scaffold_notes: String(body.scaffold_notes ?? ""),
     roof_condition: String(body.roof_condition ?? ""),
     problem_observed: problemObserved,
@@ -109,7 +109,7 @@ async function saveSurvey(request: Request, { params }: Props) {
     survey_type: surveyType,
     roof_type: roofType,
     enabled_modules: normaliseEnabledModules(body.enabled_modules, surveyType),
-    no_photo_confirmation: Boolean(body.no_photo_confirmation),
+    no_photo_confirmation: body.no_photo_confirmation === null ? null : Boolean(body.no_photo_confirmation),
     adaptive_sections: adaptiveSections,
     updated_at: new Date().toISOString()
   };
@@ -119,7 +119,7 @@ async function saveSurvey(request: Request, { params }: Props) {
       ok: true,
       jobId,
       message: "Survey payload accepted.",
-      next_status: payload.no_photo_confirmation ? "Ready For AI Quote" : "Survey Complete",
+      next_status: payload.no_photo_confirmation === true ? "Ready For AI Quote" : "Survey Complete",
       received: payload
     });
   }
@@ -152,7 +152,7 @@ async function saveSurvey(request: Request, { params }: Props) {
     adaptiveSections
   });
 
-  const nextStatus = payload.no_photo_confirmation || (photoCount ?? 0) > 0 ? "Ready For AI Quote" : "Survey Complete";
+  const nextStatus = payload.no_photo_confirmation === true || (photoCount ?? 0) > 0 ? "Ready For AI Quote" : "Survey Complete";
 
   await supabase
     .from("jobs")
@@ -280,7 +280,7 @@ function buildSurveySnapshotHtml({
     ["Recommended Works", survey.recommended_works],
     ["Measurements", survey.measurements],
     ["Access Notes", survey.access_notes],
-    ["Scaffold Required", survey.scaffold_required ? "Yes" : "No"],
+    ["Scaffold Required", survey.scaffold_required === null ? "Not assessed" : survey.scaffold_required ? "Yes" : "No"],
     ["Scaffold Notes", survey.scaffold_notes],
     ["Customer Concerns", survey.customer_concerns],
     ["Weather Notes", survey.weather_notes],

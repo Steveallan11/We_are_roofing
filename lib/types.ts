@@ -88,7 +88,7 @@ export type GeneratedQuote = {
 export type SurveyCore = {
   surveyor_name: string;
   access_notes: string;
-  scaffold_required: boolean;
+  scaffold_required: boolean | null;
   scaffold_notes: string;
   roof_condition: string;
   problem_observed: string;
@@ -100,7 +100,7 @@ export type SurveyCore = {
   customer_concerns: string;
   voice_note_transcript: string;
   raw_notes: string;
-  no_photo_confirmation: boolean;
+  no_photo_confirmation: boolean | null;
 };
 
 export type FlatRoofDetails = {
@@ -370,7 +370,7 @@ export type SurveyRecord = {
   job_id: string;
   surveyor_name?: string | null;
   access_notes?: string | null;
-  scaffold_required: boolean;
+  scaffold_required: boolean | null;
   scaffold_notes?: string | null;
   roof_condition?: string | null;
   problem_observed?: string | null;
@@ -384,7 +384,7 @@ export type SurveyRecord = {
   raw_notes?: string | null;
   survey_type?: string | null;
   roof_type?: string | null;
-  no_photo_confirmation: boolean;
+  no_photo_confirmation: boolean | null;
   source_type?: "manual" | "video" | "voice" | "glasses_import" | null;
   video_path?: string | null;
   video_duration_sec?: number | null;

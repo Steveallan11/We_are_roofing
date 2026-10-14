@@ -41,6 +41,34 @@ async function loadJobSurvey(jobRef: string, businessId: string) {
   return { supabase, job: jobResult.data as Row, survey: surveyResult.data as Row | null };
 }
 
+async function loadSurveyDetail(input: Input, businessId: string) {
+  const supabase = createSupabaseAdminClient();
+  const jobRef = typeof input.job_ref === "string" ? input.job_ref.trim() : "";
+  const surveyId = typeof input.survey_id === "string" ? input.survey_id.trim() : "";
+  if (!jobRef && !surveyId) throw new Error("job_ref or survey_id is required.");
+  if (jobRef && surveyId) throw new Error("Provide either job_ref or survey_id, not both.");
+
+  let survey: Row | null = null;
+  let job: Row | null = null;
+  if (surveyId) {
+    const surveyResult = await supabase.from("surveys").select("*").eq("id", surveyId).maybeSingle();
+    if (surveyResult.error || !surveyResult.data) throw new Error(surveyResult.error?.message ?? `Survey ${surveyId} was not found.`);
+    survey = surveyResult.data as Row;
+    const jobResult = await supabase
+      .from("jobs")
+      .select("*,customers(full_name,email,phone)")
+      .eq("id", survey.job_id)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (jobResult.error || !jobResult.data) throw new Error("Survey was not found in this workspace.");
+    job = jobResult.data as Row;
+  } else {
+    const loaded = await loadJobSurvey(jobRef, businessId);
+    return { ...loaded, survey: loaded.survey as Row | null };
+  }
+  return { supabase, job, survey };
+}
+
 function isBlank(value: unknown) {
   return value == null || value === "" || (Array.isArray(value) && value.length === 0);
 }
@@ -67,13 +95,13 @@ export function buildSurveyUpdatePreview(input: Input, job: Row, survey: Row | n
   const uncertain: Row[] = [];
   const target: Row = {
     surveyor_name: survey?.surveyor_name ?? null, access_notes: survey?.access_notes ?? null,
-    scaffold_required: survey?.scaffold_required ?? false, scaffold_notes: survey?.scaffold_notes ?? null,
+    scaffold_required: survey?.scaffold_required ?? null, scaffold_notes: survey?.scaffold_notes ?? null,
     roof_condition: survey?.roof_condition ?? null, problem_observed: survey?.problem_observed ?? null,
     suspected_cause: survey?.suspected_cause ?? null, recommended_works: survey?.recommended_works ?? null,
     measurements: survey?.measurements ?? null, weather_notes: survey?.weather_notes ?? null,
     safety_notes: survey?.safety_notes ?? null, customer_concerns: survey?.customer_concerns ?? null,
     voice_note_transcript: survey?.voice_note_transcript ?? null, raw_notes: survey?.raw_notes ?? null,
-    no_photo_confirmation: survey?.no_photo_confirmation ?? false, survey_type: primaryType,
+    no_photo_confirmation: survey?.no_photo_confirmation ?? null, survey_type: primaryType,
     roof_type: String(input.roof_type ?? survey?.roof_type ?? job.roof_type ?? "Other"),
     enabled_modules: enabledModules,
     adaptive_sections: structuredClone((survey?.adaptive_sections ?? {}) as Row)
@@ -116,6 +144,17 @@ export function buildSurveyUpdatePreview(input: Input, job: Row, survey: Row | n
   }
 
   target.enabled_modules = Array.from(new Set(enabledModules));
+  // Classification and module selection are survey fields in their own right.
+  // Include explicit changes in the preview/audit evidence even when no individual
+  // module value changes, so a reclassification cannot look like a no-op.
+  const recordStructuralChange = (field_path: string, existing: unknown, proposed: unknown) => {
+    if (stable(existing) !== stable(proposed)) {
+      changes.push({ field_path, existing: existing ?? null, proposed, applied: true, evidence_class: "CONFIRMED", confidence: null, source_page: null });
+    }
+  };
+  if (survey && input.primary_survey_type !== undefined) recordStructuralChange("survey_type", survey.survey_type, target.survey_type);
+  if (survey && input.roof_type !== undefined) recordStructuralChange("roof_type", survey.roof_type ?? job.roof_type ?? null, target.roof_type);
+  if (survey && (input.enabled_modules !== undefined || input.primary_survey_type !== undefined)) recordStructuralChange("enabled_modules", normaliseEnabledModules(survey.enabled_modules, survey.survey_type), target.enabled_modules);
   const proposalIdentity = { job_ref: job.job_ref, expected_updated_at: survey?.updated_at ?? null, target, applied_paths: changes.map((item) => item.field_path) };
   const populatedPaths = new Set([...Object.keys(globalInput).map((key) => `global.${key}`), ...Object.entries(modulesInput).flatMap(([module, fields]) => Object.keys((fields as Row) ?? {}).map((key) => `modules.${module}.${key}`))]);
   const blankFieldCount = Object.keys(GLOBAL_SURVEY_FIELDS).filter((key) => isBlank(target[key]) && !populatedPaths.has(`global.${key}`)).length
@@ -130,17 +169,39 @@ async function getSurveySchema(input: Input, context?: AssistantRouteContext): P
 }
 
 async function getJobSurvey(input: Input, context?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  return getSurveyDetail(input, context);
+}
+
+async function getSurveyDetail(input: Input, context?: AssistantRouteContext): Promise<ToolExecutionResult> {
   const { businessId } = requireContext(context);
-  const { supabase, job, survey } = await loadJobSurvey(String(input.job_ref ?? ""), businessId);
-  const evidenceResult = survey ? await supabase.from("survey_field_evidence").select("field_path,value,source_type,source_page,evidence_class,confidence,verified,created_at").eq("business_id", businessId).eq("survey_id", survey.id).order("created_at", { ascending: false }) : { data: [], error: null };
-  if (evidenceResult.error) throw new Error(evidenceResult.error.message);
+  const { supabase, job, survey } = await loadSurveyDetail(input, businessId);
+  const [evidenceResult, importsResult, photosResult, documentsResult] = survey ? await Promise.all([
+    supabase.from("survey_field_evidence").select("field_path,value,source_type,source_page,source_excerpt,evidence_class,confidence,verified,created_at").eq("business_id", businessId).eq("survey_id", survey.id).order("created_at", { ascending: false }),
+    supabase.from("survey_imports").select("id,source_document_id,source_type,status,summary,applied_by,created_at").eq("business_id", businessId).eq("survey_id", survey.id).order("created_at", { ascending: false }),
+    supabase.from("job_photos").select("id,storage_path,public_url,photo_type,caption,uploaded_at").eq("job_id", job.id).eq("survey_id", survey.id).order("uploaded_at", { ascending: true }),
+    supabase.from("job_documents").select("id,document_type,display_name,storage_path,public_url,mime_type,file_size,source_type,created_at").eq("job_id", job.id).order("created_at", { ascending: false })
+  ]) : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
+  for (const result of [evidenceResult, importsResult, photosResult, documentsResult]) {
+    if (result.error) throw new Error(result.error.message);
+  }
   const modules = survey ? normaliseEnabledModules(survey.enabled_modules, survey.survey_type) : [];
-  return { ok: true, summary: survey ? `Loaded the structured survey for ${job.job_ref} with ${modules.length} active section${modules.length === 1 ? "" : "s"}.` : `${job.job_ref} does not have a survey yet.`, data: { job: { job_ref: job.job_ref, job_title: job.job_title, property_address: job.property_address, postcode: job.postcode, customer: job.customers }, survey: survey ? { ...survey, enabled_modules: modules } : null, field_evidence: evidenceResult.data ?? [] } };
+  return {
+    ok: true,
+    summary: survey ? `Loaded the structured survey for ${job.job_ref} with ${modules.length} active section${modules.length === 1 ? "" : "s"}.` : `${job.job_ref} does not have a survey yet.`,
+    data: {
+      job: { job_ref: job.job_ref, job_title: job.job_title, property_address: job.property_address, postcode: job.postcode, survey_date: job.survey_date ?? null, customer: job.customers },
+      survey: survey ? { ...survey, enabled_modules: modules, updated_at: survey.updated_at } : null,
+      field_evidence: evidenceResult.data ?? [],
+      processing_metadata: { imports: importsResult.data ?? [], evidence_count: evidenceResult.data?.length ?? 0 },
+      media: { photos: photosResult.data ?? [], documents: documentsResult.data ?? [] }
+    }
+  };
 }
 
 async function previewSurveyUpdate(input: Input, context?: AssistantRouteContext): Promise<ToolExecutionResult> {
   const { businessId } = requireContext(context);
   const { job, survey } = await loadJobSurvey(String(input.job_ref ?? ""), businessId);
+  if (!survey) throw new Error("This job has no existing survey to preview. Create it through the normal OS survey workflow first.");
   const preview = buildSurveyUpdatePreview(input, job, survey);
   return { ok: preview.validation_errors.length === 0, summary: `Previewed ${preview.changes.length} structured field change${preview.changes.length === 1 ? "" : "s"}; ${preview.conflicts.length} conflict${preview.conflicts.length === 1 ? "" : "s"}, ${preview.uncertain.length} uncertain value${preview.uncertain.length === 1 ? "" : "s"}, and ${preview.unsupported_fields.length} unsupported field${preview.unsupported_fields.length === 1 ? "" : "s"}. Nothing was saved.`, data: { ...preview, target: undefined, saved: false } };
 }
@@ -151,6 +212,7 @@ async function previewSurveyFromDocument(input: Input, context?: AssistantRouteC
   const documentId = String(input.document_id ?? "");
   const mapped = await mapJobDocumentToSurvey({ businessId, jobRef, documentId });
   const { job, survey } = await loadJobSurvey(jobRef, businessId);
+  if (!survey) throw new Error("This job has no existing survey to preview. Create it through the normal OS survey workflow first.");
   const preview = buildSurveyUpdatePreview(mapped.proposal, job, survey);
   return {
     ok: preview.validation_errors.length === 0,
@@ -161,8 +223,11 @@ async function previewSurveyFromDocument(input: Input, context?: AssistantRouteC
 
 async function updateSurvey(input: Input, context?: AssistantRouteContext): Promise<ToolExecutionResult> {
   if (input.confirmed !== true) throw new Error("confirmed must be true after the user reviews the survey preview.");
+  const sourceType = String(input.source_type ?? "chatgpt_import");
+  if (!["roof_report", "job_document", "video", "photo", "chatgpt_import", "other"].includes(sourceType)) throw new Error("source_type must be one of roof_report, job_document, video, photo, chatgpt_import, or other.");
   const { businessId, actorId } = requireContext(context);
   const { supabase, job, survey } = await loadJobSurvey(String(input.job_ref ?? ""), businessId);
+  if (!survey) throw new Error("This job has no existing survey to update. Create the survey through the normal OS survey workflow first.");
   if ((input.expected_updated_at ?? null) !== (survey?.updated_at ?? null)) throw new Error("The survey changed after preview. Refresh and preview again.");
   const preview = buildSurveyUpdatePreview(input, job, survey);
   if (preview.validation_errors.length) throw new Error("The proposed survey contains validation errors. Preview and correct them first.");
@@ -177,7 +242,7 @@ async function updateSurvey(input: Input, context?: AssistantRouteContext): Prom
     const item = inputEvidence.get(change.field_path) ?? {};
     return { field_path: change.field_path, value: change.proposed, source_page: item.source_page ?? null, source_excerpt: item.source_excerpt ?? null, evidence_class: change.evidence_class, confidence: change.confidence, verified: false };
   });
-  const result = await supabase.rpc("apply_structured_survey_import", { p_business_id: businessId, p_job_ref: job.job_ref, p_expected_updated_at: preview.expected_updated_at, p_target: preview.target, p_evidence: appliedEvidence, p_source_document_id: sourceDocumentId, p_source_type: String(input.source_type ?? "roof_report"), p_summary: String(input.import_summary ?? `Applied ${preview.changes.length} structured survey fields.`), p_actor_id: actorId });
+  const result = await supabase.rpc("apply_structured_survey_import", { p_business_id: businessId, p_job_ref: job.job_ref, p_expected_updated_at: preview.expected_updated_at, p_target: preview.target, p_evidence: appliedEvidence, p_source_document_id: sourceDocumentId, p_source_type: sourceType, p_summary: String(input.import_summary ?? `Applied ${preview.changes.length} structured survey fields.`), p_actor_id: actorId });
   if (result.error) throw new Error(result.error.message);
   return { ok: true, summary: `Updated ${job.job_ref}: applied ${preview.changes.length} structured field change${preview.changes.length === 1 ? "" : "s"} across ${preview.enabled_modules.length} survey section${preview.enabled_modules.length === 1 ? "" : "s"}. Unsupported and unapproved conflicting or uncertain values were not saved.`, navigation: { path: `/jobs/${job.id}/survey` }, data: { ...result.data, applied_fields: preview.changes.map((item) => item.field_path), preserved_conflicts: preview.conflicts.filter((item) => !item.applied).map((item) => item.field_path), omitted_uncertain: preview.uncertain.filter((item) => !item.applied).map((item) => item.field_path), enabled_modules: preview.enabled_modules } };
 }
@@ -185,6 +250,7 @@ async function updateSurvey(input: Input, context?: AssistantRouteContext): Prom
 export async function executeSurveyTool(toolName: string, input: Input, context?: AssistantRouteContext): Promise<ToolExecutionResult> {
   switch (toolName) {
     case "get_survey_schema": return getSurveySchema(input, context);
+    case "get_survey_detail": return getSurveyDetail(input, context);
     case "get_job_survey": return getJobSurvey(input, context);
     case "preview_survey_update": return previewSurveyUpdate(input, context);
     case "preview_survey_from_document": return previewSurveyFromDocument(input, context);

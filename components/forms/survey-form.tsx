@@ -160,25 +160,25 @@ function ToggleField({
   label,
   onChange
 }: {
-  checked: boolean;
+  checked: boolean | null;
   label: string;
   onChange: (value: boolean) => void;
   hint?: string;
 }) {
   return (
     <button
-      aria-pressed={checked}
+      aria-pressed={checked === null ? "mixed" : checked}
       className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition ${
-        checked ? "border-[var(--gold)] bg-[rgba(212,175,55,0.14)]" : "border-[var(--border)] bg-[var(--card)]"
+        checked === true ? "border-[var(--gold)] bg-[rgba(212,175,55,0.14)]" : "border-[var(--border)] bg-[var(--card)]"
       }`}
-      onClick={() => onChange(!checked)}
+      onClick={() => onChange(checked === null ? true : !checked)}
       type="button"
     >
-      <span className={`mt-0.5 flex h-7 w-12 items-center rounded-full transition ${checked ? "bg-[var(--gold)]" : "bg-[var(--card2)]"}`}>
-        <span className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
+      <span className={`mt-0.5 flex h-7 w-12 items-center rounded-full transition ${checked === true ? "bg-[var(--gold)]" : "bg-[var(--card2)]"}`}>
+        <span className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked === true ? "translate-x-[22px]" : checked === null ? "translate-x-[12px]" : "translate-x-[2px]"}`} />
       </span>
       <span>
-        <span className={`block text-sm font-semibold ${checked ? "text-[var(--gold-l)]" : "text-[var(--text)]"}`}>{label}</span>
+        <span className={`block text-sm font-semibold ${checked === true ? "text-[var(--gold-l)]" : "text-[var(--text)]"}`}>{label}</span>
         {hint ? <span className="mt-1 block text-xs text-[var(--dim)]">{hint}</span> : null}
       </span>
     </button>
@@ -742,8 +742,8 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
     normaliseEnabledModules(initialSurvey?.enabled_modules, initialSurvey?.survey_type ?? surveyType)
   );
   const [selectedRoofType, setSelectedRoofType] = useState<RoofType>((initialSurvey?.roof_type as RoofType) ?? roofType);
-  const [scaffoldRequired, setScaffoldRequired] = useState(initialSurvey?.scaffold_required ?? false);
-  const [noPhotoConfirmation, setNoPhotoConfirmation] = useState(initialSurvey?.no_photo_confirmation ?? false);
+  const [scaffoldRequired, setScaffoldRequired] = useState(initialSurvey?.scaffold_required ?? null);
+  const [noPhotoConfirmation, setNoPhotoConfirmation] = useState(initialSurvey?.no_photo_confirmation ?? null);
   const [formState, setFormState] = useState({
     surveyor_name: initialSurvey?.surveyor_name ?? "Andrew Bailey",
     roof_condition: initialSurvey?.roof_condition ?? "",
@@ -924,8 +924,8 @@ export function SurveyForm({ jobId, roofType, surveyType, initialSurvey }: Props
           <TextField label="Scaffold Notes" multiline onChange={(next) => setFormState((current) => ({ ...current, scaffold_notes: next }))} placeholder="Front, rear, tower access, edge protection..." value={formState.scaffold_notes} />
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <ToggleField checked={scaffoldRequired} hint="Will scaffolding be needed?" label="Scaffold Required" onChange={setScaffoldRequired} />
-          <ToggleField checked={noPhotoConfirmation} hint="Use this only when the survey is complete but photos are not available." label="Ready For Quote Without Photos" onChange={setNoPhotoConfirmation} />
+          <ToggleField checked={scaffoldRequired} hint={scaffoldRequired === null ? "Not assessed — click to mark required, or leave unassessed." : "Will scaffolding be needed?"} label="Scaffold Required" onChange={setScaffoldRequired} />
+          <ToggleField checked={noPhotoConfirmation} hint={noPhotoConfirmation === null ? "Not confirmed — click to confirm readiness without photos." : "Use this only when the survey is complete but photos are not available."} label="Ready For Quote Without Photos" onChange={setNoPhotoConfirmation} />
         </div>
       </div>
 
