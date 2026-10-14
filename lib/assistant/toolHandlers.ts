@@ -829,7 +829,7 @@ async function navigateTo(input: Record<string, unknown>, routeContext?: Assista
 }
 
 export async function executeToolCall(toolName: string, input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
-  if (["get_survey_schema", "get_job_survey", "preview_survey_update", "preview_survey_from_document", "update_survey", "set_survey_modules"].includes(toolName)) {
+  if (["get_survey_schema", "get_survey_detail", "get_job_survey", "preview_survey_update", "preview_survey_from_document", "update_survey", "set_survey_modules"].includes(toolName)) {
     return executeSurveyTool(toolName, input, routeContext);
   }
   if ([

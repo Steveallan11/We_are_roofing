@@ -890,10 +890,25 @@ export function createRoofingMcpServer(context: McpServerContext) {
   );
 
   server.registerTool(
+    "get_survey_detail",
+    {
+      title: "Get complete structured survey",
+      description: "Load an existing workspace-owned survey by job reference or survey ID. Returns the job and customer, all general and roof-module values, active modules, media references, import/evidence processing metadata, completion context and the updated_at concurrency timestamp needed for a safe update.",
+      inputSchema: {
+        job_ref: z.string().trim().min(1).max(50).optional().describe("Visible job reference, for example WR-J-20261007-0FD3."),
+        survey_id: z.string().uuid().optional().describe("Existing survey UUID, when known. The survey must belong to this workspace.")
+      },
+      annotations: READ_ONLY_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META
+    },
+    async (input) => runTool("get_survey_detail", input, context)
+  );
+
+  server.registerTool(
     "get_job_survey",
     {
       title: "Get a job's structured survey",
-      description: "Get the current global survey values, active specialist modules, module values, concurrency timestamp and field-level source evidence for one workspace-owned job.",
+      description: "Legacy alias for get_survey_detail. Get the current global survey values, active specialist modules, module values, media, processing metadata, concurrency timestamp and field-level source evidence for one workspace-owned job.",
       inputSchema: { job_ref: z.string().trim().min(1).max(50) },
       annotations: READ_ONLY_ANNOTATIONS,
       _meta: OAUTH_TOOL_META
@@ -932,7 +947,7 @@ export function createRoofingMcpServer(context: McpServerContext) {
     "update_survey",
     {
       title: "Apply reviewed structured survey changes",
-      description: "Apply only the exact report-derived structured survey changes previously previewed. Preserves unapproved manual conflicts, requires optimistic concurrency and stores field-level source evidence. This does not put the report into internal notes.",
+      description: "Apply only the exact report-derived changes previously previewed to an existing structured survey. Uses optimistic concurrency, preserves unapproved manual conflicts, media and untouched fields, and stores field-level source evidence. Requires confirmed: true and never writes the report only into internal notes.",
       inputSchema: { ...surveyUpdateFields, expected_updated_at: z.string().datetime({ offset: true }).nullable(), update_hash: z.string().length(64), confirmed: z.literal(true) },
       annotations: WRITE_ANNOTATIONS,
       _meta: OAUTH_TOOL_META
