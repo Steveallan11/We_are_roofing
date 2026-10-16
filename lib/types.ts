@@ -1122,6 +1122,8 @@ export type JobCompletionDetails = {
   product_details?: string | null;
   warranty_years?: number | null;
   warranty_details?: string | null;
+  warranty_conditions?: string | null;
+  warranty_claim_process?: string | null;
   included_variation_ids: string[];
   updated_by?: string | null;
   updated_at?: string;

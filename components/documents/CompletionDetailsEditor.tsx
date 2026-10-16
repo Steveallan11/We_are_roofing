@@ -14,6 +14,17 @@ type Props = {
   handoverDocuments?: Array<Pick<import("@/lib/types").JobDocumentRecord, "id" | "document_type" | "display_name" | "quote_id" | "invoice_id">>;
 };
 
+const DEFAULT_WARRANTY_CONDITIONS = [
+  "Damage caused by storms, exceptional weather, flooding, fire, impact, accidental damage or events outside our reasonable control.",
+  "Pre-existing defects, structural movement, deterioration of existing building elements or parts of the property not included in our works.",
+  "Issues caused by lack of maintenance, blocked gutters or drainage, misuse, third-party works, alterations or repairs carried out by others without our written agreement.",
+  "Retained materials are covered only where a defect is caused directly by our workmanship; pre-existing or later failure of retained materials is excluded.",
+  "Any additional insulation or variation work is covered only where included in the final agreed scope.",
+  "This is a workmanship guarantee, not an insurance-backed guarantee. Manufacturer product warranties, where applicable, are separate and subject to the manufacturer's terms."
+].join("\n");
+
+const DEFAULT_CLAIM_PROCESS = "Contact We Are Roofing UK Ltd as soon as reasonably practicable after discovering a suspected defect. Provide the job reference, property address, a description of the issue and photographs where possible. We must be given a reasonable opportunity to inspect before another contractor undertakes remedial work, except where urgent action is reasonably necessary to prevent further damage.";
+
 export function CompletionDetailsEditor({ jobId, initialScope, variations, savedDetails, handoverDocuments = [] }: Props) {
   const router = useRouter();
   const approvedVariations = variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
@@ -22,10 +33,12 @@ export function CompletionDetailsEditor({ jobId, initialScope, variations, saved
   const [productDetails, setProductDetails] = useState(savedDetails?.product_details || "");
   const [warrantyYears, setWarrantyYears] = useState(savedDetails?.warranty_years ?? 15);
   const [warrantyDetails, setWarrantyDetails] = useState(savedDetails?.warranty_details || "");
+  const [warrantyConditions, setWarrantyConditions] = useState(savedDetails?.warranty_conditions || DEFAULT_WARRANTY_CONDITIONS);
+  const [warrantyClaimProcess, setWarrantyClaimProcess] = useState(savedDetails?.warranty_claim_process || DEFAULT_CLAIM_PROCESS);
   const [generatedDocuments, setGeneratedDocuments] = useState(handoverDocuments);
   const [includedIds, setIncludedIds] = useState<string[]>(savedDetails
     ? savedDetails.included_variation_ids
-    : approvedVariations.map((variation) => variation.id));
+    : []);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -38,7 +51,7 @@ export function CompletionDetailsEditor({ jobId, initialScope, variations, saved
       const response = await fetch(`/api/jobs/${jobId}/completion-details`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ works_summary: scope, installed_system: installedSystem, product_details: productDetails, warranty_years: warrantyYears, warranty_details: warrantyDetails, included_variation_ids: includedIds })
+        body: JSON.stringify({ works_summary: scope, installed_system: installedSystem, product_details: productDetails, warranty_years: warrantyYears, warranty_details: warrantyDetails, warranty_conditions: warrantyConditions, warranty_claim_process: warrantyClaimProcess, included_variation_ids: includedIds })
       });
       const result = (await response.json()) as { ok?: boolean; message?: string; error?: string };
       if (!response.ok || !result.ok) throw new Error(result.error ?? "Completion details could not be saved.");
@@ -67,10 +80,10 @@ export function CompletionDetailsEditor({ jobId, initialScope, variations, saved
     <section className="card space-y-4 p-4" aria-label="Edit completion document">
       <div>
         <h2 className="font-semibold text-[var(--text)]">Completion scope</h2>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">Record each part of the accepted scope that was completed, including preparation, installation, flashings, drainage, finishing and checks as relevant. This completion-specific record does not change the accepted quote.</p>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Use one line per task actually completed. Remove unfinished or excluded quote items before issuing. This record does not change the accepted quote.</p>
       </div>
       <label className="block">
-        <span className="label">Works completed</span>
+        <span className="label">Completed work checklist — one item per line</span>
         <textarea className="field min-h-36" maxLength={12000} onChange={(event) => setScope(event.target.value)} value={scope} />
       </label>
       <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
@@ -85,6 +98,14 @@ export function CompletionDetailsEditor({ jobId, initialScope, variations, saved
           <textarea className="field min-h-24" maxLength={6000} onChange={(event) => setWarrantyDetails(event.target.value)} placeholder="Describe the workmanship cover and any job-specific limits or conditions. Leave blank to use the standard workmanship wording." value={warrantyDetails} />
         </label>
       </div>
+      <label className="block">
+        <span className="label">Warranty exclusions and conditions — editable</span>
+        <textarea className="field min-h-36" maxLength={6000} onChange={(event) => setWarrantyConditions(event.target.value)} placeholder="Enter one condition per line. Review these terms before issuing." value={warrantyConditions} />
+      </label>
+      <label className="block">
+        <span className="label">How to make a warranty claim — editable</span>
+        <textarea className="field min-h-24" maxLength={3000} onChange={(event) => setWarrantyClaimProcess(event.target.value)} value={warrantyClaimProcess} />
+      </label>
       <label className="block">
         <span className="label">Installed roofing system</span>
         <textarea className="field min-h-20" maxLength={2000} onChange={(event) => setInstalledSystem(event.target.value)} placeholder="System/type, roof area or location, build-up and key installation details" value={installedSystem} />

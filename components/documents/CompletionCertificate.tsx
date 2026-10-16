@@ -10,21 +10,22 @@ import { formatDate } from "@/lib/utils";
 import type { JobBundle } from "@/lib/types";
 
 export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
-  const completedAt = bundle.job.completed_at || new Date().toISOString();
-  const guaranteeYears = bundle.completion_details?.warranty_years ?? extractGuaranteeYears(bundle.quote?.guarantee_text) ?? 10;
-  const guaranteeEnd = new Date(completedAt);
-  guaranteeEnd.setFullYear(guaranteeEnd.getFullYear() + guaranteeYears);
+  const completedAt = bundle.job.completed_at;
+  const completedLabel = completedAt ? formatDate(completedAt) : "To be confirmed from the actual site completion record";
+  const guaranteeYears = bundle.completion_details?.warranty_years ?? extractGuaranteeYears(bundle.quote?.guarantee_text) ?? 15;
+  const guaranteeEnd = completedAt ? new Date(completedAt) : null;
+  guaranteeEnd?.setFullYear(guaranteeEnd.getFullYear() + guaranteeYears);
 
   return (
     <DocumentFrame>
-      <DocHeader title="Completion Certificate" reference={`CC-${bundle.job.job_ref ?? bundle.job.id}`} subtitle={bundle.job.job_title} meta={`Completed ${formatDate(completedAt)}`} />
+      <DocHeader title="Completion Certificate" reference={`CC-${bundle.job.job_ref ?? bundle.job.id}`} subtitle={bundle.job.job_title} meta={`Completed ${completedLabel}`} />
       <DocumentBody>
         <MetaStrip
           items={[
             { label: "Job Ref", value: bundle.job.job_ref },
-            { label: "Completion Date", value: formatDate(completedAt) },
+            { label: "Completion Date", value: completedLabel },
             { label: "Guarantee", value: `${guaranteeYears} ${guaranteeYears === 1 ? "Year" : "Years"}` },
-            { label: "Expiry", value: formatDate(guaranteeEnd.toISOString()) }
+            { label: "Expiry", value: guaranteeEnd ? formatDate(guaranteeEnd.toISOString()) : "Confirmed when completion date is recorded" }
           ]}
         />
         <DocumentCallout eyebrow="Certificate of completion" tone="success">
@@ -58,7 +59,7 @@ export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
         <div style={{ marginTop: 22, background: DOC.dark, color: DOC.white, borderRadius: 14, padding: 20 }}>
           <div style={{ color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>{guaranteeYears} Year Workmanship Guarantee</div>
           <p style={{ margin: "12px 0 0", color: "#e8e4da", fontFamily: DOC.fontSerif, fontSize: 16, lineHeight: 1.7 }}>
-            Guarantee starts {formatDate(completedAt)} and expires {formatDate(guaranteeEnd.toISOString())}. Certificate number CC-{bundle.job.job_ref ?? bundle.job.id}.
+            Guarantee starts {completedLabel}{guaranteeEnd ? ` and expires ${formatDate(guaranteeEnd.toISOString())}` : " and expires after the verified completion date is recorded"}. Certificate number CC-{bundle.job.job_ref ?? bundle.job.id}.
           </p>
           {bundle.completion_details?.warranty_details || bundle.quote?.guarantee_text ? <p style={{ margin: "10px 0 0", color: "#cfc8b8", fontFamily: DOC.fontSerif, fontSize: 14, lineHeight: 1.65 }}>{bundle.completion_details?.warranty_details || bundle.quote?.guarantee_text}</p> : null}
         </div>

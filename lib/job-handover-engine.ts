@@ -86,8 +86,11 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
   const logo = await loadLogo(pdf);
   const invoice = latestInvoice(bundle.invoices);
   const years = normaliseWarrantyYears(options?.warrantyYears ?? bundle.completion_details?.warranty_years ?? getGuaranteeYears(bundle.quote?.guarantee_text));
-  const completed = options?.completionDate ?? new Date();
-  const dateText = completed.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const completed = options?.completionDate ?? (bundle.job.completed_at ? new Date(bundle.job.completed_at) : null);
+  const dateText = completed ? completed.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "To be confirmed from the actual site completion record";
+  const expiry = completed ? new Date(completed) : null;
+  expiry?.setFullYear(expiry.getFullYear() + years);
+  const expiryText = expiry ? expiry.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "To be confirmed after completion date is recorded";
 
   page.drawRectangle({ x: 10, y: 10, width: 575, height: 822, borderColor: DARK, borderWidth: 2.4 });
   page.drawRectangle({ x: 14, y: 14, width: 567, height: 814, borderColor: GOLD, borderWidth: 1 });
@@ -118,9 +121,12 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
   page.drawRectangle({ x: 28, y: 260, width: 255, height: 105, color: CREAM, borderColor: rgb(0.82, 0.77, 0.62), borderWidth: 0.6 });
   page.drawText("MANUFACTURER'S WARRANTY", { x: 42, y: 344, font: serif, size: 10, color: INK });
   drawWrapped(page, "Any separate manufacturer cover depends on the installed products and the manufacturer's own terms. Product-specific cover should be verified against the invoice and product documentation.", 42, 324, 225, regular, 8, INK, 11, 8);
-  page.drawText("COMPLETION DATE", { x: 28, y: 239, font: bold, size: 7, color: GOLD });
-  page.drawText(dateText, { x: 28, y: 225, font: regular, size: 8.5, color: INK });
-  drawWarrantySeal(page, years, serif, bold);
+  sectionTitle(page, "HOW TO MAKE A CLAIM", 28, 245, serif);
+  drawWrapped(page, getWarrantyClaimProcess(bundle), 40, 226, 242, regular, 7.5, INK, 10, 7);
+  page.drawText("COMPLETION DATE", { x: 28, y: 148, font: bold, size: 7, color: GOLD });
+  drawWrapped(page, dateText, 28, 135, 245, regular, 7.5, INK, 9, 2);
+  page.drawText("GUARANTEE EXPIRY", { x: 28, y: 112, font: bold, size: 7, color: GOLD });
+  drawWrapped(page, expiryText, 28, 99, 245, regular, 7.5, INK, 9, 2);
 
   page.drawLine({ start: { x: 298, y: 475 }, end: { x: 298, y: 144 }, thickness: 0.5, color: rgb(0.82, 0.77, 0.62) });
   sectionTitle(page, "INSTALLED ROOFING SYSTEM", 312, 465, serif);
@@ -138,13 +144,7 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
     sy -= 49;
   });
   sectionTitle(page, "GUARANTEE CONDITIONS", 312, 287, serif);
-  const conditions = [
-    "Applies to defects caused by our original installation workmanship.",
-    "Excludes third-party damage, alterations, penetrations, misuse, fire, extreme weather and unrelated structural failure.",
-    "Later work affecting the roof covering must be agreed with We Are Roofing.",
-    "Keep roofs, outlets and gutters reasonably clear and report suspected defects promptly.",
-    "Valid workmanship defects will be repaired within the affected area."
-  ];
+  const conditions = getWarrantyConditions(bundle);
   let cy = 263;
   conditions.forEach((condition, index) => {
     page.drawRectangle({ x: 312, y: cy - 4, width: 16, height: 16, color: rgb(0.9, 0.69, 0.2) });
@@ -160,12 +160,40 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
   drawCentre(page, "AUTHORISED SIGNATORY", 304, 59, bold, 8, INK);
   page.drawRectangle({ x: 12, y: 12, width: 571, height: 35, color: DARK });
   drawCentre(page, "ROOFING TODAY FOR A STRONGER TOMORROW", 298, 27, regular, 6.5, rgb(0.96, 0.86, 0.55));
+
+  const schedule = pdf.addPage([595.276, 841.89]);
+  if (logo) schedule.drawImage(logo, { x: 34, y: 738, width: 125, height: 78 });
+  drawRight(schedule, "WE ARE ROOFING UK LTD", 558, 794, bold, 9, MUTED);
+  drawRight(schedule, "GUARANTEE SCHEDULE", 558, 766, bold, 20, INK);
+  schedule.drawLine({ start: { x: 34, y: 724 }, end: { x: 558, y: 724 }, thickness: 1, color: GOLD });
+  drawInfoGrid(schedule, bundle, invoice, regular, bold, 708);
+  sectionTitle(schedule, "WORKS COVERED BY THIS GUARANTEE", 34, 614, bold);
+  drawWrapped(schedule, "This workmanship guarantee applies to the completed work recorded in the accompanying Completed Works Certificate, and to the installed roofing system and product details below. It does not extend cover to work or materials outside that recorded scope.", 46, 592, 500, regular, 8.5, INK, 12, 5);
+  let schedulePage = schedule;
+  const scheduleY = 520;
+  sectionTitle(schedulePage, "INSTALLED SYSTEM & PRODUCT DETAILS", 34, scheduleY, bold);
+  drawWrapped(schedulePage, getRoofingSystem(bundle), 46, scheduleY - 20, 500, bold, 9, INK, 12, 3);
+  const productLines = getProductDetails(bundle).split(/\n+/).flatMap((line) => wrap(line, regular, 8.5, 500));
+  let productY = scheduleY - 50;
+  for (let index = 0; index < productLines.length; index += 55) {
+    if (productY < 90) {
+      schedulePage = pdf.addPage([595.276, 841.89]);
+      drawRight(schedulePage, `GUARANTEE SCHEDULE · ${bundle.job.job_ref ?? bundle.job.id}`, 558, 803, bold, 8, MUTED);
+      sectionTitle(schedulePage, "PRODUCT DETAILS (CONTINUED)", 34, 766, bold);
+      drawFooter(schedulePage, bundle, regular, bold);
+      productY = 730;
+    }
+    const chunk = productLines.slice(index, index + 55);
+    drawLines(schedulePage, chunk, 46, productY, regular, 8.5, INK, 11);
+    productY -= chunk.length * 11 + 12;
+  }
+  drawFooter(schedule, bundle, regular, bold);
   return Buffer.from(await pdf.save());
 }
 
 export async function persistHandoverDocuments(supabase: AdminClient, bundle: JobBundle, options?: { warrantyYears?: number }) {
   const createdAt = new Date();
-  const [completion, warranty] = await Promise.all([buildJobCompletionPdf(bundle), buildWarrantyCertificatePdf(bundle, { warrantyYears: options?.warrantyYears, completionDate: createdAt })]);
+  const [completion, warranty] = await Promise.all([buildJobCompletionPdf(bundle), buildWarrantyCertificatePdf(bundle, { warrantyYears: options?.warrantyYears })]);
   const bucket = await ensurePrivateStorageBucket(supabase, JOB_DOCUMENTS_BUCKET);
   if (!bucket.ok) throw new Error(bucket.error);
   const timestamp = Date.now();
@@ -196,15 +224,6 @@ function getGuaranteeYears(value?: string | null) {
   return years > 0 && years <= 50 ? years : 15;
 }
 function normaliseWarrantyYears(value: number) { return [5, 10, 15, 20, 25].includes(value) ? value : 15; }
-function drawWarrantySeal(page: PDFPage, years: number, serif: PDFFont, bold: PDFFont) {
-  const x = 106; const y = 116;
-  page.drawCircle({ x, y, size: 47, color: DARK, borderColor: GOLD, borderWidth: 4 });
-  page.drawCircle({ x, y, size: 37, borderColor: rgb(0.95, 0.77, 0.3), borderWidth: 1.2 });
-  drawCentre(page, String(years), x, y + 2, serif, 27, rgb(0.95, 0.75, 0.25));
-  drawCentre(page, "YEARS", x, y - 15, bold, 7, WHITE);
-  drawCentre(page, "WORKMANSHIP", x, y + 31, bold, 5.5, rgb(0.95, 0.75, 0.25));
-  page.drawSvgPath(`M ${x - 38} ${y - 35} L ${x - 25} ${y - 61} L ${x} ${y - 45} L ${x + 25} ${y - 61} L ${x + 38} ${y - 35} Z`, { color: GOLD });
-}
 function getRoofingSystem(bundle: JobBundle) {
   return bundle.completion_details?.installed_system || bundle.survey?.recommended_works?.split(/[.\n]/)[0]?.trim() || bundle.job.roof_type || bundle.job.job_title || "Completed roofing system";
 }
@@ -218,9 +237,23 @@ function getCompletedWorks(bundle: JobBundle) {
   const accepted = bundle.variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
   const includedIds = bundle.completion_details?.included_variation_ids ?? accepted.map((variation) => variation.id);
   const extraWorks = accepted.filter((variation) => includedIds.includes(variation.id)).map((variation) => `${variation.variation_ref} · ${variation.title}: ${variation.description || variation.line_items.map((line) => line.description).join(", ")}`);
-  const additionalWorkSummary = extraWorks.length ? `Approved additional work completed: ${extraWorks.join("; ")}` : null;
   const scopeLines = splitWorks(getWorksSummary(bundle));
-  return [...scopeLines.slice(0, additionalWorkSummary ? 3 : 4), ...(additionalWorkSummary ? [additionalWorkSummary] : [])];
+  return [...scopeLines, ...extraWorks.map((work) => `Approved additional work completed — ${work}`)];
+}
+function getWarrantyConditions(bundle: JobBundle) {
+  const value = bundle.completion_details?.warranty_conditions?.trim();
+  if (value) return splitWorks(value);
+  return [
+    "Damage caused by storms, exceptional weather, flooding, fire, impact, accidental damage or events outside our reasonable control.",
+    "Pre-existing defects, structural movement, deterioration of existing building elements or parts of the property not included in our works.",
+    "Issues caused by lack of maintenance, blocked gutters or drainage, misuse, third-party works, alterations or repairs carried out by others without our written agreement.",
+    "Retained materials are covered only where a defect is caused directly by our workmanship; pre-existing or later failure of retained materials is excluded.",
+    "Any additional insulation or variation work is covered only where included in the final agreed scope.",
+    "This is a workmanship guarantee, not an insurance-backed guarantee. Manufacturer product warranties, where applicable, are separate and subject to the manufacturer's terms."
+  ];
+}
+function getWarrantyClaimProcess(bundle: JobBundle) {
+  return bundle.completion_details?.warranty_claim_process?.trim() || "Contact We Are Roofing UK Ltd as soon as reasonably practicable after discovering a suspected defect. Provide the job reference, property address, a description of the issue and photographs where possible. We must be given a reasonable opportunity to inspect before another contractor undertakes remedial work, except where urgent action is reasonably necessary to prevent further damage.";
 }
 function splitWorks(value: string) {
   const lines = value.split(/\n+/).map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim()).filter(Boolean);
