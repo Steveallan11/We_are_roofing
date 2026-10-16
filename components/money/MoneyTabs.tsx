@@ -23,8 +23,10 @@ import { currency } from "@/lib/utils";
 import { ReceiptInbox } from "@/components/money/ReceiptInbox";
 import { FinanceReportsTab, SubcontractorsTab, SupplierBillsTab } from "@/components/money/FinanceOperations";
 import { BankReconciliationTab } from "@/components/money/BankReconciliationTab";
+import { BespokeInvoiceWorkspace } from "@/components/money/BespokeInvoiceWorkspace";
 
 type ExpenseWithJob = JobExpense & { job?: { id: string; job_title: string; job_ref?: string | null } | null };
+type JobWithCustomer = Job & { customer?: Customer | null; quote?: QuoteRecord | null; documents?: JobDocumentRecord[]; invoices?: InvoiceRecord[] };
 
 interface MoneyTabsProps {
   jobs: Array<Job & { customer?: Customer | null; quote?: QuoteRecord | null; documents?: JobDocumentRecord[]; invoices?: InvoiceRecord[] }>;
@@ -36,6 +38,9 @@ interface MoneyTabsProps {
   suppliers?: SupplierRecord[];
   supplierBills?: SupplierBillRecord[];
   bankStatementImports?: BankStatementImportRecord[];
+  customers?: Customer[];
+  allInvoices?: Array<InvoiceRecord & { customer?: Customer | null; linked_job?: Job | null }>;
+  vatRate?: number;
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
@@ -50,7 +55,7 @@ const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   other: "Other"
 };
 
-export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancials = [], labourPeople = [], subcontractorPayments = [], suppliers = [], supplierBills = [], bankStatementImports = [] }: MoneyTabsProps) {
+export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancials = [], labourPeople = [], subcontractorPayments = [], suppliers = [], supplierBills = [], bankStatementImports = [], customers = [], allInvoices = [], vatRate = 0 }: MoneyTabsProps) {
   type MoneyTab = "revenue" | "jobProfit" | "expenses" | "invoices" | "subcontractors" | "supplierBills" | "bankReview" | "reports" | "forecast";
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab") as MoneyTab | null;
@@ -58,9 +63,12 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
   const [activeTab, setActiveTab] = useState<MoneyTab>(requestedTab && validTabs.includes(requestedTab) ? requestedTab : "revenue");
 
   const quotes = jobs.flatMap((job) => (job.quote ? [job.quote] : []));
-  const invoicesWithJobs = jobs.flatMap((job) =>
-    (job.invoices ?? []).map((inv) => ({ invoice: inv, job }))
-  );
+  const invoicesWithJobs: Array<{ invoice: InvoiceRecord; job: JobWithCustomer | null }> = allInvoices.length
+    ? allInvoices.map((invoice) => ({ invoice, job: invoice.linked_job ? { ...invoice.linked_job, customer: invoice.customer ?? null } : jobs.find((item) => item.id === invoice.job_id) ?? null }))
+    : jobs.flatMap((job) => (job.invoices ?? []).map((inv) => ({ invoice: inv, job })));
+  const invoiceWorkspaceItems = allInvoices.length
+    ? allInvoices
+    : invoicesWithJobs.map(({ invoice, job }) => ({ ...invoice, customer: job?.customer ?? null, linked_job: job }));
   const invoices = invoicesWithJobs.map((item) => item.invoice);
 
   const outstanding = invoicesWithJobs
@@ -175,7 +183,7 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
                       {invoicesWithJobs.map(({ invoice, job }) => (
                         <tr key={invoice.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-raised)]">
                           <td className="px-4 py-3 font-medium text-[var(--text)]">{invoice.invoice_ref}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)]">{job.customer?.full_name}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)]">{job?.customer?.business_name || job?.customer?.full_name || "Customer"}</td>
                           <td className="px-4 py-3 text-right font-medium text-[var(--text)]">{currency(invoice.total ?? 0)}</td>
                           <td className="px-4 py-3">
                             <span
@@ -213,52 +221,7 @@ export function MoneyTabs({ jobs, expenses = [], receiptInbox = [], jobFinancial
         {activeTab === "expenses" && <ExpensesTab expenses={expenses} jobs={jobs} receiptInbox={receiptInbox} />}
 
         {activeTab === "invoices" && (
-          <div className="space-y-4">
-            {invoicesWithJobs.length > 0 ? (
-              <div className="grid gap-3">
-                {invoicesWithJobs.map(({ invoice, job }) => (
-                  <div key={invoice.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--gold)] transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-semibold text-[var(--text)]">{invoice.invoice_ref}</p>
-                        <p className="text-sm text-[var(--text-muted)] mt-1">{job.customer?.full_name}</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-1">
-                          Due {new Date(invoice.due_date ?? "").toLocaleDateString("en-GB")}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-lg text-[var(--text)]">{currency(invoice.total ?? 0)}</p>
-                        <span
-                          className={`inline-block px-2 py-1 rounded text-xs font-medium mt-2 ${
-                            invoice.status === "Paid"
-                              ? "bg-green-100 text-green-800"
-                              : invoice.status === "Part Paid"
-                                ? "bg-blue-100 text-blue-800"
-                                : invoice.status === "Sent"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : invoice.status === "Overdue"
-                                    ? "bg-red-100 text-red-800"
-                                    : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {invoice.status}
-                        </span>
-                      </div>
-                    </div>
-                    {invoice.balance_due && invoice.balance_due > 0 && (
-                      <p className="mt-3 text-sm font-medium text-red-600">
-                        {currency(invoice.balance_due)} outstanding
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
-                <p className="text-[var(--text-muted)]">No invoices yet</p>
-              </div>
-            )}
-          </div>
+          <BespokeInvoiceWorkspace customers={customers} jobs={jobs} invoices={invoiceWorkspaceItems} vatRate={vatRate} />
         )}
 
         {activeTab === "subcontractors" && <SubcontractorsTab jobs={jobs} people={labourPeople} payments={subcontractorPayments} />}

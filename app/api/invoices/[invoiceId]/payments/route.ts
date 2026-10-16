@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
-import { getJobBundle } from "@/lib/data";
+import { getInvoiceDocumentBundle } from "@/lib/data";
 import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceRecord } from "@/lib/types";
@@ -134,7 +134,7 @@ export async function POST(request: Request, { params }: Props) {
   });
 
   const updatedInvoice = update.data as InvoiceRecord;
-  const bundle = await getJobBundle(updatedInvoice.job_id);
+  const bundle = await getInvoiceDocumentBundle(updatedInvoice);
   let pdfUrl = updatedInvoice.pdf_url ?? null;
   if (bundle) {
     const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [updatedInvoice, ...bundle.invoices] }, updatedInvoice);

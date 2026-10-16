@@ -897,7 +897,8 @@ export type InvoiceVatTreatment = "standard" | "domestic_reverse_charge";
 export type InvoiceRecord = {
   id: string;
   business_id: string;
-  job_id: string;
+  job_id: string | null;
+  customer_id?: string | null;
   quote_id?: string | null;
   variation_id?: string | null;
   invoice_ref: string;
@@ -935,6 +936,17 @@ export type InvoicePaymentRecord = {
   payment_reference?: string | null;
   paid_at?: string | null;
   notes?: string | null;
+  created_at?: string;
+};
+
+export type InvoiceVariationAllocation = {
+  id: string;
+  business_id: string;
+  invoice_id: string;
+  variation_id: string;
+  amount: number;
+  subtotal: number;
+  vat_amount: number;
   created_at?: string;
 };
 
@@ -1091,6 +1103,8 @@ export type JobBundle = {
   survey?: SurveyRecord | null;
   quote?: QuoteRecord | null;
   invoices: InvoiceRecord[];
+  variation_allocations?: InvoiceVariationAllocation[];
+  completion_details?: JobCompletionDetails | null;
   variations: JobVariationRecord[];
   materials: MaterialRecord[];
   labour_plan?: LabourPlanRecord | null;
@@ -1098,6 +1112,19 @@ export type JobBundle = {
   documents: JobDocumentRecord[];
   email_logs: EmailLog[];
   activity?: import("@/lib/activity/types").ActivityRecord[];
+};
+
+export type JobCompletionDetails = {
+  job_id: string;
+  business_id: string;
+  works_summary: string;
+  installed_system?: string | null;
+  product_details?: string | null;
+  warranty_years?: number | null;
+  warranty_details?: string | null;
+  included_variation_ids: string[];
+  updated_by?: string | null;
+  updated_at?: string;
 };
 
 export type DiaryEntryType = "voice_note" | "text_note" | "photo" | "reminder" | "task" | "expense" | "payment";

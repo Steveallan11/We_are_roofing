@@ -20,6 +20,7 @@ import type {
   EmailLog,
   HistoricalQuoteRecord,
   InvoiceRecord,
+  InvoiceVariationAllocation,
   Job,
   JobBundle,
   JobDocumentRecord,
@@ -130,6 +131,7 @@ export async function getJobs(): Promise<Array<Job & { customer?: Customer | nul
 
   const invoicesByJob = new Map<string, InvoiceRecord[]>();
   for (const invoice of ((invoicesResult.data as InvoiceRecord[] | null) ?? [])) {
+    if (!invoice.job_id) continue;
     const list = invoicesByJob.get(invoice.job_id) ?? [];
     list.push(invoice);
     invoicesByJob.set(invoice.job_id, list);
@@ -167,13 +169,15 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
   const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return null;
 
-  const [businessResult, customerResult, surveyResult, quoteResult, invoiceResult, variationResult, materialResult, photoResult, documentResult, emailResult, activityResult] = await Promise.all([
+  const [businessResult, customerResult, surveyResult, quoteResult, invoiceResult, variationResult, allocationResult, completionResult, materialResult, photoResult, documentResult, emailResult, activityResult] = await Promise.all([
     supabase.from("businesses").select("*").eq("id", job.business_id).single(),
     supabase.from("customers").select("*").eq("id", job.customer_id).single(),
     supabase.from("surveys").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("quotes").select("*").eq("job_id", jobId).order("version_number", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("invoices").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
     supabase.from("job_variations").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+    supabase.from("invoice_variation_allocations").select("*").eq("business_id", job.business_id),
+    supabase.from("job_completion_details").select("*").eq("job_id", jobId).maybeSingle(),
     supabase.from("materials").select("*").eq("job_id", jobId).order("created_at", { ascending: true }),
     supabase.from("job_photos").select("*").eq("job_id", jobId).order("uploaded_at", { ascending: false }),
     supabase.from("job_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
@@ -189,6 +193,8 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     survey: (surveyResult.data as SurveyRecord | null) ?? null,
     quote: (quoteResult.data as QuoteRecord | null) ?? null,
     invoices: (invoiceResult.data as InvoiceRecord[] | null) ?? [],
+    variation_allocations: (allocationResult.data as InvoiceVariationAllocation[] | null) ?? [],
+    completion_details: completionResult.data as JobBundle["completion_details"] ?? null,
     variations: (variationResult.data as JobBundle["variations"] | null) ?? [],
     materials: (materialResult.data as JobBundle["materials"] | null) ?? [],
     labour_plan: labourPlan,
@@ -197,6 +203,57 @@ export async function getJobBundle(jobId: string): Promise<JobBundle | null> {
     email_logs: (emailResult.data as EmailLog[] | null) ?? [],
     activity: activityResult.error ? [] : ((activityResult.data as JobBundle["activity"]) ?? [])
   };
+}
+
+export async function getInvoiceDocumentBundle(invoice: InvoiceRecord): Promise<JobBundle | null> {
+  if (invoice.job_id) return getJobBundle(invoice.job_id);
+  if (!canUseSupabase() || !invoice.customer_id) return null;
+
+  const supabase = createSupabaseAdminClient();
+  const [businessResult, customerResult] = await Promise.all([
+    supabase.from("businesses").select("*").eq("id", invoice.business_id).single(),
+    supabase.from("customers").select("*").eq("id", invoice.customer_id).eq("business_id", invoice.business_id).single()
+  ]);
+  if (!businessResult.data || !customerResult.data) return null;
+  const customer = customerResult.data as Customer;
+  const address = [customer.address_line_1, customer.address_line_2, customer.town, customer.county, customer.postcode].filter(Boolean).join(", ");
+
+  return {
+    business: businessResult.data as Business,
+    customer,
+    job: {
+      id: "standalone",
+      business_id: invoice.business_id,
+      customer_id: customer.id,
+      job_ref: null,
+      job_title: "Bespoke invoice",
+      property_address: address,
+      postcode: customer.postcode ?? null,
+      status: "Completed" as Job["status"]
+    },
+    quote: null,
+    invoices: [invoice],
+    variations: [],
+    materials: [],
+    photos: [],
+    documents: [],
+    email_logs: []
+  };
+}
+
+export async function getAllInvoices(): Promise<Array<InvoiceRecord & { customer?: Customer | null; linked_job?: Job | null }>> {
+  if (!canUseSupabase()) return [];
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.from("invoices").select("*, customers(*), jobs(*)").order("created_at", { ascending: false });
+  if (error) {
+    console.error("Unable to load invoices:", error.message);
+    return [];
+  }
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    ...(row as unknown as InvoiceRecord),
+    customer: (row.customers as Customer | null) ?? null,
+    linked_job: (row.jobs as Job | null) ?? null
+  }));
 }
 
 export async function getKnowledgeBase(): Promise<KnowledgeBaseRecord[]> {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
-import { getJobBundle } from "@/lib/data";
+import { getInvoiceDocumentBundle } from "@/lib/data";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { invoiceSentEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -67,13 +67,16 @@ export async function POST(request: Request, { params }: Props) {
     }
   }
 
-  const bundle = await getJobBundle(invoice.job_id);
+  const bundle = await getInvoiceDocumentBundle(invoice);
   if (!bundle) {
-    return NextResponse.json({ ok: false, error: "Related job bundle not found." }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Invoice customer or workspace details could not be loaded." }, { status: 404 });
   }
 
-  const toEmail = body.to_email?.trim() || bundle.customer.email?.trim();
-  const emailCustomerName = body.email_customer_name?.trim() || bundle.customer.full_name;
+  const customerEmail = bundle.customer.customer_type === "business"
+    ? bundle.customer.contact_person_email?.trim() || bundle.customer.email?.trim()
+    : bundle.customer.email?.trim();
+  const toEmail = body.to_email?.trim() || customerEmail;
+  const emailCustomerName = body.email_customer_name?.trim() || bundle.customer.contact_person_name || bundle.customer.full_name;
   if (!toEmail) {
     return NextResponse.json(
       { ok: false, error: "NO_EMAIL", message: isTestSend ? "Enter an email address for the test send." : "No customer email is saved for this job yet." },
@@ -92,7 +95,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const artifacts = await persistInvoiceArtifacts(supabase, bundle, invoice);
-  const extraAttachments = await loadJobDocumentAttachments(supabase, bundle.job.id, body.attachment_document_ids ?? []);
+  const extraAttachments = invoice.job_id ? await loadJobDocumentAttachments(supabase, invoice.job_id, body.attachment_document_ids ?? []) : [];
   const appUrl = getAppUrl();
   const rawInvoiceUrl = toAbsoluteUrl(artifacts.pdfUrl ?? getInvoicePdfHref(invoiceId), appUrl);
   const invoiceUrl = appendInvoiceFileToken(rawInvoiceUrl, invoiceId);
@@ -131,7 +134,7 @@ export async function POST(request: Request, { params }: Props) {
         `View invoice: ${invoiceUrl}`
       ].join("\n\n"),
       attachments: extraAttachments,
-      jobId: bundle.job.id,
+        jobId: invoice.job_id,
       templateType: isTestSend ? "invoice_test" : "invoice_sent",
       log: !isTestSend
     });
@@ -162,8 +165,8 @@ export async function POST(request: Request, { params }: Props) {
     })
     .eq("id", invoiceId);
 
-  if (toEmail !== (bundle.customer.email ?? "")) {
-    await supabase.from("customers").update({ email: toEmail }).eq("id", bundle.customer.id);
+  if (toEmail !== (customerEmail ?? "")) {
+    await supabase.from("customers").update(bundle.customer.customer_type === "business" ? { contact_person_email: toEmail } : { email: toEmail }).eq("id", bundle.customer.id);
   }
 
   return NextResponse.json({

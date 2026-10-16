@@ -11,7 +11,7 @@ import type { JobBundle } from "@/lib/types";
 
 export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
   const completedAt = bundle.job.completed_at || new Date().toISOString();
-  const guaranteeYears = extractGuaranteeYears(bundle.quote?.guarantee_text) ?? 10;
+  const guaranteeYears = bundle.completion_details?.warranty_years ?? extractGuaranteeYears(bundle.quote?.guarantee_text) ?? 10;
   const guaranteeEnd = new Date(completedAt);
   guaranteeEnd.setFullYear(guaranteeEnd.getFullYear() + guaranteeYears);
 
@@ -37,13 +37,30 @@ export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
           <AddressBlock label="Property Address" lines={[bundle.job.property_address, bundle.job.postcode, bundle.customer.town]} />
         </div>
         <SectionHead>Works Completed</SectionHead>
-        <StructuredText value={bundle.quote?.scope_of_works || bundle.survey?.recommended_works || bundle.job.job_title} />
+        <StructuredText value={bundle.completion_details?.works_summary || bundle.quote?.scope_of_works || bundle.survey?.recommended_works || bundle.job.job_title} />
+        {completedVariations(bundle).length ? (
+          <>
+            <SectionHead>Additional Work Completed</SectionHead>
+            <div style={{ display: "grid", gap: 8 }}>
+              {completedVariations(bundle).map((variation) => (
+                <div key={variation.id} style={{ border: `1px solid ${DOC.lightRule}`, borderRadius: 10, padding: 12 }}>
+                  <strong style={{ color: DOC.body, fontFamily: DOC.fontSans, fontSize: 12 }}>{variation.variation_ref} · {variation.title}</strong>
+                  {variation.description ? <p style={{ ...paragraphStyle, margin: "6px 0 0" }}>{variation.description}</p> : null}
+                  {variation.line_items?.length ? <ul style={{ ...paragraphStyle, margin: "6px 0 0", paddingLeft: 20 }}>{variation.line_items.map((line) => <li key={line.id}>{line.description}</li>)}</ul> : null}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
+        <SectionHead>Installed Roofing System & Products</SectionHead>
+        <StructuredText value={bundle.completion_details?.installed_system || bundle.survey?.recommended_works || bundle.job.roof_type || bundle.job.job_title} />
+        <StructuredText value={bundle.completion_details?.product_details || bundle.materials.map((material) => `${material.item_name}${material.supplier ? ` — ${material.supplier}` : ""}${material.quantity ? ` (${material.quantity} ${material.unit || ""})` : ""}${material.notes ? `: ${material.notes}` : ""}`).join("\n") || "Product and manufacturer references were not recorded."} />
         <div style={{ marginTop: 22, background: DOC.dark, color: DOC.white, borderRadius: 14, padding: 20 }}>
           <div style={{ color: DOC.gold, fontFamily: DOC.fontSans, fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>{guaranteeYears} Year Workmanship Guarantee</div>
           <p style={{ margin: "12px 0 0", color: "#e8e4da", fontFamily: DOC.fontSerif, fontSize: 16, lineHeight: 1.7 }}>
             Guarantee starts {formatDate(completedAt)} and expires {formatDate(guaranteeEnd.toISOString())}. Certificate number CC-{bundle.job.job_ref ?? bundle.job.id}.
           </p>
-          {bundle.quote?.guarantee_text ? <p style={{ margin: "10px 0 0", color: "#cfc8b8", fontFamily: DOC.fontSerif, fontSize: 14, lineHeight: 1.65 }}>{bundle.quote.guarantee_text}</p> : null}
+          {bundle.completion_details?.warranty_details || bundle.quote?.guarantee_text ? <p style={{ margin: "10px 0 0", color: "#cfc8b8", fontFamily: DOC.fontSerif, fontSize: 14, lineHeight: 1.65 }}>{bundle.completion_details?.warranty_details || bundle.quote?.guarantee_text}</p> : null}
         </div>
         <SectionHead>Signatures</SectionHead>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
@@ -54,6 +71,12 @@ export function CompletionCertificate({ bundle }: { bundle: JobBundle }) {
       <DocFooter business={bundle.business} />
     </DocumentFrame>
   );
+}
+
+function completedVariations(bundle: JobBundle) {
+  const accepted = bundle.variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
+  const ids = bundle.completion_details?.included_variation_ids ?? accepted.map((variation) => variation.id);
+  return accepted.filter((variation) => ids.includes(variation.id));
 }
 
 function extractGuaranteeYears(value?: string | null) {

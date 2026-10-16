@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CommunicationDraft, ConversationChannel, ConversationRecord, JobDocumentRecord, LiteratureAsset, MessageRecord, MessageTemplateRecord } from "@/lib/types";
+import { buildQuickFollowUp, type QuickFollowUpContext, type QuickFollowUpKind } from "@/lib/comms/quickFollowUp";
 
 type DraftChannel = Extract<ConversationChannel, "email" | "sms" | "whatsapp">;
 type AttachableJobDocument = JobDocumentRecord & { attachable?: boolean };
@@ -13,10 +14,15 @@ type Props = {
   conversation: ConversationRecord | null;
   templates: MessageTemplateRecord[];
   literature: LiteratureAsset[];
+  quickFollowUpContext?: QuickFollowUpContext | null;
+  initialBody?: string;
+  initialSubject?: string;
+  initialDraftKey?: string | number;
+  initialJobDocumentIds?: string[];
   onSent: (messages: MessageRecord[]) => void;
 };
 
-export function MessageComposer({ conversationId, defaultChannel, conversation, templates, literature, onSent }: Props) {
+export function MessageComposer({ conversationId, defaultChannel, conversation, templates, literature, quickFollowUpContext, initialBody, initialSubject, initialDraftKey, initialJobDocumentIds, onSent }: Props) {
   const [channel, setChannel] = useState<DraftChannel>(normaliseChannel(defaultChannel));
   const [body, setBody] = useState("");
   const [subject, setSubject] = useState("");
@@ -36,10 +42,10 @@ export function MessageComposer({ conversationId, defaultChannel, conversation, 
 
   useEffect(() => {
     setDraftId(null);
-    setBody("");
-    setSubject("");
+    setBody(initialBody ?? "");
+    setSubject(initialSubject ?? "");
     setSelectedLiteratureIds([]);
-    setSelectedJobDocumentIds([]);
+    setSelectedJobDocumentIds(initialJobDocumentIds ?? []);
     setSavedMessage(null);
     if (!conversationId) return;
     let active = true;
@@ -59,7 +65,7 @@ export function MessageComposer({ conversationId, defaultChannel, conversation, 
     return () => {
       active = false;
     };
-  }, [conversationId]);
+  }, [conversationId, initialBody, initialSubject, initialDraftKey, initialJobDocumentIds]);
 
   useEffect(() => {
     setJobDocuments([]);
@@ -165,6 +171,31 @@ export function MessageComposer({ conversationId, defaultChannel, conversation, 
           ))}
         </select>
       </div>
+      {channel === "email" && quickFollowUpContext ? (
+        <label className="mt-3 block">
+          <span className="label">Quick job follow-up</span>
+          <select
+            className="field"
+            onChange={(event) => {
+              if (!event.target.value) return;
+              const draft = buildQuickFollowUp(quickFollowUpContext, event.target.value as QuickFollowUpKind);
+              setSubject(draft.subject);
+              setBody(draft.body);
+              setSavedMessage("Job-aware follow-up added. Edit it before saving or sending.");
+              setError(null);
+              event.target.value = "";
+            }}
+            defaultValue=""
+          >
+            <option value="">Choose a follow-up email to prefill…</option>
+            {quickFollowUpContext.quoteStatus === "Sent" ? <option value="quote">Check in on a quotation</option> : null}
+            <option value="survey">Follow up after a survey</option>
+            <option value="work">Check in on planned work</option>
+            <option value="general">General job follow-up</option>
+          </select>
+          <span className="mt-1 block text-xs text-[var(--muted)]">Uses this job’s customer, address, stage and quote details where available. Nothing is sent automatically.</span>
+        </label>
+      ) : null}
       {channel === "email" ? (
         <input className="field mt-3" onChange={(event) => setSubject(event.target.value)} placeholder="Subject" value={subject} />
       ) : null}

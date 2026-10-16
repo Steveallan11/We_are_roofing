@@ -50,6 +50,7 @@ import type {
   Customer,
   EmailLog,
   InvoiceRecord,
+  InvoiceVariationAllocation,
   Job,
   JobDocumentRecord,
   JobExpense,
@@ -72,6 +73,7 @@ export type JobDetailViewProps = {
   materials: MaterialRecord[];
   labourPlan?: LabourPlanRecord | null;
   invoices: InvoiceRecord[];
+  variationAllocations?: InvoiceVariationAllocation[];
   variations: JobVariationRecord[];
   expenses?: JobExpense[];
   emailLogs: EmailLog[];
@@ -185,6 +187,7 @@ export function JobDetailView(props: JobDetailViewProps) {
               jobTitle={job.job_title}
               quote={quote ?? null}
               invoices={invoices}
+              variationAllocations={props.variationAllocations ?? []}
               variations={variations}
               expenses={expenses ?? []}
               materials={materials}
@@ -269,7 +272,7 @@ function JobDetailHeader({
               Call customer
             </SmartButton>
             <SmartButton variant="secondary" size="sm" href={`/comms?job=${job.id}&compose=1`}>
-              Send message
+              Draft follow-up email
             </SmartButton>
             <SmartButton variant="ghost" size="sm" href={`/customers/${customer.id}`}>
               Customer details

@@ -11,6 +11,7 @@ import type { InvoiceRecord, JobBundle } from "@/lib/types";
 
 export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoice: InvoiceRecord }) {
   const isDeposit = invoice.invoice_type === "deposit";
+  const isStandalone = !invoice.job_id;
   const isReverseCharge = invoice.vat_treatment === "domestic_reverse_charge";
   const cisDeduction = Number(invoice.cis_deduction_amount ?? 0);
   return (
@@ -19,8 +20,8 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
       <DocumentBody>
         <MetaStrip
           items={[
-            { label: "Job Ref", value: bundle.job.job_ref },
-            { label: "Quote Ref", value: bundle.quote?.quote_ref },
+            ...(isStandalone ? [] : [{ label: "Job Ref", value: bundle.job.job_ref }]),
+            ...(!isStandalone && bundle.quote?.quote_ref ? [{ label: "Quote Ref", value: bundle.quote.quote_ref }] : []),
             { label: "Payment Due", value: formatDate(invoice.due_date) },
             { label: "Status", value: invoice.status }
           ]}
@@ -33,11 +34,13 @@ export function InvoiceDocument({ bundle, invoice }: { bundle: JobBundle; invoic
           </div>
         ) : null}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <AddressBlock label="Customer" lines={[bundle.customer.full_name, bundle.job.property_address, bundle.job.postcode]} />
+          <AddressBlock label={isStandalone ? "Bill To" : "Customer"} lines={[bundle.customer.business_name || bundle.customer.full_name, bundle.customer.business_name ? bundle.customer.contact_person_name : null, isStandalone ? bundle.customer.address_line_1 : bundle.job.property_address, bundle.customer.address_line_2, bundle.customer.town, bundle.customer.postcode]} />
           <AddressBlock label="Bank Details" lines={[bundle.business.bank_account_name, bundle.business.bank_name, bundle.business.bank_sort_code ? `Sort Code: ${bundle.business.bank_sort_code}` : null, bundle.business.bank_account ? `Account: ${bundle.business.bank_account}` : null]} />
         </div>
-        <SectionHead>{isDeposit ? "Booking Deposit" : "Works Completed"}</SectionHead>
-        {isDeposit ? (
+        <SectionHead>{isStandalone ? "Invoice" : isDeposit ? "Booking Deposit" : "Works Completed"}</SectionHead>
+        {isStandalone ? (
+          <p style={paragraphStyle}>Please see the bespoke goods and services itemised below.</p>
+        ) : isDeposit ? (
           <>
             <p style={paragraphStyle}>
               Thank you for choosing We Are Roofing. This deposit secures your booking in our schedule for {bundle.job.job_title} at{" "}

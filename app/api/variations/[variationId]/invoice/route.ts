@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: Props) {
   if (!bundle) return NextResponse.json({ ok: false, error: "Related job not found." }, { status: 404 });
 
   const variationInvoices = bundle.invoices.filter((invoice) => invoice.variation_id === variation.id);
-  const progress = getVariationInvoiceProgress(variationInvoices, variation.id, Number(variation.total ?? 0));
+  const progress = getVariationInvoiceProgress(bundle.invoices, variation.id, Number(variation.total ?? 0), bundle.variation_allocations ?? []);
   if (progress.remaining <= 0.01) {
     return NextResponse.json({ ok: false, error: "This additional work has already been invoiced in full." }, { status: 400 });
   }

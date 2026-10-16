@@ -3,7 +3,7 @@ import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { calculateCisDeduction, persistInvoiceArtifacts, round2 } from "@/lib/invoice-engine";
-import { getJobBundle } from "@/lib/data";
+import { getInvoiceDocumentBundle } from "@/lib/data";
 import { getQuoteLineItemCategory } from "@/lib/quotes/value";
 import type { ActivityType } from "@/lib/activity/types";
 import type { InvoiceLineItem, InvoiceRecord, InvoiceStatus, InvoiceVatTreatment } from "@/lib/types";
@@ -64,8 +64,8 @@ export async function PATCH(request: Request, { params }: Props) {
       return NextResponse.json({ ok: false, error: "Enter the customer's VAT number and confirm the reverse-charge conditions." }, { status: 400 });
     }
 
-    const bundle = await getJobBundle(String(invoice.job_id));
-    if (!bundle) return NextResponse.json({ ok: false, error: "Related job could not be loaded." }, { status: 404 });
+    const bundle = await getInvoiceDocumentBundle(invoice as InvoiceRecord);
+    if (!bundle) return NextResponse.json({ ok: false, error: "Invoice customer or workspace details could not be loaded." }, { status: 404 });
     const sourceLines = Array.isArray(invoice.line_items) ? (invoice.line_items as InvoiceLineItem[]) : [];
     const lineItems = sourceLines.map((line) => {
       if (line.category || !bundle.quote) return line;
@@ -189,8 +189,9 @@ export async function DELETE(_request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Invoice not found." }, { status: 404 });
   }
 
-  if (invoice.status !== "Void") {
-    return NextResponse.json({ ok: false, error: "Only void invoices can be deleted." }, { status: 400 });
+  const eligibleForRemoval = ["Draft", "Void"].includes(String(invoice.status)) && !invoice.sent_at;
+  if (!eligibleForRemoval) {
+    return NextResponse.json({ ok: false, error: "Only invoices that have never been sent can be permanently removed. Void sent invoices to preserve the accounting audit trail." }, { status: 400 });
   }
 
   const paymentCheck = await supabase.from("invoice_payments").select("id").eq("invoice_id", invoiceId).limit(1);
@@ -219,13 +220,13 @@ export async function DELETE(_request: Request, { params }: Props) {
     job_id: invoice.job_id ? String(invoice.job_id) : null,
     invoice_id: invoiceId,
     activity_type: "status_changed",
-    message: `Void invoice ${invoice.invoice_ref} deleted`,
+    message: `${invoice.status === "Draft" ? "Draft" : "Unsent void"} invoice ${invoice.invoice_ref} removed`,
     actor_type: "user",
     actor_id: auth.session.user?.id ?? null,
     actor_name: auth.session.user?.email ?? null,
     linked_entity_type: "invoice",
     linked_entity_id: invoiceId,
-    details: { invoice_ref: invoice.invoice_ref, deleted: true }
+    details: { invoice_ref: invoice.invoice_ref, deleted: true, previous_status: invoice.status }
   });
 
   await supabase.from("job_documents").delete().eq("invoice_id", invoiceId);

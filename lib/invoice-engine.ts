@@ -69,7 +69,10 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
   const isDeposit = invoice.invoice_type === "deposit";
   const isVariation = Boolean(invoice.variation_id);
   const isReverseCharge = invoice.vat_treatment === "domestic_reverse_charge";
-  const introHtml = isDeposit
+  const isStandalone = !invoice.job_id;
+  const introHtml = isStandalone
+    ? `<h2>Invoice</h2><div class="terms">Please see the bespoke goods and services itemised below.</div>`
+    : isDeposit
     ? `
         <h2>Booking Deposit</h2>
         <div class="terms">
@@ -136,9 +139,9 @@ export function buildInvoiceDocumentHtml(bundle: JobBundle, invoice: InvoiceReco
       </div>
       <div class="body">
         <div class="meta">
-          <div class="meta-card"><div class="meta-label">Customer</div><div>${escapeHtml(bundle.customer.full_name)}</div></div>
-          <div class="meta-card"><div class="meta-label">Job Ref</div><div>${escapeHtml(bundle.job.job_ref || bundle.job.id)}</div></div>
-          <div class="meta-card"><div class="meta-label">Property</div><div>${escapeHtml(bundle.job.property_address)}</div></div>
+          <div class="meta-card"><div class="meta-label">Customer</div><div>${escapeHtml(bundle.customer.business_name || bundle.customer.full_name)}</div></div>
+          ${isStandalone ? "" : `<div class="meta-card"><div class="meta-label">Job Ref</div><div>${escapeHtml(bundle.job.job_ref || bundle.job.id)}</div></div>`}
+          ${bundle.job.property_address ? `<div class="meta-card"><div class="meta-label">${isStandalone ? "Billing address" : "Property"}</div><div>${escapeHtml(bundle.job.property_address)}</div></div>` : ""}
           <div class="meta-card"><div class="meta-label">Due Date</div><div>${formatDate(invoice.due_date)}</div></div>
         </div>
         ${isReverseCharge || Number(invoice.cis_deduction_amount ?? 0) > 0 ? `<div style="background:#101417;border-left:6px solid #d4af37;color:#fff;margin:18px 0;padding:16px 18px;"><div style="color:#d4af37;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;">Invoice tax treatment</div>${isReverseCharge ? `<strong style="display:block;margin-bottom:5px;">DOMESTIC REVERSE CHARGE — CUSTOMER ACCOUNTS FOR VAT</strong>` : ""}${Number(invoice.cis_deduction_amount ?? 0) > 0 ? `<strong style="display:block;">CIS: CUSTOMER DEDUCTS ${formatCurrency(Number(invoice.cis_deduction_amount ?? 0))} FROM OUR LABOUR</strong>` : ""}</div>` : ""}
@@ -188,8 +191,11 @@ export function buildInvoicePdfBuffer(bundle: JobBundle, invoice: InvoiceRecord)
     y = drawInvoiceTaxBanner(page, invoice, y);
   }
 
-  const introTitle = isDeposit ? "Booking Deposit" : isVariation ? "Approved Additional Work" : "Works Completed";
-  const introBody = isDeposit
+  const isStandalone = !invoice.job_id;
+  const introTitle = isStandalone ? "Invoice" : isDeposit ? "Booking Deposit" : isVariation ? "Approved Additional Work" : "Works Completed";
+  const introBody = isStandalone
+    ? "Please see the bespoke goods and services itemised below."
+    : isDeposit
     ? `Thank you for choosing We Are Roofing UK Ltd. This deposit secures your booking in our schedule for ${bundle.job.job_title} at ${bundle.job.property_address}. It allows us to begin arranging the items needed before work commences, including materials, scaffold/access, skips, welfare facilities, and other job preparation where required. Getting these in place early helps minimise delays once the works start.`
     : isVariation
       ? `This invoice covers additional work approved separately for ${bundle.job.property_address}. The variation reference and agreed work are shown in the invoice items and notes below.`
@@ -362,10 +368,10 @@ function drawInvoiceHeader(page: PdfPage, bundle: JobBundle, invoice: InvoiceRec
 function drawInvoiceMeta(page: PdfPage, bundle: JobBundle, invoice: InvoiceRecord, y: number) {
   const cardW = 244;
   const cardH = 52;
-  drawMetaCard(page, 46, y, cardW, cardH, "Customer", bundle.customer.full_name);
+  drawMetaCard(page, 46, y, cardW, cardH, "Customer", bundle.customer.business_name || bundle.customer.full_name);
   drawMetaCard(page, 305, y, cardW, cardH, "Due Date", formatDate(invoice.due_date));
-  drawMetaCard(page, 46, y - 64, cardW, cardH, "Property", bundle.job.property_address);
-  drawMetaCard(page, 305, y - 64, cardW, cardH, "Job", bundle.job.job_ref || bundle.job.job_title);
+  drawMetaCard(page, 46, y - 64, cardW, cardH, invoice.job_id ? "Property" : "Billing address", bundle.job.property_address || "-");
+  drawMetaCard(page, 305, y - 64, cardW, cardH, "Job", invoice.job_id ? bundle.job.job_ref || bundle.job.job_title : "Standalone invoice");
   return y - 132;
 }
 
@@ -556,7 +562,7 @@ export async function persistInvoiceArtifacts(
   invoice: InvoiceRecord
 ) {
   const timestamp = Date.now();
-  const basePath = `${bundle.job.id}/invoices/${invoice.id}`;
+  const basePath = `${invoice.job_id || "standalone"}/invoices/${invoice.id}`;
   const htmlPath = `${basePath}/${invoice.invoice_ref.toLowerCase()}-${timestamp}.html`;
   const pdfPath = `${basePath}/${invoice.invoice_ref.toLowerCase()}-${timestamp}.pdf`;
   const html = buildInvoiceDocumentHtml(bundle, invoice);
@@ -589,7 +595,7 @@ export async function persistInvoiceArtifacts(
   ]);
 
   const htmlPayload = {
-    job_id: bundle.job.id,
+    job_id: invoice.job_id,
     invoice_id: invoice.id,
     document_type: "invoice_html",
     display_name: `${invoice.invoice_ref} HTML Snapshot`,
@@ -603,7 +609,7 @@ export async function persistInvoiceArtifacts(
   };
 
   const pdfPayload = {
-    job_id: bundle.job.id,
+    job_id: invoice.job_id,
     invoice_id: invoice.id,
     document_type: "invoice_pdf",
     display_name: `${invoice.invoice_ref}.pdf`,

@@ -5,6 +5,7 @@ import { ConversationList } from "@/components/comms/ConversationList";
 import { ConversationThread } from "@/components/comms/ConversationThread";
 import { CustomerContext } from "@/components/comms/CustomerContext";
 import { MessageComposer } from "@/components/comms/MessageComposer";
+import type { QuickFollowUpContext } from "@/lib/comms/quickFollowUp";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useWindowSize } from "@/lib/hooks/useWindowSize";
 import type { ConversationRecord, LiteratureAsset, MessageRecord, MessageTemplateRecord } from "@/lib/types";
@@ -16,11 +17,20 @@ export type ComposeContact = {
   customerName: string;
   email: string | null;
   phone: string | null;
+  propertyAddress?: string | null;
+  jobStatus?: string | null;
+  followUpDate?: string | null;
+  quoteRef?: string | null;
+  quoteStatus?: string | null;
+  quoteTotal?: number | null;
 };
 
 type Props = {
   contacts: ComposeContact[];
   initialComposeJobId?: string | null;
+  initialComposeBody?: string;
+  initialComposeSubject?: string;
+  initialJobDocumentIds?: string[];
   initialConversations: ConversationRecord[];
   initialConversation: ConversationRecord | null;
   initialMessages: MessageRecord[];
@@ -28,7 +38,7 @@ type Props = {
   literature: LiteratureAsset[];
 };
 
-export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConversations, initialConversation, initialMessages, templates, literature }: Props) {
+export function UnifiedInbox({ contacts, initialComposeJobId = null, initialComposeBody, initialComposeSubject, initialJobDocumentIds, initialConversations, initialConversation, initialMessages, templates, literature }: Props) {
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedId, setSelectedId] = useState<string | null>(initialConversation?.id ?? initialConversations[0]?.id ?? null);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(initialConversation ?? initialConversations[0] ?? null);
@@ -38,7 +48,8 @@ export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConv
   const [composeOpen, setComposeOpen] = useState(Boolean(initialComposeJobId));
   const [composeJobId, setComposeJobId] = useState(initialComposeJobId ?? contacts[0]?.jobId ?? "");
   const [composeChannel, setComposeChannel] = useState<"email" | "sms">("email");
-  const [composeSubject, setComposeSubject] = useState("");
+  const [composeSubject, setComposeSubject] = useState(initialComposeSubject ?? "");
+  const [completionPrefillVersion, setCompletionPrefillVersion] = useState(0);
   const [composeError, setComposeError] = useState<string | null>(null);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const { width } = useWindowSize();
@@ -149,6 +160,7 @@ export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConv
     setMobileThreadOpen(true);
     setComposeOpen(false);
     setComposeSubject("");
+    if (initialComposeBody) setCompletionPrefillVersion((version) => version + 1);
   }
 
   const newMessageButton = (
@@ -177,6 +189,11 @@ export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConv
         <MessageComposer
           conversationId={selectedConversation?.id ?? null}
           conversation={selectedConversation}
+          quickFollowUpContext={toQuickFollowUpContext(contacts.find((contact) => contact.jobId === selectedConversation?.job_id))}
+          initialBody={completionPrefillVersion ? initialComposeBody : undefined}
+          initialSubject={completionPrefillVersion ? initialComposeSubject : undefined}
+          initialDraftKey={completionPrefillVersion}
+          initialJobDocumentIds={completionPrefillVersion ? initialJobDocumentIds : undefined}
           defaultChannel={selectedConversation?.primary_channel ?? "email"}
           onSent={(nextMessages) => {
             setMessages(nextMessages);
@@ -228,6 +245,21 @@ export function UnifiedInbox({ contacts, initialComposeJobId = null, initialConv
       {composeOpen ? <NewMessageDialog contacts={contacts} creating={creatingConversation} error={composeError} jobId={composeJobId} onChannelChange={setComposeChannel} onClose={() => setComposeOpen(false)} onJobChange={setComposeJobId} onStart={() => void startConversation()} onSubjectChange={setComposeSubject} channel={composeChannel} subject={composeSubject} /> : null}
     </>
   );
+}
+
+function toQuickFollowUpContext(contact?: ComposeContact): QuickFollowUpContext | null {
+  if (!contact) return null;
+  return {
+    firstName: contact.customerName === "Unknown customer" ? "there" : contact.customerName.split(/\s+/)[0] || "there",
+    jobRef: contact.jobRef,
+    jobTitle: contact.jobTitle,
+    propertyAddress: contact.propertyAddress,
+    jobStatus: contact.jobStatus,
+    followUpDate: contact.followUpDate,
+    quoteRef: contact.quoteRef,
+    quoteStatus: contact.quoteStatus,
+    quoteTotal: contact.quoteTotal
+  };
 }
 
 function NewMessageDialog({ contacts, creating, error, jobId, channel, subject, onChannelChange, onClose, onJobChange, onStart, onSubjectChange }: {

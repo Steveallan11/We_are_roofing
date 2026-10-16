@@ -13,6 +13,7 @@ import {
 } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceLineItem, InvoiceRecord, InvoiceType, InvoiceVatTreatment } from "@/lib/types";
+import { getVariationInvoiceProgress, updateVariationInvoiceStatus } from "@/lib/variations/invoicing";
 import { canPersistToSupabase, getNextInvoiceRef } from "@/lib/workflows";
 
 type Props = {
@@ -31,6 +32,7 @@ export async function POST(request: Request, { params }: Props) {
     customer_vat_number?: string;
     reverse_charge_confirmed?: boolean;
     cis_deduction_rate?: number;
+    variation_ids?: string[];
   };
   const invoiceType: InvoiceType =
     body.type === "deposit" || body.type === "final" || body.type === "interim" ? body.type : "standard";
@@ -105,6 +107,7 @@ export async function POST(request: Request, { params }: Props) {
   let total: number;
   let notes: string;
   let dueInDays: number;
+  let additionalWorkAllocations: Array<{ variation_id: string; amount: number; subtotal: number; vat_amount: number; line_items: InvoiceLineItem[] }> = [];
 
   if (invoiceType === "deposit") {
     const existingDeposit = liveInvoicesForQuote.find((invoice) => invoice.invoice_type === "deposit");
@@ -152,62 +155,120 @@ export async function POST(request: Request, { params }: Props) {
       );
     }
 
-    const alreadyInvoiced = sumLiveInvoiceTotal(liveInvoicesForQuote);
-    total = round2(invoiceLimit - alreadyInvoiced);
-    if (total <= 0) {
+    const requestedVariationIds = Array.isArray(body.variation_ids) ? [...new Set(body.variation_ids.filter((id) => typeof id === "string"))] : [];
+    const allocations = [] as typeof additionalWorkAllocations;
+    for (const variationId of requestedVariationIds) {
+      const variation = bundle.variations.find((item) => item.id === variationId);
+      if (!variation || !["Accepted", "Invoiced"].includes(variation.status)) {
+        return NextResponse.json({ ok: false, error: "Only approved additional-work items on this job can be included in the final invoice." }, { status: 400 });
+      }
+      const progress = getVariationInvoiceProgress(bundle.invoices, variation.id, Number(variation.total ?? 0), bundle.variation_allocations ?? []);
+      if (progress.remaining <= 0.01) continue;
+      const previousInvoices = bundle.invoices.filter((invoice) => invoice.variation_id === variation.id && invoice.status !== "Void");
+      const previousAllocations = (bundle.variation_allocations ?? []).filter((allocation) => allocation.variation_id === variation.id && bundle.invoices.some((invoice) => invoice.id === allocation.invoice_id && invoice.status !== "Void"));
+      const previousSubtotal = previousInvoices.reduce((sum, invoice) => sum + Number(invoice.subtotal ?? 0), 0) + previousAllocations.reduce((sum, allocation) => sum + Number(allocation.subtotal ?? 0), 0);
+      const previousVat = previousInvoices.reduce((sum, invoice) => sum + Number(invoice.vat_amount ?? 0), 0) + previousAllocations.reduce((sum, allocation) => sum + Number(allocation.vat_amount ?? 0), 0);
+      const remainingSubtotal = round2(Math.max(0, Number(variation.subtotal ?? 0) - previousSubtotal));
+      const remainingVat = round2(Math.max(0, Number(variation.vat_amount ?? 0) - previousVat));
+      const amount = round2(remainingSubtotal + remainingVat);
+      if (Math.abs(amount - progress.remaining) > 0.02) {
+        return NextResponse.json({ ok: false, error: `The remaining balance for ${variation.variation_ref} could not be reconciled. Refresh the job and retry.` }, { status: 409 });
+      }
+      const lineItems: InvoiceLineItem[] = previousInvoices.length || previousAllocations.length
+        ? [{ description: `Remaining approved additional work — ${variation.title} (${variation.variation_ref})`, quantity: 1, unit: "item", unit_price: remainingSubtotal, vat_applicable: remainingVat > 0, total: remainingSubtotal }]
+        : variation.line_items.map((line) => ({ description: `${line.description} (${variation.variation_ref})`, quantity: line.quantity, unit: line.unit, unit_price: line.unit_price, vat_applicable: line.vat_applicable, total: line.total }));
+      allocations.push({ variation_id: variation.id, amount, subtotal: remainingSubtotal, vat_amount: remainingVat, line_items: lineItems });
+    }
+
+    const alreadyInvoicedForMain = round2(liveInvoicesForQuote.reduce((sum, invoice) => {
+      const extras = (bundle.variation_allocations ?? []).filter((allocation) => allocation.invoice_id === invoice.id).reduce((total, allocation) => total + Number(allocation.amount ?? 0), 0);
+      return sum + Math.max(0, Number(invoice.total ?? 0) - (reverseCharge ? extras - (bundle.variation_allocations ?? []).filter((allocation) => allocation.invoice_id === invoice.id).reduce((total, allocation) => total + Number(allocation.vat_amount ?? 0), 0) : extras));
+    }, 0));
+    const mainRemaining = round2(Math.max(0, invoiceLimit - alreadyInvoicedForMain));
+    if (mainRemaining <= 0.01 && allocations.length === 0) {
       return NextResponse.json(
-        { ok: false, error: `The firm quote value (£${invoiceLimit.toFixed(2)}) has already been invoiced.` },
+        { ok: false, error: `The main quote value (£${invoiceLimit.toFixed(2)}) and all selected additional work have already been invoiced.` },
         { status: 400 }
       );
     }
-    ({ lineItems, subtotal, vatAmount, reverseChargeVatAmount, total } = buildProportionalInvoiceLineItemsFromQuote(
-      quote,
-      total,
-      bundle.business.vat_rate,
-      "Final balance",
-      reverseCharge
-    ));
+    const main = mainRemaining > 0.01
+      ? buildProportionalInvoiceLineItemsFromQuote(quote, mainRemaining, bundle.business.vat_rate, "Final balance", reverseCharge)
+      : { lineItems: [] as InvoiceLineItem[], subtotal: 0, vatAmount: 0, reverseChargeVatAmount: 0, total: 0 };
+    additionalWorkAllocations = allocations;
+    lineItems = [...main.lineItems, ...allocations.flatMap((allocation) => allocation.line_items)];
+    subtotal = round2(main.subtotal + allocations.reduce((sum, allocation) => sum + allocation.subtotal, 0));
+    vatAmount = reverseCharge ? 0 : round2(main.vatAmount + allocations.reduce((sum, allocation) => sum + allocation.vat_amount, 0));
+    reverseChargeVatAmount = reverseCharge ? round2(main.reverseChargeVatAmount + allocations.reduce((sum, allocation) => sum + allocation.vat_amount, 0)) : 0;
+    total = round2(subtotal + vatAmount);
     notes =
-      alreadyInvoiced > 0
-        ? `Final balance for quote ${quote.quote_ref} (£${alreadyInvoiced.toFixed(2)} previously invoiced).`
-        : `Final balance for quote ${quote.quote_ref}.`;
+      `Final balance for quote ${quote.quote_ref}.` + (allocations.length ? ` Includes approved additional work: ${allocations.map((allocation) => bundle.variations.find((variation) => variation.id === allocation.variation_id)?.variation_ref).filter(Boolean).join(", ")}.` : "") + (alreadyInvoicedForMain > 0 ? ` £${alreadyInvoicedForMain.toFixed(2)} of the main contract was previously invoiced.` : "");
     dueInDays = 14;
   } else if (invoiceType === "interim") {
-    // On-the-fly stage/progress payment — raise as many of these as the job needs,
-    // whenever a payment is due (scaffold up, materials landed, work stage complete...).
+    // A custom invoice can combine a main-contract stage payment with multiple
+    // approved additional-work items, or contain only additional work.
     const fixedAmount = Number(body.amount ?? 0);
     const percentage = Number(body.percentage ?? 0);
-    if (fixedAmount > 0) {
-      total = round2(fixedAmount);
-    } else if (percentage > 0 && percentage < 100) {
-      total = round2((invoiceLimit * percentage) / 100);
-    } else {
-      return NextResponse.json({ ok: false, error: "Enter an amount or a percentage for this invoice." }, { status: 400 });
+    if (!Number.isFinite(fixedAmount) || fixedAmount < 0 || !Number.isFinite(percentage) || percentage < 0 || percentage >= 100 || (fixedAmount > 0 && percentage > 0)) {
+      return NextResponse.json({ ok: false, error: "Enter either a valid stage amount or a percentage below 100%." }, { status: 400 });
     }
-    if (total <= 0) {
-      return NextResponse.json({ ok: false, error: "Invoice amount must be greater than zero." }, { status: 400 });
+    const requestedVariationIds = Array.isArray(body.variation_ids) ? [...new Set(body.variation_ids.filter((id) => typeof id === "string"))] : [];
+    const allocations: typeof additionalWorkAllocations = [];
+    for (const variationId of requestedVariationIds) {
+      const variation = bundle.variations.find((item) => item.id === variationId);
+      if (!variation || !["Accepted", "Invoiced"].includes(variation.status)) {
+        return NextResponse.json({ ok: false, error: "Only approved additional-work items on this job can be included on an invoice." }, { status: 400 });
+      }
+      const progress = getVariationInvoiceProgress(bundle.invoices, variation.id, Number(variation.total ?? 0), bundle.variation_allocations ?? []);
+      if (progress.remaining <= 0.01) continue;
+      const previousInvoices = bundle.invoices.filter((invoice) => invoice.variation_id === variation.id && invoice.status !== "Void");
+      const previousAllocations = (bundle.variation_allocations ?? []).filter((allocation) => allocation.variation_id === variation.id && bundle.invoices.some((invoice) => invoice.id === allocation.invoice_id && invoice.status !== "Void"));
+      const previousSubtotal = previousInvoices.reduce((sum, invoice) => sum + Number(invoice.subtotal ?? 0), 0) + previousAllocations.reduce((sum, allocation) => sum + Number(allocation.subtotal ?? 0), 0);
+      const previousVat = previousInvoices.reduce((sum, invoice) => sum + Number(invoice.vat_amount ?? 0), 0) + previousAllocations.reduce((sum, allocation) => sum + Number(allocation.vat_amount ?? 0), 0);
+      const remainingSubtotal = round2(Math.max(0, Number(variation.subtotal ?? 0) - previousSubtotal));
+      const remainingVat = round2(Math.max(0, Number(variation.vat_amount ?? 0) - previousVat));
+      const amount = round2(remainingSubtotal + remainingVat);
+      if (Math.abs(amount - progress.remaining) > 0.02) {
+        return NextResponse.json({ ok: false, error: `The remaining balance for ${variation.variation_ref} could not be reconciled. Refresh the job and retry.` }, { status: 409 });
+      }
+      const variationLineItems: InvoiceLineItem[] = previousInvoices.length || previousAllocations.length
+        ? [{ description: `Remaining approved additional work — ${variation.title} (${variation.variation_ref})`, quantity: 1, unit: "item", unit_price: remainingSubtotal, vat_applicable: remainingVat > 0, total: remainingSubtotal }]
+        : variation.line_items.map((line) => ({ description: `${line.description} (${variation.variation_ref})`, quantity: line.quantity, unit: line.unit, unit_price: line.unit_price, vat_applicable: line.vat_applicable, total: line.total }));
+      allocations.push({ variation_id: variation.id, amount, subtotal: remainingSubtotal, vat_amount: remainingVat, line_items: variationLineItems });
     }
 
-    const alreadyInvoicedForInterim = sumLiveInvoiceTotal(liveInvoicesForQuote);
-    if (alreadyInvoicedForInterim + total > invoiceLimit + 0.01) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `That would take invoicing past the firm quote total. £${alreadyInvoicedForInterim.toFixed(2)} already invoiced of £${invoiceLimit.toFixed(2)}.`
-        },
-        { status: 400 }
-      );
+    const mainAmount = fixedAmount > 0
+      ? round2(fixedAmount)
+      : percentage > 0 && percentage < 100
+        ? round2((invoiceLimit * percentage) / 100)
+        : 0;
+    if (mainAmount <= 0 && allocations.length === 0) {
+      return NextResponse.json({ ok: false, error: "Enter a stage amount or select approved additional work to invoice." }, { status: 400 });
     }
 
-    const description = body.description?.trim() || `Progress payment — ${bundle.job.job_title} (quote ${quote.quote_ref})`;
-    ({ lineItems, subtotal, vatAmount, reverseChargeVatAmount, total } = buildProportionalInvoiceLineItemsFromQuote(
-      quote,
-      total,
-      bundle.business.vat_rate,
-      description,
-      reverseCharge
-    ));
-    notes = body.description?.trim() ? `Interim invoice: ${body.description.trim()}.` : `Interim invoice for quote ${quote.quote_ref}.`;
+    const alreadyInvoicedForMain = round2(liveInvoicesForQuote.reduce((sum, invoice) => {
+      const extras = (bundle.variation_allocations ?? []).filter((allocation) => allocation.invoice_id === invoice.id);
+      const extraTotal = extras.reduce((amount, allocation) => amount + Number(allocation.amount ?? 0), 0);
+      const extraVat = extras.reduce((amount, allocation) => amount + Number(allocation.vat_amount ?? 0), 0);
+      return sum + Math.max(0, Number(invoice.total ?? 0) - (reverseCharge ? extraTotal - extraVat : extraTotal));
+    }, 0));
+    const mainRemaining = round2(Math.max(0, invoiceLimit - alreadyInvoicedForMain));
+    if (mainAmount > mainRemaining + 0.01) {
+      return NextResponse.json({ ok: false, error: `That stage payment exceeds the main contract balance. £${mainRemaining.toFixed(2)} remains to invoice.` }, { status: 400 });
+    }
+
+    const main = mainAmount > 0
+      ? buildProportionalInvoiceLineItemsFromQuote(quote, mainAmount, bundle.business.vat_rate, body.description?.trim() || `Progress payment — ${bundle.job.job_title}`, reverseCharge)
+      : { lineItems: [] as InvoiceLineItem[], subtotal: 0, vatAmount: 0, reverseChargeVatAmount: 0, total: 0 };
+    additionalWorkAllocations = allocations;
+    lineItems = [...main.lineItems, ...allocations.flatMap((allocation) => allocation.line_items)];
+    subtotal = round2(main.subtotal + allocations.reduce((sum, allocation) => sum + allocation.subtotal, 0));
+    vatAmount = reverseCharge ? 0 : round2(main.vatAmount + allocations.reduce((sum, allocation) => sum + allocation.vat_amount, 0));
+    reverseChargeVatAmount = reverseCharge ? round2(main.reverseChargeVatAmount + allocations.reduce((sum, allocation) => sum + allocation.vat_amount, 0)) : 0;
+    total = round2(subtotal + vatAmount);
+    notes = [
+      body.description?.trim() ? `Interim invoice: ${body.description.trim()}.` : `Interim invoice for quote ${quote.quote_ref}.`,
+      allocations.length ? `Includes approved additional work: ${allocations.map((allocation) => bundle.variations.find((variation) => variation.id === allocation.variation_id)?.variation_ref).filter(Boolean).join(", ")}.` : null
+    ].filter(Boolean).join(" ");
     dueInDays = 7;
   } else {
     const existingStandard = liveInvoicesForQuote.find((invoice) => (invoice.invoice_type ?? "standard") === "standard");
@@ -299,6 +360,24 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const invoice = data as InvoiceRecord;
+  if (additionalWorkAllocations.length > 0) {
+    for (const allocation of additionalWorkAllocations) {
+      const insertedAllocation = await supabase.from("invoice_variation_allocations").insert({
+        business_id: bundle.business.id,
+        invoice_id: invoice.id,
+        variation_id: allocation.variation_id,
+        amount: allocation.amount,
+        subtotal: allocation.subtotal,
+        vat_amount: allocation.vat_amount
+      });
+      if (insertedAllocation.error) {
+        await supabase.from("invoices").update({ status: "Void" }).eq("id", invoice.id).eq("business_id", bundle.business.id);
+        await Promise.all(additionalWorkAllocations.map((item) => updateVariationInvoiceStatus(supabase, item.variation_id)));
+        return NextResponse.json({ ok: false, error: insertedAllocation.error.message.includes("exceeds the approved additional-work balance") ? "An additional-work balance changed while this invoice was being created. Refresh and retry." : "The combined final invoice could not be safely linked to all additional-work items. No active invoice was left behind." }, { status: 409 });
+      }
+      await updateVariationInvoiceStatus(supabase, allocation.variation_id);
+    }
+  }
   const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [invoice, ...bundle.invoices] }, invoice);
 
   const typeLabel =

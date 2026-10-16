@@ -24,7 +24,7 @@ export async function buildJobCompletionPdf(bundle: JobBundle) {
   const logo = await loadLogo(pdf);
   const invoice = latestInvoice(bundle.invoices);
   const worksTitle = getRoofingSystem(bundle);
-  const works = getWorksSummary(bundle);
+  const works = getCompletedWorks(bundle);
 
   if (logo) page.drawImage(logo, { x: 35, y: 712, width: 168, height: 105 });
   drawRight(page, "WE ARE ROOFING UK LTD", 558, 793, bold, 9, MUTED);
@@ -40,7 +40,7 @@ export async function buildJobCompletionPdf(bundle: JobBundle) {
   drawWrapped(page, worksTitle, 52, 554, 485, bold, 14, WHITE, 17, 2);
 
   sectionTitle(page, "WORKS COMPLETED", 34, 505, bold);
-  const workLines = splitWorks(works);
+  const workLines = works;
   let y = 474;
   workLines.slice(0, 4).forEach((work, index) => {
     const lines = wrap(work, regular, 10.5, 460);
@@ -58,6 +58,22 @@ export async function buildJobCompletionPdf(bundle: JobBundle) {
   page.drawText("RECORD", { x: 48, y: y - 36, font: bold, size: 9, color: INK });
   drawLines(page, recordLines, 152, y - 22, regular, 9.5, INK, 13);
   drawFooter(page, bundle, regular, bold);
+  for (let offset = 4; offset < workLines.length; offset += 10) {
+    const continuation = pdf.addPage([595.276, 841.89]);
+    drawRight(continuation, `JOB COMPLETION · ${bundle.job.job_ref ?? bundle.job.id}`, 558, 803, bold, 8, MUTED);
+    sectionTitle(continuation, "WORKS COMPLETED (CONTINUED)", 34, 765, bold);
+    let continuationY = 730;
+    workLines.slice(offset, offset + 10).forEach((work, index) => {
+      const lines = wrap(work, regular, 10.5, 460);
+      const height = Math.max(47, lines.length * 14 + 18);
+      continuation.drawRectangle({ x: 34, y: continuationY - height, width: 524, height, color: WHITE, borderColor: rgb(0.78, 0.8, 0.81), borderWidth: 0.6 });
+      continuation.drawRectangle({ x: 34, y: continuationY - height, width: 34, height, color: rgb(0.88, 0.89, 0.89) });
+      continuation.drawText(String(offset + index + 1), { x: 48, y: continuationY - 28, font: bold, size: 10, color: INK });
+      drawLines(continuation, lines, 80, continuationY - 22, regular, 10.5, INK, 14);
+      continuationY -= height + 12;
+    });
+    drawFooter(continuation, bundle, regular, bold);
+  }
   return Buffer.from(await pdf.save());
 }
 
@@ -69,7 +85,7 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
   const page = pdf.addPage([595.276, 841.89]);
   const logo = await loadLogo(pdf);
   const invoice = latestInvoice(bundle.invoices);
-  const years = normaliseWarrantyYears(options?.warrantyYears ?? getGuaranteeYears(bundle.quote?.guarantee_text));
+  const years = normaliseWarrantyYears(options?.warrantyYears ?? bundle.completion_details?.warranty_years ?? getGuaranteeYears(bundle.quote?.guarantee_text));
   const completed = options?.completionDate ?? new Date();
   const dateText = completed.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
@@ -97,7 +113,7 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
   drawInfoGrid(page, bundle, invoice, regular, bold, 554);
 
   sectionTitle(page, "OUR WORKMANSHIP GUARANTEE", 28, 465, serif);
-  const guarantee = `Cover: ${years} years from the confirmed completion date for the installed ${getRoofingSystem(bundle).toLowerCase()}. The guarantee covers defects arising directly from our installation workmanship to the roof covering and associated waterproofing details.`;
+  const guarantee = bundle.completion_details?.warranty_details || `Cover: ${years} years from the confirmed completion date for the installed ${getRoofingSystem(bundle).toLowerCase()}. The guarantee covers defects arising directly from our installation workmanship to the roof covering and associated waterproofing details.`;
   drawWrapped(page, guarantee, 28, 446, 258, regular, 9, INK, 13, 9);
   page.drawRectangle({ x: 28, y: 260, width: 255, height: 105, color: CREAM, borderColor: rgb(0.82, 0.77, 0.62), borderWidth: 0.6 });
   page.drawText("MANUFACTURER'S WARRANTY", { x: 42, y: 344, font: serif, size: 10, color: INK });
@@ -111,14 +127,14 @@ export async function buildWarrantyCertificatePdf(bundle: JobBundle, options?: {
   const systemItems = [
     ["Works completed", bundle.job.job_title],
     ["Installed covering", getRoofingSystem(bundle)],
-    ["Product specification", "Materials and individual products are recorded on the accepted quote and invoice."]
+    ["Product specification", getProductDetails(bundle)]
   ];
   let sy = 437;
   systemItems.forEach(([title, body], index) => {
     page.drawCircle({ x: 323, y: sy + 1, size: 10, color: DARK, borderColor: GOLD, borderWidth: 1 });
     page.drawText(String(index + 1), { x: 320, y: sy - 3, font: bold, size: 8, color: WHITE });
     page.drawText(title, { x: 342, y: sy + 3, font: bold, size: 8, color: INK });
-    drawWrapped(page, body, 342, sy - 9, 215, regular, 7.5, INK, 10, 3);
+    drawWrapped(page, body, 342, sy - 9, 215, regular, 7.5, INK, 10, 4);
     sy -= 49;
   });
   sectionTitle(page, "GUARANTEE CONDITIONS", 312, 287, serif);
@@ -162,7 +178,7 @@ export async function persistHandoverDocuments(supabase: AdminClient, bundle: Jo
     const upload = await supabase.storage.from(JOB_DOCUMENTS_BUCKET).upload(definition.path, definition.content, { contentType: "application/pdf", upsert: true });
     if (upload.error) throw new Error(upload.error.message);
     const existing = await supabase.from("job_documents").select("id").eq("job_id", bundle.job.id).eq("document_type", definition.type).limit(1).maybeSingle();
-    const payload = { job_id: bundle.job.id, quote_id: bundle.quote?.id ?? null, invoice_id: latestInvoice(bundle.invoices)?.id ?? null, document_type: definition.type, display_name: definition.name, storage_bucket: JOB_DOCUMENTS_BUCKET, storage_path: definition.path, public_url: null, source_type: "generated", mime_type: "application/pdf", file_size: definition.content.length, content_html: null };
+    const payload = { job_id: bundle.job.id, quote_id: bundle.quote?.id ?? null, invoice_id: latestInvoice(bundle.invoices)?.id ?? null, document_type: definition.type, display_name: definition.name, storage_bucket: JOB_DOCUMENTS_BUCKET, storage_path: definition.path, public_url: null, source_type: "generated", mime_type: "application/pdf", file_size: definition.content.length, content_html: null, created_at: createdAt.toISOString() };
     const result = existing.data?.id
       ? await supabase.from("job_documents").update(payload).eq("id", existing.data.id).select("*").single()
       : await supabase.from("job_documents").insert(payload).select("*").single();
@@ -190,10 +206,21 @@ function drawWarrantySeal(page: PDFPage, years: number, serif: PDFFont, bold: PD
   page.drawSvgPath(`M ${x - 38} ${y - 35} L ${x - 25} ${y - 61} L ${x} ${y - 45} L ${x + 25} ${y - 61} L ${x + 38} ${y - 35} Z`, { color: GOLD });
 }
 function getRoofingSystem(bundle: JobBundle) {
-  return bundle.survey?.recommended_works?.split(/[.\n]/)[0]?.trim() || bundle.job.roof_type || bundle.job.job_title || "Completed roofing system";
+  return bundle.completion_details?.installed_system || bundle.survey?.recommended_works?.split(/[.\n]/)[0]?.trim() || bundle.job.roof_type || bundle.job.job_title || "Completed roofing system";
+}
+function getProductDetails(bundle: JobBundle) {
+  return bundle.completion_details?.product_details || bundle.materials.map((material) => `${material.item_name}${material.supplier ? ` — ${material.supplier}` : ""}${material.quantity ? ` (${material.quantity} ${material.unit || ""})` : ""}${material.notes ? `: ${material.notes}` : ""}`).join("; ") || "Product and manufacturer references were not recorded.";
 }
 function getWorksSummary(bundle: JobBundle) {
-  return bundle.quote?.scope_of_works || bundle.survey?.recommended_works || bundle.job.internal_notes || bundle.job.job_title;
+  return bundle.completion_details?.works_summary || bundle.quote?.scope_of_works || bundle.survey?.recommended_works || bundle.job.internal_notes || bundle.job.job_title;
+}
+function getCompletedWorks(bundle: JobBundle) {
+  const accepted = bundle.variations.filter((variation) => ["Accepted", "Invoiced", "Paid"].includes(variation.status));
+  const includedIds = bundle.completion_details?.included_variation_ids ?? accepted.map((variation) => variation.id);
+  const extraWorks = accepted.filter((variation) => includedIds.includes(variation.id)).map((variation) => `${variation.variation_ref} · ${variation.title}: ${variation.description || variation.line_items.map((line) => line.description).join(", ")}`);
+  const additionalWorkSummary = extraWorks.length ? `Approved additional work completed: ${extraWorks.join("; ")}` : null;
+  const scopeLines = splitWorks(getWorksSummary(bundle));
+  return [...scopeLines.slice(0, additionalWorkSummary ? 3 : 4), ...(additionalWorkSummary ? [additionalWorkSummary] : [])];
 }
 function splitWorks(value: string) {
   const lines = value.split(/\n+/).map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim()).filter(Boolean);

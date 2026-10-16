@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { JobCard } from "@/components/jobs/job-card";
 import { RateCardNudge } from "@/components/settings/RateCardNudge";
 import { TodayJobsGrid } from "@/components/today/TodayJobsGrid";
+import { CompleteTodayTaskButton } from "@/components/today/CompleteTodayTaskButton";
 import { Button, Card, PageSection } from "@/components/ui/primitives";
 import { WeatherStrip } from "@/components/weather/WeatherStrip";
 import { getBusiness, getJobs, getPricingRules, getUnreadCustomerReplies, getUpcomingDiaryTasks } from "@/lib/data";
@@ -16,6 +17,7 @@ type PriorityItem = {
   detail: string;
   href: Route;
   kind: "task" | "message" | "job";
+  diaryTaskId?: string;
 };
 
 export default async function TodayPage() {
@@ -86,7 +88,8 @@ export default async function TodayPage() {
       title: task.title || "Task needs completing",
       detail: task.body || "Due today or overdue",
       href: (task.linked_job_id ? `/jobs/${task.linked_job_id}` : "/diary") as Route,
-      kind: "task" as const
+      kind: "task" as const,
+      diaryTaskId: task.id
     })),
     ...unreadReplies.map((reply) => ({
       id: `message-${reply.conversation_id}`,
@@ -165,16 +168,16 @@ export default async function TodayPage() {
           {priorityCount > 0 ? (
             <div className="priority-list">
               {priorities.slice(0, 6).map((item) => (
-                <Link className="priority-row" href={item.href} key={item.id}>
+                <div className="priority-row" key={item.id}>
                   <span className={`priority-row__icon priority-row__icon--${item.kind}`} aria-hidden="true">
                     {item.kind === "message" ? "✉" : item.kind === "task" ? "✓" : "!"}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="priority-row__title">{item.title}</span>
+                    <Link className="priority-row__title hover:underline" href={item.href}>{item.title}</Link>
                     <span className="priority-row__detail">{item.detail}</span>
                   </span>
-                  <span className="priority-row__action">Open</span>
-                </Link>
+                  {item.diaryTaskId ? <CompleteTodayTaskButton taskId={item.diaryTaskId} /> : <Link className="priority-row__action" href={item.href}>Open</Link>}
+                </div>
               ))}
             </div>
           ) : (

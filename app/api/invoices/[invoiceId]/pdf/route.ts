@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
-import { getJobBundle } from "@/lib/data";
+import { getInvoiceDocumentBundle } from "@/lib/data";
 import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InvoiceRecord } from "@/lib/types";
@@ -26,9 +26,9 @@ export async function POST(_request: Request, { params }: Props) {
     return NextResponse.json({ ok: false, error: error?.message ?? "Invoice not found." }, { status: 404 });
   }
 
-  const bundle = await getJobBundle(invoice.job_id);
+  const bundle = await getInvoiceDocumentBundle(invoice as InvoiceRecord);
   if (!bundle) {
-    return NextResponse.json({ ok: false, error: "Related job not found." }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Invoice customer or workspace details could not be loaded." }, { status: 404 });
   }
 
   const typedInvoice = invoice as InvoiceRecord;

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, PageSection } from "@/components/ui/primitives";
 import { SendVariationQuoteModal, type VariationEmailDraft } from "@/components/variations/SendVariationQuoteModal";
-import type { InvoiceRecord, JobVariationRecord } from "@/lib/types";
+import type { InvoiceRecord, InvoiceVariationAllocation, JobVariationRecord } from "@/lib/types";
 import { currency, formatDate } from "@/lib/utils";
 import { getVariationInvoiceProgress } from "@/lib/variations/invoicing";
 
@@ -23,6 +23,7 @@ type Props = {
   customerEmail?: string | null;
   variations: JobVariationRecord[];
   invoices: InvoiceRecord[];
+  variationAllocations: InvoiceVariationAllocation[];
 };
 
 type EmailTarget =
@@ -38,7 +39,7 @@ const newLine = (): DraftLine => ({
   vat_applicable: false
 });
 
-export function JobVariationsSection({ jobId, customerName, customerEmail, variations, invoices }: Props) {
+export function JobVariationsSection({ jobId, customerName, customerEmail, variations, invoices, variationAllocations }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
@@ -220,7 +221,7 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
   }
 
   function openInvoiceForm(variation: JobVariationRecord) {
-    const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+    const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total, variationAllocations);
     setInvoiceVariationId(variation.id);
     setInvoiceDueDate(addDays(7));
     setInvoiceAmountMode("remaining");
@@ -229,7 +230,7 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
   }
 
   async function raiseInvoice(variation: JobVariationRecord) {
-    const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+    const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total, variationAllocations);
     const amount = invoiceAmountMode === "remaining" ? progress.remaining : Number(invoiceAmount);
     setBusy(`invoice-${variation.id}`);
     setError(null);
@@ -367,7 +368,7 @@ export function JobVariationsSection({ jobId, customerName, customerEmail, varia
       <div className="mt-5 space-y-3">
         {variations.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No additional work recorded yet.</p> : null}
         {variations.map((variation) => {
-          const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total);
+          const progress = getVariationInvoiceProgress(invoices, variation.id, variation.total, variationAllocations);
           const allLinkedInvoices = invoices.filter((invoice) => invoice.variation_id === variation.id);
           const linkedInvoices = invoices.filter((invoice) => invoice.variation_id === variation.id && invoice.status !== "Void");
           const groupedVariations = variation.approval_group_id
