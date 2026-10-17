@@ -15,7 +15,7 @@ export function CompleteTodayTaskButton({ taskId }: { taskId: string }) {
       const response = await fetch("/api/diary/tasks", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: taskId })
+        body: JSON.stringify({ id: taskId, outcome: "Completed from Today" })
       });
       const result = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not complete task.");

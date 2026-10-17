@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 const ACTIONS = [
   { label: "New job", detail: "Capture a new enquiry", href: "/jobs/new" },
+  { label: "New task", detail: "Add a workflow action or follow-up", href: "/tasks" },
   { label: "New customer", detail: "Add a customer record", href: "/customers/new" },
   { label: "Create invoice", detail: "Choose the job to invoice", href: "/jobs?filter=complete" },
   { label: "Add expense", detail: "Record a cost or receipt", href: "/money?tab=expenses&action=new" }

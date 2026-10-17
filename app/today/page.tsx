@@ -138,6 +138,7 @@ export default async function TodayPage() {
           </div>
           <div className="today-quick-actions" aria-label="Quick actions">
             <QuickAction href="/jobs/new" label="Add a new job" icon="+" />
+            <QuickAction href={"/tasks" as Route} label="Create or review tasks" icon="✓" />
             <QuickAction href="/jobs?filter=complete" label="Create an invoice" icon="£" />
             <QuickAction href="/money?tab=expenses&action=new" label="Add an expense" icon="−" />
             <QuickAction href="/customers" label="Find a customer" icon="⌕" />

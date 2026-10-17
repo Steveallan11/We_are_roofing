@@ -419,9 +419,42 @@ export type DiaryTask = {
   task_due_date: string | null;
   task_assigned_to: string | null;
   task_completed: boolean;
+  task_outcome?: string | null;
+  task_completed_at?: string | null;
   linked_job_id: string | null;
   created_at: string;
 };
+
+export async function getWorkflowTasks(): Promise<DiaryTask[]> {
+  if (!canUseSupabase()) return [];
+  const supabase = createSupabaseAdminClient();
+  const business = await getBusiness();
+  const { data, error } = await supabase
+    .from("diary_entries")
+    .select("id, entry_type, title, body, task_due_date, task_assigned_to, task_completed, task_outcome, task_completed_at, linked_job_id, created_at")
+    .eq("business_id", business.id)
+    .eq("entry_type", "task")
+    .order("task_completed", { ascending: true })
+    .order("task_due_date", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (!isMissingRelationError(error.message)) console.warn("Workflow tasks could not be loaded:", error.message);
+    return [];
+  }
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    entry_type: "task" as const,
+    title: (row.title as string | null) ?? null,
+    body: (row.body as string | null) ?? null,
+    task_due_date: (row.task_due_date as string | null) ?? null,
+    task_assigned_to: (row.task_assigned_to as string | null) ?? null,
+    task_completed: Boolean(row.task_completed),
+    task_outcome: (row.task_outcome as string | null) ?? null,
+    task_completed_at: (row.task_completed_at as string | null) ?? null,
+    linked_job_id: (row.linked_job_id as string | null) ?? null,
+    created_at: String(row.created_at ?? "")
+  }));
+}
 
 /**
  * Incomplete tasks/reminders due today or earlier.
@@ -434,7 +467,7 @@ export async function getUpcomingDiaryTasks(): Promise<DiaryTask[]> {
 
   const { data, error } = await supabase
     .from("diary_entries")
-    .select("id, entry_type, title, body, task_due_date, task_assigned_to, task_completed, linked_job_id, created_at")
+    .select("id, entry_type, title, body, task_due_date, task_assigned_to, task_completed, task_outcome, task_completed_at, linked_job_id, created_at")
     .in("entry_type", ["task", "reminder"])
     .eq("task_completed", false)
     .lte("task_due_date", today)
@@ -456,6 +489,8 @@ export async function getUpcomingDiaryTasks(): Promise<DiaryTask[]> {
     task_due_date: (row.task_due_date as string | null) ?? null,
     task_assigned_to: (row.task_assigned_to as string | null) ?? null,
     task_completed: Boolean(row.task_completed),
+    task_outcome: (row.task_outcome as string | null) ?? null,
+    task_completed_at: (row.task_completed_at as string | null) ?? null,
     linked_job_id: row.linked_job_id ? String(row.linked_job_id) : null,
     created_at: String(row.created_at ?? "")
   }));

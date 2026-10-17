@@ -8,6 +8,7 @@ import type { JobStatus, QuoteRecord, QuoteStatus } from "@/lib/types";
 import { executeFinanceTool } from "@/lib/finance/service";
 import { buildQuoteUpdate, type QuoteUpdatePlan } from "@/lib/quotes/mcpQuoteEditing";
 import { executeSurveyTool } from "@/lib/surveys/service";
+import { executeTaskTool } from "@/lib/tasks/service";
 
 const VALID_JOB_STATUSES: JobStatus[] = [
   "New Lead",
@@ -829,6 +830,7 @@ async function navigateTo(input: Record<string, unknown>, routeContext?: Assista
 }
 
 export async function executeToolCall(toolName: string, input: Record<string, unknown>, routeContext?: AssistantRouteContext): Promise<ToolExecutionResult> {
+  if (["get_tasks", "create_task", "update_task"].includes(toolName)) return executeTaskTool(toolName, input, routeContext);
   if (["get_survey_schema", "get_survey_detail", "get_job_survey", "preview_survey_update", "preview_survey_from_document", "update_survey", "set_survey_modules"].includes(toolName)) {
     return executeSurveyTool(toolName, input, routeContext);
   }

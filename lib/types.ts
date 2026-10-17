@@ -1155,6 +1155,8 @@ export type DiaryEntry = {
   task_due_date: string | null;
   task_completed: boolean;
   task_assigned_to: string | null;
+  task_outcome?: string | null;
+  task_completed_at?: string | null;
 
   reminder_time: string | null;
   reminder_completed: boolean;

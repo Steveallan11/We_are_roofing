@@ -162,6 +162,62 @@ export function createRoofingMcpServer(context: McpServerContext) {
   );
 
   server.registerTool(
+    "get_tasks",
+    {
+      title: "Find workflow tasks",
+      description: "List workspace task records, including job links, due dates, completion state and outcomes. Filter by status and/or job. This includes tasks created in the OS Tasks section.",
+      inputSchema: {
+        status: z.enum(["open", "completed", "all"]).optional(),
+        job_ref: z.string().trim().max(50).optional(),
+        due_before: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        limit: z.number().int().min(1).max(100).optional()
+      },
+      annotations: READ_ONLY_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META
+    },
+    async (input) => runTool("get_tasks", input, context)
+  );
+
+  server.registerTool(
+    "create_task",
+    {
+      title: "Create workflow task",
+      description: "Create an open workspace task, optionally linked to a job by its visible job reference, with optional due date, assignee and details.",
+      inputSchema: {
+        title: z.string().trim().min(1).max(200),
+        description: z.string().trim().max(5000).optional(),
+        job_ref: z.string().trim().max(50).optional(),
+        due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        assigned_to: z.string().trim().max(120).optional()
+      },
+      annotations: WRITE_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META
+    },
+    async (input) => runTool("create_task", input, context)
+  );
+
+  server.registerTool(
+    "update_task",
+    {
+      title: "Update or complete workflow task",
+      description: "Edit a workspace task or complete/reopen it. Completing requires an outcome describing what happened. To unlink a job, pass an empty job_ref. Use get_tasks first to find the task ID.",
+      inputSchema: {
+        task_id: z.string().uuid(),
+        title: z.string().trim().min(1).max(200).optional(),
+        description: z.string().trim().max(5000).optional(),
+        job_ref: z.string().trim().max(50).optional(),
+        due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        assigned_to: z.string().trim().max(120).optional(),
+        outcome: z.string().trim().max(5000).optional(),
+        completed: z.boolean().optional()
+      },
+      annotations: WRITE_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META
+    },
+    async (input) => runTool("update_task", input, context)
+  );
+
+  server.registerTool(
     "search_customers",
     {
       title: "Search customers",

@@ -5,19 +5,20 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
-import type { Customer, InvoiceRecord, Job } from "@/lib/types";
+import type { Customer, InvoiceRecord, Job, QuoteRecord, SurveyRecord } from "@/lib/types";
 import { currency } from "@/lib/utils";
 
 type InvoiceListItem = InvoiceRecord & { customer?: Customer | null; linked_job?: Job | null };
-type Props = { customers: Customer[]; jobs: Array<Job & { customer?: Customer | null }>; invoices: InvoiceListItem[]; vatRate: number };
+type JobContext = { jobId: string; jobTitle: string; customer: Customer; survey: SurveyRecord | null; quote: QuoteRecord | null };
+type Props = { customers: Customer[]; jobs: Array<Job & { customer?: Customer | null }>; invoices: InvoiceListItem[]; vatRate: number; jobContext?: JobContext; showInvoices?: boolean };
 type LineDraft = { description: string; quantity: string; unit: string; unit_price: string; vat_applicable: boolean };
 const newLine = (): LineDraft => ({ description: "", quantity: "1", unit: "item", unit_price: "", vat_applicable: true });
 
-export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: Props) {
+export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate, jobContext, showInvoices = true }: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState("");
-  const [jobId, setJobId] = useState("");
+  const [open, setOpen] = useState(Boolean(jobContext));
+  const [customerId, setCustomerId] = useState(jobContext?.customer.id ?? "");
+  const [jobId, setJobId] = useState(jobContext?.jobId ?? "");
   const [issueDate, setIssueDate] = useState(today());
   const [dueDate, setDueDate] = useState(today());
   const [paymentTerms, setPaymentTerms] = useState("Payment due on receipt.");
@@ -36,6 +37,32 @@ export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: 
 
   function updateLine(index: number, change: Partial<LineDraft>) {
     setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...change } : line));
+  }
+
+  function buildFromJobRecords() {
+    if (!jobContext) return;
+    const quoteLines = (jobContext.quote?.cost_breakdown ?? []).filter((line) => !line.billed_separately);
+    const draftLines = quoteLines.map((line) => {
+      const quantity = Number(line.quantity ?? 1) || 1;
+      const unitPrice = Number(line.unit_rate ?? (Number(line.cost ?? 0) / quantity));
+      return {
+        description: String(line.display_name || line.item || "Roofing work"),
+        quantity: String(quantity),
+        unit: String(line.unit || "item"),
+        unit_price: String(round2(unitPrice)),
+        vat_applicable: line.vat_applicable !== false
+      };
+    });
+    const fallbackDescription = jobContext.quote?.scope_of_works || jobContext.survey?.recommended_works || "Work completed";
+    setLines(draftLines.length ? draftLines : [{ ...newLine(), description: fallbackDescription, unit_price: String(Number(jobContext.quote?.subtotal ?? 0) || "") }]);
+    const surveyNotes = [
+      jobContext.quote?.scope_of_works ? `Quoted scope (${jobContext.quote.quote_ref}):\n${jobContext.quote.scope_of_works}` : "",
+      jobContext.survey?.recommended_works ? `Survey recommended works:\n${jobContext.survey.recommended_works}` : "",
+      jobContext.survey?.problem_observed ? `Survey findings:\n${jobContext.survey.problem_observed}` : "",
+      jobContext.survey?.measurements ? `Survey measurements:\n${jobContext.survey.measurements}` : ""
+    ].filter(Boolean).join("\n\n");
+    setNotes(surveyNotes);
+    setOpen(true);
   }
 
   async function createDraft(event: React.FormEvent<HTMLFormElement>) {
@@ -64,7 +91,8 @@ export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: 
     if (!response.ok || !result?.ok) { setError(result?.error || "The invoice draft could not be saved."); return; }
     setNotice([result.message, result.warning].filter(Boolean).join(" "));
     setOpen(false);
-    setCustomerId(""); setJobId(""); setIssueDate(today()); setDueDate(today()); setNotes(""); setLines([newLine()]);
+    if (!jobContext) { setCustomerId(""); setJobId(""); }
+    setIssueDate(today()); setDueDate(today()); setNotes(""); setLines([newLine()]);
     router.refresh();
   }
 
@@ -72,10 +100,13 @@ export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: 
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div>
-          <h2 className="font-semibold text-[var(--text)]">Bespoke invoices</h2>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Create a simple itemised invoice for any person or business. Linking a job is optional.</p>
+          <h2 className="font-semibold text-[var(--text)]">{jobContext ? "Create a bespoke job invoice" : "Bespoke invoices"}</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">{jobContext ? "Start with this job’s survey and quote, then edit the invoice items before saving." : "Create a simple itemised invoice for any person or business. Linking a job is optional."}</p>
         </div>
-        <button className="button-primary" onClick={() => { setOpen((value) => !value); setError(null); }} type="button">{open ? "Close" : "＋ Create bespoke invoice"}</button>
+        <div className="flex flex-wrap gap-2">
+          {jobContext ? <button className="button-secondary" onClick={buildFromJobRecords} type="button">Use survey + quote</button> : null}
+          <button className="button-primary" onClick={() => { setOpen((value) => !value); setError(null); }} type="button">{open ? "Close" : "＋ Create bespoke invoice"}</button>
+        </div>
       </div>
 
       {notice ? <p className="rounded-lg border border-green-700/30 bg-green-900/10 p-3 text-sm text-green-700">{notice}</p> : null}
@@ -83,20 +114,21 @@ export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: 
 
       {open ? (
         <form className="space-y-5 rounded-xl border border-[var(--gold)]/40 bg-[var(--surface)] p-4 md:p-6" onSubmit={createDraft}>
+          {jobContext ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-[var(--text-muted)]">This creates a separate job-linked invoice. Check earlier invoices and payments so you do not bill the same work twice.</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block"><span className="label">Invoice to *</span>
+            {jobContext ? <div className="rounded-lg border border-[var(--border)] p-3 text-sm"><span className="label">Invoice to</span><p className="mt-1 font-semibold text-[var(--text)]">{jobContext.customer.customer_type === "business" ? jobContext.customer.business_name || jobContext.customer.full_name : jobContext.customer.full_name}</p></div> : <label className="block"><span className="label">Invoice to *</span>
               <select className="field mt-1 min-h-11" onChange={(event) => { setCustomerId(event.target.value); setJobId(""); }} required value={customerId}>
                 <option value="">Choose a person or business</option>
                 {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.customer_type === "business" ? customer.business_name || customer.full_name : customer.full_name}{customer.customer_type === "business" ? " · Business" : " · Person"}</option>)}
               </select>
               {customers.length === 0 ? <span className="mt-2 block text-xs text-[var(--text-muted)]">Add a person or business in <Link className="underline" href="/customers/new">Customers</Link> first.</span> : null}
-            </label>
-            <label className="block"><span className="label">Link to job (optional)</span>
+            </label>}
+            {!jobContext ? <label className="block"><span className="label">Link to job (optional)</span>
               <select className="field mt-1 min-h-11" disabled={!customerId || compatibleJobs.length === 0} onChange={(event) => setJobId(event.target.value)} value={jobId}>
                 <option value="">No job — standalone invoice</option>
                 {compatibleJobs.map((job) => <option key={job.id} value={job.id}>{job.job_ref || job.job_title} · {job.job_title}</option>)}
               </select>
-            </label>
+            </label> : <div className="rounded-lg border border-[var(--border)] p-3 text-sm"><span className="label">Job</span><p className="mt-1 font-semibold text-[var(--text)]">{jobContext.jobTitle}</p></div>}
             <label className="block"><span className="label">Invoice date *</span><input className="field mt-1 min-h-11" onChange={(event) => setIssueDate(event.target.value)} required type="date" value={issueDate} /></label>
             <label className="block"><span className="label">Payment due *</span><input className="field mt-1 min-h-11" onChange={(event) => setDueDate(event.target.value)} required type="date" value={dueDate} /></label>
           </div>
@@ -127,7 +159,7 @@ export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: 
         </form>
       ) : null}
 
-      <div className="grid gap-3">
+      {showInvoices ? <div className="grid gap-3">
         {invoices.map((invoice) => {
           const customer = invoice.customer;
           const recipientName = customer?.business_name || customer?.full_name || "Customer";
@@ -140,7 +172,7 @@ export function BespokeInvoiceWorkspace({ customers, jobs, invoices, vatRate }: 
           );
         })}
         {!invoices.length ? <div className="rounded-lg border border-[var(--border)] p-8 text-center text-sm text-[var(--text-muted)]">No invoices yet. Create a bespoke invoice above, or raise one from a job.</div> : null}
-      </div>
+      </div> : null}
       {sending ? <SendInvoiceModal invoiceId={sending.id} invoiceRef={sending.invoice_ref} jobTitle={sending.linked_job?.job_title || "Bespoke invoice"} total={sending.total} dueDate={sending.due_date} customerName={sending.customer?.contact_person_name || sending.customer?.full_name || sending.customer?.business_name || "Customer"} customerEmail={sending.customer?.customer_type === "business" ? sending.customer.contact_person_email || sending.customer.email : sending.customer?.email} onClose={() => setSending(null)} onSent={() => { setSending(null); router.refresh(); }} /> : null}
     </section>
   );

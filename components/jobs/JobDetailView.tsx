@@ -65,6 +65,7 @@ import type {
 
 export type JobDetailViewProps = {
   job: Job;
+  vatRate: number;
   customer: Customer;
   survey?: SurveyRecord | null;
   quote?: QuoteRecord | null;
@@ -101,7 +102,7 @@ const LEGACY_TABS: Record<string, TabId> = {
 };
 
 export function JobDetailView(props: JobDetailViewProps) {
-  const { job, customer, survey, quote, documents, photos, materials, labourPlan, invoices, variations, expenses, emailLogs, activity, paymentSchedule } = props;
+  const { job, vatRate, customer, survey, quote, documents, photos, materials, labourPlan, invoices, variations, expenses, emailLogs, activity, paymentSchedule } = props;
 
   const router = useRouter();
   const pathname = usePathname();
@@ -185,6 +186,9 @@ export function JobDetailView(props: JobDetailViewProps) {
               job={job}
               jobId={job.id}
               jobTitle={job.job_title}
+              customer={customer}
+              vatRate={vatRate}
+              survey={survey ?? null}
               quote={quote ?? null}
               invoices={invoices}
               variationAllocations={props.variationAllocations ?? []}

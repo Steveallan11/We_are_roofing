@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { SendInvoiceModal } from "@/components/invoices/SendInvoiceModal";
 import { JobVariationsSection } from "@/components/jobs/JobVariationsSection";
+import { BespokeInvoiceWorkspace } from "@/components/money/BespokeInvoiceWorkspace";
 import { Badge, Button, PageSection, Stat } from "@/components/ui/primitives";
 import { getInvoicePdfHref } from "@/lib/documents";
 import { analyseReceiptFile, type ReceiptAnalysis } from "@/lib/receipts/analyseReceiptFile";
@@ -13,12 +14,15 @@ import { getFirmQuoteLines } from "@/lib/quotes/provisional";
 import { getQuoteLineItemCategory, getQuoteValueLines, isScaffoldLine } from "@/lib/quotes/value";
 import { currency, formatDate } from "@/lib/utils";
 import { getVariationInvoiceProgress } from "@/lib/variations/invoicing";
-import type { InvoiceRecord, InvoiceType, InvoiceVatTreatment, InvoiceVariationAllocation, Job, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord } from "@/lib/types";
+import type { Customer, InvoiceRecord, InvoiceType, InvoiceVatTreatment, InvoiceVariationAllocation, Job, JobDocumentRecord, JobExpense, JobExpenseCategory, JobVariationRecord, MaterialRecord, QuoteRecord, SurveyRecord } from "@/lib/types";
 
 type Props = {
   job: Job;
   jobId: string;
   jobTitle: string;
+  customer: Customer;
+  vatRate: number;
+  survey: SurveyRecord | null;
   quote: QuoteRecord | null;
   invoices: InvoiceRecord[];
   variationAllocations: InvoiceVariationAllocation[];
@@ -99,7 +103,7 @@ function formatReceiptFileSize(size: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variationAllocations, variations, expenses: initialExpenses, materials, documents, customerName, customerEmail }: Props) {
+export function JobMoneyTab({ job, jobId, jobTitle, customer, vatRate, survey, quote, invoices, variationAllocations, variations, expenses: initialExpenses, materials, documents, customerName, customerEmail }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [expenses, setExpenses] = useState<JobExpense[]>(initialExpenses);
@@ -555,6 +559,15 @@ export function JobMoneyTab({ job, jobId, jobTitle, quote, invoices, variationAl
         variationAllocations={variationAllocations}
         jobId={jobId}
         variations={variations}
+      />
+
+      <BespokeInvoiceWorkspace
+        customers={[customer]}
+        jobs={[{ ...job, customer }]}
+        invoices={[]}
+        vatRate={vatRate}
+        showInvoices={false}
+        jobContext={{ jobId, jobTitle, customer, survey, quote }}
       />
 
       <PageSection

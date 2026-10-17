@@ -7,7 +7,7 @@ export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
-  const body = (await request.json().catch(() => ({}))) as { id?: string };
+  const body = (await request.json().catch(() => ({}))) as { id?: string; outcome?: string };
   if (!body.id) return NextResponse.json({ ok: false, error: "Task id is required." }, { status: 400 });
   if (!canPersistToSupabase()) return NextResponse.json({ ok: true });
 
@@ -19,7 +19,7 @@ export async function PATCH(request: Request) {
 
   const { data, error } = await supabase
     .from("diary_entries")
-    .update({ task_completed: true, updated_at: new Date().toISOString() })
+    .update({ task_completed: true, task_outcome: String(body.outcome ?? "Completed from Today").trim().slice(0, 5000), task_completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", body.id)
     .eq("business_id", business.id)
     .in("entry_type", ["task", "reminder"])

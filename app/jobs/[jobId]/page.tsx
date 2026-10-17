@@ -41,6 +41,7 @@ export default async function JobDetailPage({ params }: Props) {
     >
       <JobDetailView
         job={bundle.job}
+        vatRate={bundle.business.vat_rate}
         customer={bundle.customer}
         survey={bundle.survey ?? null}
         quote={bundle.quote ?? null}
