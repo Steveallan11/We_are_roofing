@@ -125,6 +125,8 @@ export function JobMoneyTab({ job, jobId, jobTitle, customer, vatRate, survey, q
   const [editCustomerVatNumber, setEditCustomerVatNumber] = useState("");
   const [editReverseChargeConfirmed, setEditReverseChargeConfirmed] = useState(false);
   const [editCisRate, setEditCisRate] = useState(0);
+  const [editLineTax, setEditLineTax] = useState<Array<{ category: string; vat_applicable: boolean }>>([]);
+  const [editInvoiceNotes, setEditInvoiceNotes] = useState("");
   const [vatTreatment, setVatTreatment] = useState<InvoiceVatTreatment>(() => invoices.find((invoice) => invoice.status !== "Void")?.vat_treatment ?? "standard");
   const [customerVatNumber, setCustomerVatNumber] = useState(() => invoices.find((invoice) => invoice.status !== "Void")?.customer_vat_number ?? "");
   const [reverseChargeConfirmed, setReverseChargeConfirmed] = useState(() => Boolean(invoices.find((invoice) => invoice.status !== "Void")?.reverse_charge_confirmed_at));
@@ -447,6 +449,11 @@ export function JobMoneyTab({ job, jobId, jobTitle, customer, vatRate, survey, q
     setEditCustomerVatNumber(invoice.customer_vat_number ?? "");
     setEditReverseChargeConfirmed(Boolean(invoice.reverse_charge_confirmed_at));
     setEditCisRate(Number(invoice.cis_deduction_rate ?? 0));
+    setEditLineTax(invoice.line_items.map((line) => ({
+      category: line.category ?? "",
+      vat_applicable: line.vat_applicable ?? Number((line as typeof line & { vat_rate?: number }).vat_rate ?? 0) > 0
+    })));
+    setEditInvoiceNotes(invoice.notes ?? "");
     notify(null, null);
   }
 
@@ -464,7 +471,9 @@ export function JobMoneyTab({ job, jobId, jobTitle, customer, vatRate, survey, q
         vat_treatment: editVatTreatment,
         customer_vat_number: editCustomerVatNumber,
         reverse_charge_confirmed: editReverseChargeConfirmed,
-        cis_deduction_rate: editCisRate
+        cis_deduction_rate: editCisRate,
+        line_tax: editLineTax,
+        notes: editInvoiceNotes
       })
     });
     const result = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string; warning?: string } | null;
@@ -932,6 +941,33 @@ export function JobMoneyTab({ job, jobId, jobTitle, customer, vatRate, survey, q
                       </label>
                     </div>
                   ) : null}
+                  <div className="mt-4 space-y-3">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Invoice item tax details</p>
+                    {editingInvoice.line_items.map((line, index) => (
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3" key={`${line.description}-${index}`}>
+                        <p className="mb-2 text-sm">{line.description}</p>
+                        <div className="flex flex-wrap items-end gap-4">
+                          <label>
+                            <span className="label">CIS category</span>
+                            <select className="field" value={editLineTax[index]?.category ?? ""} onChange={(event) => setEditLineTax((previous) => previous.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}>
+                              <option value="">Unclassified</option>
+                              <option value="labour">Labour</option>
+                              <option value="materials">Materials</option>
+                              <option value="roof_works">Other works</option>
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-2 pb-2 text-sm">
+                            <input type="checkbox" checked={editLineTax[index]?.vat_applicable ?? false} onChange={(event) => setEditLineTax((previous) => previous.map((item, itemIndex) => itemIndex === index ? { ...item, vat_applicable: event.target.checked } : item))} />
+                            VAT applies to this item
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <label className="mt-4 block">
+                    <span className="label">Invoice notes</span>
+                    <textarea className="field min-h-24" value={editInvoiceNotes} onChange={(event) => setEditInvoiceNotes(event.target.value)} />
+                  </label>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button variant="primary" size="sm" onClick={saveInvoiceTaxTreatment} disabled={busy !== null}>
                       {busy === `edit-${invoice.id}` ? "Saving..." : "Save changes & regenerate PDF"}

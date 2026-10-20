@@ -535,7 +535,7 @@ export function createRoofingMcpServer(context: McpServerContext) {
     "get_invoices",
     {
       title: "Find customer invoices",
-      description: "Find actual customer invoices by inclusive invoice-date range, status, customer, job reference, invoice number or payment state. Quotes are never treated as invoices or turnover.",
+      description: "Find actual customer invoices by inclusive invoice-date range, status, customer, job reference, invoice number or payment state. Returns VAT treatment, reverse-charge VAT, CIS deduction, net payment due and outstanding balance. Quotes are never treated as invoices or turnover.",
       inputSchema: { start_date: dateField("Start date").optional(), end_date: dateField("End date").optional(), status: z.string().optional(), customer_name: z.string().optional(), job_ref: z.string().optional(), invoice_number: z.string().optional(), unpaid_only: z.boolean().optional(), overdue_only: z.boolean().optional(), limit: financeLimit },
       annotations: READ_ONLY_ANNOTATIONS,
       _meta: OAUTH_TOOL_META
@@ -547,7 +547,7 @@ export function createRoofingMcpServer(context: McpServerContext) {
     "get_invoice_detail",
     {
       title: "Get invoice detail",
-      description: "Get one customer invoice with its customer, job, stored line items and VAT, payments, credit notes, balance, notes and dates.",
+      description: "Get one customer invoice with its customer, job, stored line items, VAT treatment (including domestic reverse charge), CIS deduction, net payment due, payments, credit notes, balance, notes and dates.",
       inputSchema: { invoice_id: z.string().uuid().optional(), invoice_number: z.string().trim().min(1).optional() },
       annotations: READ_ONLY_ANNOTATIONS,
       _meta: OAUTH_TOOL_META
@@ -843,8 +843,8 @@ export function createRoofingMcpServer(context: McpServerContext) {
     "create_invoice",
     {
       title: "Create customer invoice",
-      description: "Create a draft or issued customer invoice linked to a workspace-owned job. Can link the invoice to approved additional work using its visible reference, keeping its remaining balance and status accurate. Calculates net, line VAT and gross values from reviewed line items. Requires explicit confirmation.",
-      inputSchema: { job_ref: z.string().trim().min(1), additional_work_ref: z.string().trim().min(1).optional().describe("Visible approved additional-work reference, for example WR-J-1005-V01."), invoice_number: z.string().trim().min(1).optional(), invoice_date: dateField("Invoice date"), tax_point_date: dateField("Tax point date").optional(), due_date: dateField("Due date"), status: z.enum(["Draft", "Sent"]).optional(), lines: z.array(invoiceLine).min(1).max(100), payment_terms: z.string().trim().max(1000).optional(), notes: z.string().trim().max(5000).optional(), confirmed },
+      description: "Create a draft or issued customer invoice linked to a workspace-owned job. Supports standard VAT or domestic reverse charge (VAT shown but excluded from customer payment), and CIS deductions of 0%, 20%, or 30% on labour only. CIS invoices must identify every line as labour or materials. Requires explicit confirmation.",
+      inputSchema: { job_ref: z.string().trim().min(1), additional_work_ref: z.string().trim().min(1).optional().describe("Visible approved additional-work reference, for example WR-J-1005-V01."), invoice_number: z.string().trim().min(1).optional(), invoice_date: dateField("Invoice date"), tax_point_date: dateField("Tax point date").optional(), due_date: dateField("Due date"), status: z.enum(["Draft", "Sent"]).optional(), vat_treatment: z.enum(["standard", "domestic_reverse_charge"]).default("standard"), customer_vat_number: z.string().trim().max(100).optional().describe("Required for domestic reverse charge."), reverse_charge_confirmed: z.literal(true).optional().describe("Required when vat_treatment is domestic_reverse_charge after confirming the statutory conditions."), cis_deduction_rate: z.union([z.literal(0), z.literal(20), z.literal(30)]).default(0), lines: z.array(invoiceLine).min(1).max(100).describe("For CIS, categorise every line as labour or materials."), payment_terms: z.string().trim().max(1000).optional(), notes: z.string().trim().max(5000).optional(), confirmed },
       annotations: FINANCIAL_WRITE_ANNOTATIONS,
       _meta: OAUTH_TOOL_META
     },

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createActivity } from "@/lib/activity/createActivity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { calculateCisDeduction, persistInvoiceArtifacts, round2 } from "@/lib/invoice-engine";
+import { calculateCisDeduction, normaliseInvoiceTaxLine, persistInvoiceArtifacts, round2 } from "@/lib/invoice-engine";
 import { getInvoiceDocumentBundle } from "@/lib/data";
 import { getQuoteLineItemCategory } from "@/lib/quotes/value";
 import type { ActivityType } from "@/lib/activity/types";
@@ -27,6 +27,8 @@ export async function PATCH(request: Request, { params }: Props) {
     customer_vat_number?: string;
     reverse_charge_confirmed?: boolean;
     cis_deduction_rate?: number;
+    line_tax?: Array<{ category: string; vat_applicable: boolean }>;
+    notes?: string;
   };
 
   const isTaxTreatmentUpdate = body.vat_treatment != null || body.cis_deduction_rate != null;
@@ -59,32 +61,47 @@ export async function PATCH(request: Request, { params }: Props) {
     if (![0, 20, 30].includes(cisRate)) {
       return NextResponse.json({ ok: false, error: "CIS deduction rate must be 0%, 20% or 30%." }, { status: 400 });
     }
-    const customerVatNumber = body.customer_vat_number?.trim().toUpperCase() || null;
+    const customerVatNumber = body.customer_vat_number?.replace(/\s+/g, "").toUpperCase() || null;
     if (vatTreatment === "domestic_reverse_charge" && (!body.reverse_charge_confirmed || !customerVatNumber)) {
       return NextResponse.json({ ok: false, error: "Enter the customer's VAT number and confirm the reverse-charge conditions." }, { status: 400 });
+    }
+    if (vatTreatment === "domestic_reverse_charge" && !/^(GB)?\d{9}$/.test(customerVatNumber!)) {
+      return NextResponse.json({ ok: false, error: "Enter the customer's nine-digit UK VAT registration number, optionally prefixed GB." }, { status: 400 });
     }
 
     const bundle = await getInvoiceDocumentBundle(invoice as InvoiceRecord);
     if (!bundle) return NextResponse.json({ ok: false, error: "Invoice customer or workspace details could not be loaded." }, { status: 404 });
-    const sourceLines = Array.isArray(invoice.line_items) ? (invoice.line_items as InvoiceLineItem[]) : [];
-    const lineItems = sourceLines.map((line) => {
-      if (line.category || !bundle.quote) return line;
-      const description = line.description.toLowerCase();
-      const quoteLine = bundle.quote.cost_breakdown.find((candidate) => description.includes(candidate.item.toLowerCase()));
-      return quoteLine ? { ...line, category: getQuoteLineItemCategory(quoteLine) } : line;
+    const businessVatRate = Number(bundle.business.vat_rate ?? 0);
+    if (![0, 5, 20].includes(businessVatRate)) {
+      return NextResponse.json({ ok: false, error: "The business VAT rate is unsupported for invoice item tax details." }, { status: 400 });
+    }
+    const sourceLines = Array.isArray(invoice.line_items) ? (invoice.line_items as Array<InvoiceLineItem & { net_amount?: number; vat_rate?: number }>) : [];
+    if (body.line_tax && (body.line_tax.length !== sourceLines.length || body.line_tax.some((item) => typeof item.vat_applicable !== "boolean" || !["", "labour", "materials", "roof_works"].includes(item.category)))) {
+      return NextResponse.json({ ok: false, error: "Invoice item tax details must match the existing items." }, { status: 400 });
+    }
+    const lineItems = sourceLines.map((line, index): InvoiceLineItem => {
+      const quoteLine = !line.category && bundle.quote
+        ? bundle.quote.cost_breakdown.find((candidate) => line.description.toLowerCase().includes(candidate.item.toLowerCase()))
+        : null;
+      const normalised = normaliseInvoiceTaxLine(line, body.line_tax?.[index]);
+      return { ...normalised, category: normalised.category || (quoteLine ? getQuoteLineItemCategory(quoteLine) : undefined) };
     });
+    if (!lineItems.length || lineItems.some((line) => !Number.isFinite(line.total) || line.total < 0)) {
+      return NextResponse.json({ ok: false, error: "Invoice items must have valid net amounts." }, { status: 400 });
+    }
     const cis = calculateCisDeduction(lineItems, cisRate);
     if (cisRate > 0 && cis.labourAmount <= 0) {
       return NextResponse.json({ ok: false, error: "No labour amount was found on this invoice. Split the quote into materials and labour first." }, { status: 400 });
     }
     const subtotal = round2(lineItems.reduce((sum, line) => sum + Number(line.total ?? 0), 0));
-    const calculatedVat = round2(lineItems.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.total ?? 0) * (Number(bundle.business.vat_rate ?? 0) / 100), 0));
+    const calculatedVat = round2(lineItems.filter((line) => line.vat_applicable).reduce((sum, line) => sum + Number(line.total ?? 0) * (businessVatRate / 100), 0));
     const vatAmount = vatTreatment === "standard" ? calculatedVat : 0;
     const reverseChargeVatAmount = vatTreatment === "domestic_reverse_charge" ? calculatedVat : 0;
     const total = round2(subtotal + vatAmount);
     const balanceDue = round2(Math.max(0, total - cis.deductionAmount));
     const taxUpdate = await supabase.from("invoices").update({
       line_items: lineItems,
+      notes: body.notes === undefined ? invoice.notes : body.notes.trim() || null,
       subtotal,
       vat_amount: vatAmount,
       vat_treatment: vatTreatment,
@@ -100,6 +117,22 @@ export async function PATCH(request: Request, { params }: Props) {
     }).eq("id", invoiceId).select("*").single();
     if (taxUpdate.error || !taxUpdate.data) {
       return NextResponse.json({ ok: false, error: taxUpdate.error?.message ?? "Unable to update invoice tax treatment." }, { status: 500 });
+    }
+    if (body.line_tax) {
+      const rate = businessVatRate;
+      for (const [index, line] of lineItems.entries()) {
+        const lineVat = line.vat_applicable && vatTreatment === "standard" ? round2(line.total * rate / 100) : 0;
+        const lineUpdate = await supabase.from("invoice_lines").update({
+          category: line.category ?? null,
+          vat_code: line.vat_applicable ? String(rate) : "0",
+          vat_rate: line.vat_applicable ? rate : 0,
+          vat_amount: lineVat,
+          gross_amount: round2(line.total + lineVat)
+        }).eq("invoice_id", invoiceId).eq("sort_order", index);
+        if (lineUpdate.error) {
+          return NextResponse.json({ ok: false, error: `Invoice tax treatment was saved but item detail needs attention: ${lineUpdate.error.message}` }, { status: 500 });
+        }
+      }
     }
     const updatedInvoice = taxUpdate.data as InvoiceRecord;
     const artifacts = await persistInvoiceArtifacts(supabase, { ...bundle, invoices: [updatedInvoice, ...bundle.invoices.filter((item) => item.id !== invoiceId)] }, updatedInvoice);

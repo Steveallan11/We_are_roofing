@@ -13,6 +13,7 @@ export type FinancialInvoice = {
   total?: unknown;
   amount_paid?: unknown;
   balance_due?: unknown;
+  cis_deduction_amount?: unknown;
   customer_name?: string | null;
   job_ref?: string | null;
   job_title?: string | null;
@@ -24,7 +25,7 @@ export type FinancialCost = { net_amount?: unknown; amount?: unknown; vat_amount
 
 export function invoiceOutstandingPence(invoice: FinancialInvoice) {
   if (invoice.balance_due !== null && invoice.balance_due !== undefined) return Math.max(0, toPence(invoice.balance_due));
-  return Math.max(0, toPence(invoice.total) - toPence(invoice.amount_paid));
+  return Math.max(0, toPence(invoice.total) - toPence(invoice.cis_deduction_amount) - toPence(invoice.amount_paid));
 }
 
 export function ageingBucket(dueDate: string | null | undefined, asOfDate: string) {

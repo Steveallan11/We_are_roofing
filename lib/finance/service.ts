@@ -12,6 +12,10 @@ import {
 import { decimalMultiply, formatGbp, fromPence, sumPence, toPence } from "@/lib/finance/money";
 import { updateVariationInvoiceStatus } from "@/lib/variations/invoicing";
 import { calculateSubcontractorAmounts } from "@/lib/finance/subcontractors";
+import { calculateCisDeduction } from "@/lib/invoice-engine";
+import { persistInvoiceArtifacts } from "@/lib/invoice-engine";
+import { getInvoiceDocumentBundle } from "@/lib/data";
+import type { InvoiceRecord } from "@/lib/types";
 import { createHash, randomUUID } from "node:crypto";
 import { bankFingerprintSource, classifyBankTransaction, type BankTransactionType } from "@/lib/finance/bankStatements";
 
@@ -87,6 +91,8 @@ function enrichInvoice(row: Row, maps: Awaited<ReturnType<typeof getLookupMaps>>
 }
 
 function publicInvoice(row: FinancialInvoice & Row) {
+  const cisDeduction = fromPence(toPence(row.cis_deduction_amount));
+  const payable = Math.max(0, fromPence(toPence(row.total) - toPence(row.cis_deduction_amount)));
   return {
     invoice_id: row.id,
     invoice_number: row.invoice_ref,
@@ -99,6 +105,13 @@ function publicInvoice(row: FinancialInvoice & Row) {
     subtotal: fromPence(toPence(row.subtotal)),
     vat: fromPence(toPence(row.vat_amount)),
     total: fromPence(toPence(row.total)),
+    vat_treatment: row.vat_treatment === "domestic_reverse_charge" ? "domestic_reverse_charge" : "standard",
+    reverse_charge_vat: fromPence(toPence(row.reverse_charge_vat_amount)),
+    cis_deduction_rate: Number(row.cis_deduction_rate ?? 0),
+    cis_labour_amount: fromPence(toPence(row.cis_labour_amount)),
+    cis_deduction: cisDeduction,
+    net_payment_due: payable,
+    balance_due: fromPence(invoiceOutstandingPence(row)),
     amount_paid: fromPence(toPence(row.amount_paid)),
     amount_outstanding: fromPence(invoiceOutstandingPence(row)),
     status: row.status,
@@ -712,9 +725,37 @@ async function createInvoice(input: Input, context?: AssistantRouteContext): Pro
   if (dueDate < invoiceDate) throw new Error("due_date cannot be before invoice_date.");
   const job = await resolveScopedJob(businessId, input.job_ref);
   const lines = financeLines(input.lines, "unit_price");
+  const invoiceLines = lines as Array<{ category?: string | null; net_amount?: number }>;
+  const documentLines = lines.map((line) => ({
+    description: line.description,
+    quantity: line.quantity,
+    unit: line.unit ?? "item",
+    unit_price: "unit_price" in line ? line.unit_price : 0,
+    total: line.net_amount,
+    vat_applicable: line.vat_rate > 0,
+    category: "category" in line ? line.category ?? undefined : undefined
+  }));
   const subtotal = sumPence(lines.map((line) => line.net_amount));
-  const vat = sumPence(lines.map((line) => line.vat_amount));
+  const calculatedVat = sumPence(lines.map((line) => line.vat_amount));
+  const vatTreatment = input.vat_treatment === "domestic_reverse_charge" ? "domestic_reverse_charge" : "standard";
+  const customerVatNumber = text(input.customer_vat_number).replace(/\s+/g, "").toUpperCase() || null;
+  if (vatTreatment === "domestic_reverse_charge" && (input.reverse_charge_confirmed !== true || !customerVatNumber)) {
+    throw new Error("Domestic reverse charge requires reverse_charge_confirmed: true and customer_vat_number.");
+  }
+  if (vatTreatment === "domestic_reverse_charge" && !/^(GB)?\d{9}$/.test(customerVatNumber!)) {
+    throw new Error("customer_vat_number must be a nine-digit UK VAT registration number, optionally prefixed GB.");
+  }
+  const cisRate = Number(input.cis_deduction_rate ?? 0);
+  if (![0, 20, 30].includes(cisRate)) throw new Error("cis_deduction_rate must be 0%, 20% or 30%.");
+  if (cisRate > 0 && invoiceLines.some((line) => line.category !== "labour" && line.category !== "materials")) {
+    throw new Error("CIS invoices require every line to be categorised as labour or materials.");
+  }
+  const cis = calculateCisDeduction(invoiceLines, cisRate);
+  if (cisRate > 0 && cis.labourAmount <= 0) throw new Error("No labour amount was found. Split the invoice into labour and materials before applying CIS.");
+  const vat = vatTreatment === "standard" ? calculatedVat : 0;
+  const reverseChargeVat = vatTreatment === "domestic_reverse_charge" ? calculatedVat : 0;
   const total = subtotal + vat;
+  const netPaymentDue = Math.max(0, total - toPence(cis.deductionAmount));
   const status = text(input.status || "Draft");
   if (!["Draft", "Sent"].includes(status)) throw new Error("New invoices may only be Draft or Sent.");
   const supabase = createSupabaseAdminClient();
@@ -752,19 +793,29 @@ async function createInvoice(input: Input, context?: AssistantRouteContext): Pro
     variation_id: variation?.id ?? null,
     invoice_ref: input.invoice_number ? text(input.invoice_number) : null,
     invoice_date: invoiceDate, issue_date: invoiceDate, tax_point_date: taxPoint, due_date: dueDate,
-    status, currency: "GBP", line_items: lines, subtotal: fromPence(subtotal), vat_amount: fromPence(vat), total: fromPence(total),
-    amount_paid: 0, balance_due: fromPence(total), notes: text(input.notes) || null, payment_terms: text(input.payment_terms) || null,
+    status, currency: "GBP", line_items: documentLines, subtotal: fromPence(subtotal), vat_amount: fromPence(vat), total: fromPence(total),
+    vat_treatment: vatTreatment, reverse_charge_vat_amount: fromPence(reverseChargeVat), customer_vat_number: vatTreatment === "domestic_reverse_charge" ? customerVatNumber : null,
+    reverse_charge_confirmed_at: vatTreatment === "domestic_reverse_charge" ? new Date().toISOString() : null,
+    cis_deduction_rate: cis.rate, cis_labour_amount: cis.labourAmount, cis_deduction_amount: cis.deductionAmount,
+    amount_paid: 0, balance_due: fromPence(netPaymentDue), notes: text(input.notes) || null, payment_terms: text(input.payment_terms) || null,
     sent_at: status === "Sent" ? new Date().toISOString() : null
   }).select("*").single();
   if (inserted.error || !inserted.data) throw new Error(inserted.error?.message ?? "Unable to create the invoice.");
-  const lineInsert = await supabase.from("invoice_lines").insert(lines.map((line) => ({ ...line, invoice_id: inserted.data.id })));
+  const lineInsert = await supabase.from("invoice_lines").insert(lines.map((line) => ({
+    ...line,
+    vat_amount: vatTreatment === "domestic_reverse_charge" ? 0 : line.vat_amount,
+    gross_amount: vatTreatment === "domestic_reverse_charge" ? line.net_amount : line.gross_amount,
+    invoice_id: inserted.data.id
+  })));
   if (lineInsert.error) {
     await supabase.from("invoices").delete().eq("id", inserted.data.id).eq("business_id", businessId);
     throw new Error(`Invoice lines could not be saved: ${lineInsert.error.message}`);
   }
-  await audit(businessId, actorId, "create_invoice", "invoice", inserted.data.id, inserted.data.invoice_ref, { total: fromPence(total), job_ref: job!.job_ref });
+  const bundle = await getInvoiceDocumentBundle(inserted.data as InvoiceRecord);
+  const artifacts = bundle ? await persistInvoiceArtifacts(supabase, bundle, inserted.data as InvoiceRecord) : null;
+  await audit(businessId, actorId, "create_invoice", "invoice", inserted.data.id, inserted.data.invoice_ref, { total: fromPence(total), net_payment_due: fromPence(netPaymentDue), vat_treatment: vatTreatment, reverse_charge_vat: fromPence(reverseChargeVat), cis_deduction: cis.deductionAmount, job_ref: job!.job_ref });
   if (variation) await updateVariationInvoiceStatus(supabase, variation.id);
-  return { ok: true, summary: `Created ${status.toLowerCase()} invoice ${inserted.data.invoice_ref} for ${formatGbp(fromPence(total))}.`, data: publicInvoice(enrichInvoice(inserted.data, await getLookupMaps(businessId))) };
+  return { ok: true, summary: `Created ${status.toLowerCase()} invoice ${inserted.data.invoice_ref} for ${formatGbp(fromPence(netPaymentDue))} payable.${artifacts?.error ? ` PDF filing needs attention: ${artifacts.error}` : ""}`, data: { ...publicInvoice(enrichInvoice(inserted.data, await getLookupMaps(businessId))), pdf_url: artifacts?.pdfUrl ?? null } };
 }
 
 async function recordCustomerPayment(input: Input, context?: AssistantRouteContext): Promise<ToolExecutionResult> {

@@ -188,6 +188,57 @@ describe("all finance reporting tools", () => {
     expect((credit.data as Row).total).toBe(12);
   });
 
+  it("preserves standard VAT invoices and exposes their payment treatment", async () => {
+    const invoice = await executeFinanceTool("create_invoice", {
+      job_ref: "WR-J-1005", invoice_date: "2026-09-23", due_date: "2026-10-23",
+      lines: [{ description: "Standard VAT works", quantity: 1, unit_price: 1000, vat_code: "20" }], confirmed: true
+    }, context);
+    expect(invoice.data).toMatchObject({ vat_treatment: "standard", vat: 200, total: 1200, cis_deduction: 0, net_payment_due: 1200, amount_outstanding: 1200 });
+  });
+
+  it("creates domestic reverse-charge invoices with displayed VAT excluded from payment", async () => {
+    const invoice = await executeFinanceTool("create_invoice", {
+      job_ref: "WR-J-1005", invoice_date: "2026-09-23", due_date: "2026-10-23",
+      vat_treatment: "domestic_reverse_charge", customer_vat_number: "GB123456789", reverse_charge_confirmed: true,
+      lines: [{ description: "Reverse-charge roofing work", quantity: 1, unit_price: 1000, vat_code: "20" }], confirmed: true
+    }, context);
+    expect(invoice.data).toMatchObject({ vat_treatment: "domestic_reverse_charge", vat: 0, reverse_charge_vat: 200, total: 1000, net_payment_due: 1000, amount_outstanding: 1000 });
+  });
+
+  it("deducts CIS only from labour for mixed labour/material invoices at supported rates", async () => {
+    const invoice = await executeFinanceTool("create_invoice", {
+      job_ref: "WR-J-1005", invoice_date: "2026-09-23", due_date: "2026-10-23",
+      vat_treatment: "domestic_reverse_charge", customer_vat_number: "GB123456789", reverse_charge_confirmed: true, cis_deduction_rate: 30,
+      lines: [
+        { description: "Labour", quantity: 1, unit_price: 1000, vat_code: "20", category: "labour" },
+        { description: "Materials", quantity: 1, unit_price: 500, vat_code: "20", category: "materials" }
+      ], confirmed: true
+    }, context);
+    expect(invoice.data).toMatchObject({ vat_treatment: "domestic_reverse_charge", reverse_charge_vat: 300, total: 1500, cis_deduction_rate: 30, cis_labour_amount: 1000, cis_deduction: 300, net_payment_due: 1200, amount_outstanding: 1200 });
+
+    const twentyPercent = await executeFinanceTool("create_invoice", {
+      job_ref: "WR-J-1005", invoice_date: "2026-09-23", due_date: "2026-10-23", cis_deduction_rate: 20,
+      lines: [{ description: "Labour", quantity: 1, unit_price: 1000, vat_code: "0", category: "labour" }], confirmed: true
+    }, context);
+    expect(twentyPercent.data).toMatchObject({ cis_deduction_rate: 20, cis_deduction: 200, net_payment_due: 800 });
+
+    await expect(executeFinanceTool("create_invoice", {
+      job_ref: "WR-J-1005", invoice_date: "2026-09-23", due_date: "2026-10-23", cis_deduction_rate: 20,
+      lines: [{ description: "Uncategorised work", quantity: 1, unit_price: 100, vat_code: "20" }], confirmed: true
+    }, context)).rejects.toThrow("labour or materials");
+  });
+
+  it("returns VAT treatment, CIS deduction and net payment due in invoice lists and details", async () => {
+    tables.invoices[0] = {
+      ...tables.invoices[0], vat_treatment: "domestic_reverse_charge", vat_amount: 0, reverse_charge_vat_amount: 20000,
+      cis_deduction_rate: 30, cis_labour_amount: 100000, cis_deduction_amount: 30000, total: 100000, amount_paid: 0, balance_due: 70000
+    };
+    const invoices = await executeFinanceTool("get_invoices", {}, context);
+    expect((invoices.data as Row).invoices[0]).toMatchObject({ vat_treatment: "domestic_reverse_charge", reverse_charge_vat: 20000, cis_deduction: 30000, net_payment_due: 70000, amount_outstanding: 70000 });
+    const detail = await executeFinanceTool("get_invoice_detail", { invoice_number: "WR-INV-1001" }, context);
+    expect(detail.data).toMatchObject({ vat_treatment: "domestic_reverse_charge", cis_deduction_rate: 30, net_payment_due: 70000 });
+  });
+
   it("records part payments and rejects customer and supplier overpayments", async () => {
     const customer = await executeFinanceTool("record_customer_payment", { invoice_number: "WR-INV-1001", amount: 1000, payment_date: "2026-09-23", payment_method: "Bank Transfer", confirmed: true }, context);
     expect((customer.data as Row).amount_outstanding).toBe(59000);

@@ -41,15 +41,30 @@ export function buildInvoiceLineItemsFromQuote(quote: QuoteRecord): InvoiceLineI
     }));
 }
 
-export function calculateCisDeduction(lineItems: InvoiceLineItem[], rate: number) {
+export function calculateCisDeduction(lineItems: Array<{ category?: string | null; total?: number; net_amount?: number }>, rate: number) {
   const validRate = rate === 20 || rate === 30 ? rate : 0;
   const labourAmount = round2(
-    lineItems.filter((line) => line.category === "labour").reduce((sum, line) => sum + Number(line.total ?? 0), 0)
+    lineItems.filter((line) => line.category === "labour").reduce((sum, line) => sum + Number(line.net_amount ?? line.total ?? 0), 0)
   );
   return {
     rate: validRate,
     labourAmount,
     deductionAmount: round2(labourAmount * (validRate / 100))
+  };
+}
+
+export function normaliseInvoiceTaxLine(
+  line: InvoiceLineItem & { net_amount?: number; vat_rate?: number },
+  override?: { category: string; vat_applicable: boolean }
+): InvoiceLineItem {
+  return {
+    description: line.description,
+    quantity: Number(line.quantity ?? 1),
+    unit: line.unit || "item",
+    unit_price: Number(line.unit_price ?? 0),
+    total: Number(line.total ?? line.net_amount ?? 0),
+    category: override?.category || line.category || undefined,
+    vat_applicable: override?.vat_applicable ?? line.vat_applicable ?? Number(line.vat_rate ?? 0) > 0
   };
 }
 
